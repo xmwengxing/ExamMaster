@@ -68,6 +68,9 @@ check-*.js
 create-*.js
 fix-*.cjs
 
+# Git helper scripts (Windows)
+git-*.bat
+
 # Deployment scripts
 deploy*.bat
 deploy*.sh
@@ -91,3 +94,9 @@ metadata.json
 
 # Development docs (keep main docs)
 开发文档_*/
+
+# Git helper documentation
+GIT_DAILY_USAGE.md
+PUSH_ERROR_FIX.md
+GITHUB_CHECKLIST.md
+QUICK_START.md
