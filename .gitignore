@@ -62,7 +62,7 @@ cloudflare-key.pem
 .github/
 
 # 开发文档
-.开发文档/
+开发文档/
 
 # Test files
 test-*.html
