@@ -297,13 +297,13 @@ npm run preview
 npm run build
 
 # 2. 上传到服务器
-scp -r dist server.js package.json root@your-server:/var/www/edumaster/
+scp -r dist server.js package.json root@your-server:/*/
 
 # 3. 安装依赖
-ssh root@your-server "cd /var/www/edumaster && npm install --production"
+ssh root@your-server "cd /* && npm install --production"
 
 # 4. 启动服务
-ssh root@your-server "cd /var/www/edumaster && pm2 start ecosystem.config.cjs"
+ssh root@your-server "cd /* && pm2 start ecosystem.config.cjs"
 ```
 
 ### 详细部署
@@ -359,7 +359,6 @@ EduMaster_Sqlite/
 ## 📚 文档
 
 - [技术文档.md](技术文档.md) - 完整的技术文档
-- [docs/](docs/) - 更多文档
 
 ## 🎯 系统要求
 

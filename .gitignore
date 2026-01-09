@@ -41,6 +41,7 @@ backups/
 *.sw?
 
 # OS files
+.sqlite
 Thumbs.db
 
 # SSL certificates
@@ -66,6 +67,9 @@ cloudflare-key.pem
 
 # 备忘文档
 备忘文件/
+
+# 技术文档
+技术文档.md
 
 # Test files
 test-*.html
