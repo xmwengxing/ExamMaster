@@ -10,6 +10,9 @@ lerna-debug.log*
 # Dependencies
 node_modules
 
+# 推送配置文件
+.gitignore
+
 # Build output
 dist
 dist-ssr
