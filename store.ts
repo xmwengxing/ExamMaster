@@ -871,7 +871,8 @@ export const useAppStore = () => {
     fetchComments: async (discussionId: string) => {
       try {
         const result = await fetchApi(`/discussions/${discussionId}/comments`);
-        return result.comments || [];
+        // 后端直接返回评论数组，不是包含comments字段的对象
+        return Array.isArray(result) ? result : [];
       } catch (e: any) {
         console.error('[fetchComments] Failed:', e);
         throw e;
