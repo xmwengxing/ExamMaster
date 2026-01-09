@@ -69,7 +69,7 @@ cloudflare-key.pem
 备忘文件/
 
 # 技术文档
-技术文档.md
+技术文档*.md
 
 # Test files
 test-*.html
@@ -103,7 +103,4 @@ metadata.json
 开发文档_*/
 
 # Git helper documentation
-GIT_DAILY_USAGE.md
-PUSH_ERROR_FIX.md
-GITHUB_CHECKLIST.md
-QUICK_START.md
+
