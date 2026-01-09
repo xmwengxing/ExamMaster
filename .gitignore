@@ -61,6 +61,9 @@ cloudflare-key.pem
 # GitHub workflows (if not needed)
 .github/
 
+# 开发文档
+.开发文档/
+
 # Test files
 test-*.html
 test-*.js
