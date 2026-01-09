@@ -229,6 +229,29 @@ db.serialize(() => {
     }
   });
 
+  // 扩展 exams 表以支持新题型
+  db.all("PRAGMA table_info(exams)", (err, columns) => {
+    if (!err && columns) {
+      // 添加 fillBlankCount 字段（填空题数量）
+      const hasFillBlankCount = columns.some(col => col.name === 'fillBlankCount');
+      if (!hasFillBlankCount) {
+        db.run("ALTER TABLE exams ADD COLUMN fillBlankCount INTEGER DEFAULT 0", (err) => {
+          if (err) console.log('[DB] fillBlankCount column may already exist');
+          else console.log('[DB] Added fillBlankCount column to exams table');
+        });
+      }
+      
+      // 添加 shortAnswerCount 字段（简答题数量）
+      const hasShortAnswerCount = columns.some(col => col.name === 'shortAnswerCount');
+      if (!hasShortAnswerCount) {
+        db.run("ALTER TABLE exams ADD COLUMN shortAnswerCount INTEGER DEFAULT 0", (err) => {
+          if (err) console.log('[DB] shortAnswerCount column may already exist');
+          else console.log('[DB] Added shortAnswerCount column to exams table');
+        });
+      }
+    }
+  });
+
   // 标签表
   db.run(`CREATE TABLE IF NOT EXISTS tags (
     id TEXT PRIMARY KEY,
@@ -1294,8 +1317,8 @@ app.post('/api/exams', auth, (req, res) => {
     `INSERT INTO exams (
       id, bankId, title, duration, totalScore, passScore, passScorePercent, 
       strategy, selectedQuestionIds, status, isVisible, startTime, endTime, 
-      singleCount, multipleCount, judgeCount
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      singleCount, multipleCount, judgeCount, fillBlankCount, shortAnswerCount
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       exam.bankId,
@@ -1312,7 +1335,9 @@ app.post('/api/exams', auth, (req, res) => {
       exam.endTime || null,
       exam.singleCount || 0,
       exam.multipleCount || 0,
-      exam.judgeCount || 0
+      exam.judgeCount || 0,
+      exam.fillBlankCount || 0,
+      exam.shortAnswerCount || 0
     ],
     (err) => {
       if (err) {
@@ -1351,6 +1376,8 @@ app.put('/api/exams/:id', auth, (req, res) => {
   if (exam.singleCount !== undefined) { fields.push('singleCount = ?'); values.push(exam.singleCount); }
   if (exam.multipleCount !== undefined) { fields.push('multipleCount = ?'); values.push(exam.multipleCount); }
   if (exam.judgeCount !== undefined) { fields.push('judgeCount = ?'); values.push(exam.judgeCount); }
+  if (exam.fillBlankCount !== undefined) { fields.push('fillBlankCount = ?'); values.push(exam.fillBlankCount); }
+  if (exam.shortAnswerCount !== undefined) { fields.push('shortAnswerCount = ?'); values.push(exam.shortAnswerCount); }
   
   if (fields.length === 0) {
     return res.status(400).json({ error: 'No fields to update' });

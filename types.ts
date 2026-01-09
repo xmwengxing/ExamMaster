@@ -163,6 +163,8 @@ export interface Exam {
   singleCount?: number;
   multipleCount?: number;
   judgeCount?: number;
+  fillBlankCount?: number;
+  shortAnswerCount?: number;
 }
 
 export interface AuditLog {

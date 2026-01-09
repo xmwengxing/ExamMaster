@@ -33,6 +33,8 @@ const ExamPublisher: React.FC<ExamPublisherProps> = ({ banks, exams, allQuestion
     singleCount: 10, 
     multipleCount: 5, 
     judgeCount: 5,
+    fillBlankCount: 0,
+    shortAnswerCount: 0,
     passScorePercent: 60,
     selectedQuestionIds: [] as string[]
   });
@@ -69,7 +71,9 @@ const ExamPublisher: React.FC<ExamPublisherProps> = ({ banks, exams, allQuestion
     return (
       form.singleCount * (scores[QuestionType.SINGLE] || 0) +
       form.multipleCount * (scores[QuestionType.MULTIPLE] || 0) +
-      form.judgeCount * (scores[QuestionType.JUDGE] || 0)
+      form.judgeCount * (scores[QuestionType.JUDGE] || 0) +
+      form.fillBlankCount * (scores[QuestionType.FILL_IN_BLANK] || 0) +
+      form.shortAnswerCount * (scores[QuestionType.SHORT_ANSWER] || 0)
     );
   }, [selectedBank, form, bankQuestions]);
 
@@ -114,6 +118,7 @@ const ExamPublisher: React.FC<ExamPublisherProps> = ({ banks, exams, allQuestion
       title: '', bankId: banks[0]?.id || '', duration: 60, strategy: 'RANDOM',
       startTime: '', endTime: '',
       singleCount: 10, multipleCount: 5, judgeCount: 5,
+      fillBlankCount: 0, shortAnswerCount: 0,
       passScorePercent: 60,
       selectedQuestionIds: []
     });
@@ -139,6 +144,8 @@ const ExamPublisher: React.FC<ExamPublisherProps> = ({ banks, exams, allQuestion
       singleCount: exam.singleCount || 0,
       multipleCount: exam.multipleCount || 0,
       judgeCount: exam.judgeCount || 0,
+      fillBlankCount: exam.fillBlankCount || 0,
+      shortAnswerCount: exam.shortAnswerCount || 0,
       passScorePercent: exam.passScorePercent || 60,
       selectedQuestionIds: exam.selectedQuestionIds || []
     });
@@ -388,15 +395,23 @@ const ExamPublisher: React.FC<ExamPublisherProps> = ({ banks, exams, allQuestion
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-bold text-gray-600">单选题</span>
-                      <input type="number" className="w-20 bg-gray-50 py-2 text-center rounded-xl font-black" value={form.singleCount} onChange={e => setForm({...form, singleCount: Number(e.target.value)})} />
+                      <input type="number" min="0" className="w-20 bg-gray-50 py-2 text-center rounded-xl font-black" value={form.singleCount} onChange={e => setForm({...form, singleCount: Number(e.target.value)})} />
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-bold text-gray-600">多选题</span>
-                      <input type="number" className="w-20 bg-gray-50 py-2 text-center rounded-xl font-black" value={form.multipleCount} onChange={e => setForm({...form, multipleCount: Number(e.target.value)})} />
+                      <input type="number" min="0" className="w-20 bg-gray-50 py-2 text-center rounded-xl font-black" value={form.multipleCount} onChange={e => setForm({...form, multipleCount: Number(e.target.value)})} />
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-bold text-gray-600">判断题</span>
-                      <input type="number" className="w-20 bg-gray-50 py-2 text-center rounded-xl font-black" value={form.judgeCount} onChange={e => setForm({...form, judgeCount: Number(e.target.value)})} />
+                      <input type="number" min="0" className="w-20 bg-gray-50 py-2 text-center rounded-xl font-black" value={form.judgeCount} onChange={e => setForm({...form, judgeCount: Number(e.target.value)})} />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-bold text-gray-600">填空题</span>
+                      <input type="number" min="0" className="w-20 bg-gray-50 py-2 text-center rounded-xl font-black" value={form.fillBlankCount} onChange={e => setForm({...form, fillBlankCount: Number(e.target.value)})} />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-bold text-gray-600">简答题</span>
+                      <input type="number" min="0" className="w-20 bg-gray-50 py-2 text-center rounded-xl font-black" value={form.shortAnswerCount} onChange={e => setForm({...form, shortAnswerCount: Number(e.target.value)})} />
                     </div>
                   </div>
                 </div>
@@ -423,6 +438,8 @@ const ExamPublisher: React.FC<ExamPublisherProps> = ({ banks, exams, allQuestion
                         <option value={QuestionType.SINGLE}>单选</option>
                         <option value={QuestionType.MULTIPLE}>多选</option>
                         <option value={QuestionType.JUDGE}>判断</option>
+                        <option value={QuestionType.FILL_IN_BLANK}>填空</option>
+                        <option value={QuestionType.SHORT_ANSWER}>简答</option>
                       </select>
                       <input 
                         className="flex-1 text-[10px] bg-gray-50 px-3 py-1.5 rounded-xl border-none outline-none font-bold" 
