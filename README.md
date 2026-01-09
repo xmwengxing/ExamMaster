@@ -9,7 +9,7 @@
 [![React](https://img.shields.io/badge/react-19.2.3-blue.svg)](https://reactjs.org/)
 [![Version](https://img.shields.io/badge/version-2.0.0-orange.svg)](https://github.com)
 
-[在线演示](http://jingtianairen.cc) | [技术文档](技术文档.md) | [更新日志](#更新日志)
+[技术文档](技术文档.md) | [更新日志](#更新日志)
 
 </div>
 
