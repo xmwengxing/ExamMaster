@@ -1,0 +1,934 @@
+
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { 
+  User, UserRole, QuestionBank, Question, Exam, 
+  ExamRecord, PracticeRecord, QuestionType, LoginLog, 
+  AuditLog, QuestionNote, DailyProgress, StudentPermission, PracticeMode,
+  PracticalTask, PracticalTaskRecord, SrsRecord
+} from './types';
+
+const API_BASE = '/api';
+
+// 防抖工具函数
+const debounce = <T extends (...args: any[]) => any>(
+  func: T,
+  wait: number
+): ((...args: Parameters<T>) => void) => {
+  let timeout: NodeJS.Timeout | null = null;
+  
+  return (...args: Parameters<T>) => {
+    if (timeout) clearTimeout(timeout);
+    timeout = setTimeout(() => func(...args), wait);
+  };
+};
+
+// 错误事件节流机制
+const errorEventCache = new Map<string, number>();
+const ERROR_THROTTLE_MS = 1000;
+
+const dispatchErrorEvent = (eventName: string, detail: any) => {
+  const key = `${eventName}:${JSON.stringify(detail)}`;
+  const lastTime = errorEventCache.get(key) || 0;
+  const now = Date.now();
+  
+  if (now - lastTime < ERROR_THROTTLE_MS) {
+    return; // 跳过重复事件
+  }
+  
+  errorEventCache.set(key, now);
+  window.dispatchEvent(new CustomEvent(eventName, { detail }));
+};
+
+const fetchApi = async (endpoint: string, options: any = {}, retries: number = 2): Promise<any> => {
+  const token = localStorage.getItem('edu_token');
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+    ...options.headers
+  };
+
+  try {
+    const response = await fetch(`${API_BASE}${endpoint}`, { ...options, headers });
+    if (!response.ok) {
+      const text = await response.text();
+      console.warn(`[fetchApi] ${endpoint} -> ${response.status} ${text}`);
+      // 仅当 401 Unauthorized 时触发重新认证提示；403 Forbidden 代表权限不足，不应导致登录弹窗
+      if (response.status === 401) {
+        console.warn('[fetchApi] Received 401 — dispatching auth event for UI');
+        try { dispatchErrorEvent('edu:auth-error', { status: response.status, message: text }); } catch (e) { console.debug(e); }
+      }
+      throw new Error(text);
+    }
+    return response.json();
+  } catch (err: any) {
+    // 处理瞬态网络错误（例如 ERR_NETWORK_CHANGED）——简单重试策略
+    const isNetworkError = err instanceof TypeError || /network|failed to fetch|ECONNREFUSED|NetworkError|ERR_NETWORK_CHANGED/i.test(err.message || '');
+    console.warn(`[fetchApi] Network error on ${endpoint}:`, err && err.message ? err.message : err);
+    if (isNetworkError && retries > 0) {
+      const backoff = (3 - retries) * 300; // 300ms, 600ms...
+      console.info(`[fetchApi] Retrying ${endpoint} in ${backoff}ms (${retries} retries left)`);
+      await new Promise(r => setTimeout(r, backoff));
+      try {
+        return await fetchApi(endpoint, options, retries - 1);
+      } catch (e) {
+        // fallthrough
+      }
+    }
+    // 派发网络错误事件供 UI 显示（不自动强制 reload）
+    try { dispatchErrorEvent('edu:network-error', { endpoint, message: err && err.message ? err.message : String(err) }); } catch (e) { console.debug(e); }
+    throw err;
+  }
+};
+
+export const useAppStore = () => {
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [banks, setBanks] = useState<QuestionBank[]>([]);
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [exams, setExams] = useState<Exam[]>([]);
+  const [practiceRecords, setPracticeRecords] = useState<PracticeRecord[]>([]);
+  const [examHistory, setExamHistory] = useState<ExamRecord[]>([]);
+  const [systemConfig, setSystemConfig] = useState<any>(null);
+  const [mistakes, setMistakes] = useState<Question[]>([]);
+  const [favorites, setFavorites] = useState<Question[]>([]);
+  const [activeBank, setActiveBank] = useState<QuestionBank | null>(null);
+  const [srsRecords, setSrsRecords] = useState<SrsRecord[]>([]);
+
+  // Added missing states for administrative and functional features
+  const [students, setStudents] = useState<User[]>([]);
+  const [admins, setAdmins] = useState<User[]>([]);
+  const [loginLogs, setLoginLogs] = useState<LoginLog[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [practicalTasks, setPracticalTasks] = useState<PracticalTask[]>([]);
+  const [practicalRecords, setPracticalRecords] = useState<PracticalTaskRecord[]>([]);
+  const [customFieldSchema, setCustomFieldSchema] = useState<string[]>([]);
+  const [allProgress, setAllProgress] = useState<DailyProgress[]>([]);
+
+  const refreshAll = useCallback(async () => {
+    const token = localStorage.getItem('edu_token');
+    if (!token) {
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      // First, fetch profile to determine role and avoid calling admin-only endpoints for students
+      const userProfile = await fetchApi('/user/profile').catch(err => {
+        console.warn('[refreshAll] Failed to fetch profile', err);
+        return null;
+      });
+
+      const promises: Array<Promise<any>> = [
+        Promise.resolve(userProfile),
+        fetchApi('/banks').catch(() => []),
+        fetchApi('/questions').catch(() => []),
+        fetchApi('/exams').catch(() => []),
+        fetchApi('/config').catch(() => null),
+        fetchApi('/practice').catch(() => []),
+        fetchApi('/favorites').catch(() => []),
+        fetchApi('/user/progress').catch(() => []),
+      ];
+
+      // Conditionally add admin-only endpoints
+      if (userProfile && userProfile.role === 'ADMIN') {
+        promises.push(fetchApi('/admin/students').catch(() => []));
+        promises.push(fetchApi('/admin/admins').catch(() => []));
+        promises.push(fetchApi('/admin/login-logs').catch(() => []));
+        promises.push(fetchApi('/admin/audit-logs').catch(() => []));
+        promises.push(fetchApi('/admin/all-progress').catch(() => []));
+      } else {
+        // placeholders for indexes consistency
+        promises.push(Promise.resolve([])); // students
+        promises.push(Promise.resolve([])); // admins
+        promises.push(Promise.resolve([])); // login-logs
+        promises.push(Promise.resolve([])); // audit-logs
+        promises.push(Promise.resolve([])); // all-progress
+      }
+
+      // Non-admin functional endpoints
+      promises.push(fetchApi('/practical/tasks').catch(() => []));
+      promises.push(fetchApi('/practical/records').catch(() => []));
+      promises.push(fetchApi('/srs/records').catch(() => []));
+      promises.push(fetchApi('/mistakes').catch(() => []));
+      promises.push(fetchApi('/exams/history').catch(() => []));
+
+      const results = await Promise.all(promises);
+
+      const user = results[0] || null;
+      const b = results[1] || [];
+      const q = results[2] || [];
+      const e = results[3] || [];
+      const config = results[4] || null;
+      const pr = results[5] || [];
+      const fav = results[6] || [];
+      const progress = results[7] || [];
+      const st = results[8] || [];
+      const adm = results[9] || [];
+      const lLogs = results[10] || [];
+      const aLogs = results[11] || [];
+      const allProg = results[12] || [];
+      const pTasks = results[13] || [];
+      const pRecs = results[14] || [];
+      const srs = results[15] || [];
+      const mist = results[16] || [];
+      const eHist = results[17] || [];
+
+      setCurrentUser(user);
+      // 规范化 banks 数据，确保 scoreConfig 是对象
+      const normalizedBanks = (b || []).map((bank: any) => ({
+        ...bank,
+        scoreConfig: typeof bank.scoreConfig === 'string' ? (() => {
+          try {
+            return JSON.parse(bank.scoreConfig);
+          } catch (e) {
+            return { SINGLE: 1, MULTIPLE: 2, JUDGE: 1 };
+          }
+        })() : (bank.scoreConfig || { SINGLE: 1, MULTIPLE: 2, JUDGE: 1 })
+      }));
+      setBanks(normalizedBanks);
+      setQuestions(q || []);
+      setExams(e || []);
+      setSystemConfig(config);
+      // 解析 practice_records 中的 userAnswers（可能是 JSON 字符串）和 isCustom（可能是 0/1）
+      const parsedPracticeRecords = (pr || []).map((r: any) => ({
+        ...r,
+        userAnswers: typeof r.userAnswers === 'string' ? (() => {
+          try { return JSON.parse(r.userAnswers); } catch { return {}; }
+        })() : (r.userAnswers || {}),
+        isCustom: r.isCustom === 1 || r.isCustom === true
+      }));
+      setPracticeRecords(parsedPracticeRecords);
+      setFavorites(fav || []);
+      setStudents(st || []);
+      setAdmins(adm || []);
+      setLoginLogs(lLogs || []);
+      setAuditLogs(aLogs || []);
+      setAllProgress(allProg || []);
+      setPracticalTasks(pTasks || []);
+      setPracticalRecords(pRecs || []);
+      setSrsRecords(srs || []);
+      setMistakes(mist || []);
+      setExamHistory(eHist || []);
+      setCustomFieldSchema(config?.customFieldSchema || []);
+      
+      if (!activeBank && b?.length > 0) setActiveBank(b[0]);
+    } catch (err) {
+      console.error("Refresh failed", err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [activeBank]);
+
+  useEffect(() => { refreshAll(); }, [refreshAll]);
+
+  // Heartbeat interval - send heartbeat every 2 minutes to update online status
+  useEffect(() => {
+    const token = localStorage.getItem('edu_token');
+    if (!token || !currentUser) return;
+
+    // Send initial heartbeat
+    fetchApi('/user/heartbeat', { method: 'POST' }).catch(e => console.debug('[Heartbeat] Failed:', e));
+
+    // Setup interval to send heartbeat every 2 minutes
+    const interval = setInterval(() => {
+      fetchApi('/user/heartbeat', { method: 'POST' }).catch(e => console.debug('[Heartbeat] Failed:', e));
+    }, 2 * 60 * 1000); // 2 minutes
+
+    return () => clearInterval(interval);
+  }, [currentUser]);
+
+  // 选择性刷新函数
+  const refreshPracticeRecords = useCallback(async () => {
+    try {
+      const records = await fetchApi('/practice');
+      const parsedRecords = (records || []).map((r: any) => ({
+        ...r,
+        userAnswers: typeof r.userAnswers === 'string' ? (() => {
+          try { return JSON.parse(r.userAnswers); } catch { return {}; }
+        })() : (r.userAnswers || {}),
+        isCustom: r.isCustom === 1 || r.isCustom === true
+      }));
+      setPracticeRecords(parsedRecords);
+    } catch (err) {
+      console.error("Failed to refresh practice records", err);
+    }
+  }, []);
+
+  const refreshBanks = useCallback(async () => {
+    try {
+      const b = await fetchApi('/banks');
+      const normalizedBanks = (b || []).map((bank: any) => ({
+        ...bank,
+        scoreConfig: typeof bank.scoreConfig === 'string' ? (() => {
+          try {
+            return JSON.parse(bank.scoreConfig);
+          } catch (e) {
+            return { SINGLE: 1, MULTIPLE: 2, JUDGE: 1 };
+          }
+        })() : (bank.scoreConfig || { SINGLE: 1, MULTIPLE: 2, JUDGE: 1 })
+      }));
+      setBanks(normalizedBanks);
+    } catch (err) {
+      console.error("Failed to refresh banks", err);
+    }
+  }, []);
+
+  // 创建防抖版本的 updatePracticeRecord
+  const debouncedUpdatePracticeRecord = useCallback(
+    debounce(async (id: string, data: any) => {
+      await fetchApi(`/practice/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+      await refreshPracticeRecords();
+    }, 500),
+    []
+  );
+
+  const storeValue = useMemo(() => ({
+    isLoading, currentUser, banks, questions, exams, practiceRecords, examHistory, systemConfig, mistakes, favorites, srsRecords,
+    students, admins, loginLogs, auditLogs, practicalTasks, practicalRecords, customFieldSchema, allProgress,
+    activeBank: activeBank || banks[0], setActiveBank,
+    
+    login: async (phone: string, pass: string, role: UserRole) => {
+      try {
+        const res = await fetchApi('/auth/login', {
+          method: 'POST',
+          body: JSON.stringify({ phone, password: pass, role })
+        });
+        localStorage.setItem('edu_token', res.token);
+        setCurrentUser(res.user);
+        await refreshAll();
+        return true;
+      } catch (e) {
+        return false;
+      }
+    },
+
+    // Heartbeat to update online status
+    sendHeartbeat: async () => {
+      try {
+        await fetchApi('/user/heartbeat', { method: 'POST' });
+      } catch (e) {
+        console.debug('[Heartbeat] Failed:', e);
+      }
+    },
+
+    logout: () => {
+      localStorage.removeItem('edu_token');
+      setCurrentUser(null);
+      // Reset state upon logout
+      setBanks([]);
+      setExams([]);
+      setPracticeRecords([]);
+      setExamHistory([]);
+      setStudents([]);
+      setAdmins([]);
+      setLoginLogs([]);
+      setAuditLogs([]);
+      setPracticalTasks([]);
+      setPracticalRecords([]);
+      
+      // 通知其他标签页退出登录
+      localStorage.setItem('edu_logout_event', Date.now().toString());
+    },
+
+    updateProfile: async (data: Partial<User>) => {
+      await fetchApi('/user/profile', { method: 'PUT', body: JSON.stringify(data) });
+      await refreshAll();
+    },
+
+    getPracticeRecord: async (bankId: string, mode: PracticeMode, isCustom: boolean = false) => {
+      // 总是从 API 获取最新数据，确保进度是最新的
+      try {
+        const allRecords = await fetchApi('/practice');
+        const found = allRecords.find((r: PracticeRecord) => r.bankId === bankId && r.mode === mode && (isCustom ? r.isCustom : !r.isCustom));
+        if (found) {
+          // 解析 userAnswers（如果是字符串）
+          if (typeof found.userAnswers === 'string') {
+            try {
+              found.userAnswers = JSON.parse(found.userAnswers);
+            } catch (e) {
+              found.userAnswers = {};
+            }
+          }
+          return found;
+        }
+      } catch (e) {
+        console.warn('[getPracticeRecord] Failed to fetch from API, falling back to cache', e);
+        // 如果 API 失败，才使用内存缓存
+        let record = practiceRecords.find(r => r.bankId === bankId && r.mode === mode && (isCustom ? r.isCustom : !r.isCustom)) || null;
+        if (record && typeof record.userAnswers === 'string') {
+          try {
+            record.userAnswers = JSON.parse(record.userAnswers);
+          } catch (e) {
+            record.userAnswers = {};
+          }
+        }
+        return record;
+      }
+      return null;
+    },
+
+    addPracticeRecord: async (r: any) => {
+       await fetchApi('/practice', { method: 'POST', body: JSON.stringify(r) });
+       await refreshAll();
+    },
+
+    updatePracticeRecord: async (id: string, data: any) => {
+      debouncedUpdatePracticeRecord(id, data);
+    },
+
+    // Added: deletePracticeRecord required by PracticeList
+    deletePracticeRecord: async (id: string) => {
+      await fetchApi(`/practice/${id}`, { method: 'DELETE' });
+      await refreshPracticeRecords(); // 只刷新练习记录
+    },
+    
+    getDailyProgress: async () => {
+      return await fetchApi('/user/progress');
+    },
+
+    incrementDailyProgress: async () => {
+      await fetchApi('/user/progress/increment', { method: 'POST' });
+    },
+
+    addNote: async (qId: string, content: string) => {
+      await fetchApi('/notes', { method: 'POST', body: JSON.stringify({ questionId: qId, content }) });
+    },
+
+    getNote: async (qId: string) => {
+      try { return await fetchApi(`/notes/${qId}`); } catch { return null; }
+    },
+
+    toggleFavorite: async (q: Question) => {
+      await fetchApi(`/favorites/${q.id}`, { method: 'POST' });
+      await refreshAll();
+    },
+
+    addToMistakes: async (q: Question) => {
+      await fetchApi('/mistakes', { method: 'POST', body: JSON.stringify({ questionId: q.id }) });
+      await refreshAll();
+    },
+
+    // Added: updateSrsRecord required by PracticeMode
+    updateSrsRecord: async (questionId: string, level: 'HARD' | 'GOOD' | 'EASY') => {
+      await fetchApi('/srs/update', { method: 'POST', body: JSON.stringify({ questionId, level }) });
+      await refreshAll();
+    },
+
+    // Administrative: Students management methods
+    addStudent: async (student: any) => {
+      await fetchApi('/admin/students', { method: 'POST', body: JSON.stringify(student) });
+      await refreshAll();
+    },
+    updateStudent: async (id: string, data: any) => {
+      await fetchApi(`/admin/students/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+      await refreshAll();
+    },
+    deleteStudents: async (ids: string[]) => {
+      await fetchApi('/admin/students/batch-delete', { method: 'POST', body: JSON.stringify({ ids }) });
+      await refreshAll();
+    },
+
+    // Administrative: Custom field schema management
+    addCustomField: async (name: string) => {
+      await fetchApi('/admin/config/custom-fields', { method: 'POST', body: JSON.stringify({ name }) });
+      await refreshAll();
+    },
+    removeCustomField: async (name: string) => {
+      await fetchApi(`/admin/config/custom-fields/${name}`, { method: 'DELETE' });
+      await refreshAll();
+    },
+
+    // Administrative: Bank management methods
+    addBank: async (bank: any) => {
+      await fetchApi('/banks', { method: 'POST', body: JSON.stringify(bank) });
+      await refreshAll();
+    },
+    updateBank: async (id: string, data: any) => {
+      await fetchApi(`/banks/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+      await refreshAll();
+    },
+    deleteBank: async (id: string) => {
+      await fetchApi(`/banks/${id}`, { method: 'DELETE' });
+      await refreshAll();
+    },
+    updateBankScore: async (bankId: string, config: any) => {
+      await fetchApi(`/banks/${bankId}/score`, { method: 'PUT', body: JSON.stringify({ scoreConfig: config }) });
+      await refreshAll();
+    },
+
+    // Administrative: Question management methods
+    addQuestion: async (q: Question) => {
+      const res = await fetchApi('/questions', { method: 'POST', body: JSON.stringify(q) });
+      await refreshAll();
+      return res;
+    },
+    updateQuestion: async (id: string, data: Partial<Question>) => {
+      await fetchApi(`/questions/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+      await refreshAll();
+    },
+    deleteQuestion: async (id: string) => {
+      await fetchApi(`/questions/${id}`, { method: 'DELETE' });
+      await refreshAll();
+    },
+    deleteQuestions: async (bankId: string, ids: string[]) => {
+      await fetchApi('/questions/batch-delete', { method: 'POST', body: JSON.stringify({ bankId, ids }) });
+      await refreshAll();
+    },
+    importQuestions: async (bankId: string, qs: Question[]) => {
+      const res = await fetchApi(`/banks/${bankId}/import`, { method: 'POST', body: JSON.stringify({ questions: qs }) });
+      await refreshAll();
+      return res;
+    },
+
+    // Administrative: Exam management methods
+    publishExam: async (exam: Exam) => {
+      await fetchApi('/exams', { method: 'POST', body: JSON.stringify(exam) });
+      await refreshAll();
+    },
+    updateExam: async (id: string, data: any) => {
+      await fetchApi(`/exams/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+      await refreshAll();
+    },
+    deleteExam: async (id: string) => {
+      await fetchApi(`/exams/${id}`, { method: 'DELETE' });
+      await refreshAll();
+    },
+    toggleExamVisibility: async (id: string) => {
+      await fetchApi(`/exams/${id}/toggle-visibility`, { method: 'POST' });
+      await refreshAll();
+    },
+
+    // Administrative: System settings methods
+    updateSystemSettings: async (data: any) => {
+      try {
+        await fetchApi('/config', { method: 'PUT', body: JSON.stringify(data) });
+        await refreshAll();
+        return true;
+      } catch (err) {
+        console.error('updateSystemSettings failed', err);
+        return false;
+      }
+    },
+    changeAdminPassword: async (old: string, newP: string) => {
+      try {
+        await fetchApi('/admin/change-password', { method: 'POST', body: JSON.stringify({ old, newP }) });
+        return true;
+      } catch {
+        return false;
+      }
+    },
+
+    // Administrative: Student permissions methods
+    batchSetStudentPerms: async (data: Record<string, { studentPerms: StudentPermission[], allowedBankIds: string[] }>) => {
+      console.log('[store.batchSetStudentPerms] Batch updating students:', Object.keys(data).length, 'students');
+      console.log('[store.batchSetStudentPerms] Data:', data);
+      await fetchApi('/admin/students/batch-perms', { method: 'POST', body: JSON.stringify(data) });
+      console.log('[store.batchSetStudentPerms] API call complete, calling refreshAll');
+      await refreshAll();
+      console.log('[store.batchSetStudentPerms] refreshAll complete');
+    },
+    updateStudentPerms: async (id: string, perms: StudentPermission[], bankIds?: string[]) => {
+      console.log('[store.updateStudentPerms] Updating student:', {
+        id,
+        perms,
+        bankIds
+      });
+      await fetchApi(`/admin/students/${id}/perms`, { method: 'PUT', body: JSON.stringify({ studentPerms: perms, allowedBankIds: bankIds }) });
+      console.log('[store.updateStudentPerms] API call complete, calling refreshAll');
+      await refreshAll();
+      console.log('[store.updateStudentPerms] refreshAll complete');
+    },
+
+    // Administrative: Admin account management methods
+    addAdmin: async (a: any) => {
+      await fetchApi('/admin/admins', { method: 'POST', body: JSON.stringify(a) });
+      await refreshAll();
+    },
+    updateAdmin: async (id: string, data: any) => {
+      await fetchApi(`/admin/admins/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+      await refreshAll();
+    },
+    deleteAdmin: async (id: string) => {
+      await fetchApi(`/admin/admins/${id}`, { method: 'DELETE' });
+      await refreshAll();
+    },
+
+    // Exam History management methods
+    addExamHistory: async (record: ExamRecord) => {
+      await fetchApi('/exams/history', { method: 'POST', body: JSON.stringify(record) });
+      await refreshAll();
+    },
+    deleteExamHistory: async (id: string) => {
+      await fetchApi(`/exams/history/${id}`, { method: 'DELETE' });
+      await refreshAll();
+    },
+
+    // User data management methods
+    resetUserData: async () => {
+      await fetchApi('/user/reset', { method: 'POST' });
+      await refreshAll();
+    },
+
+    // Backup & Restore methods
+    exportData: () => {
+      const data = { currentUser, banks, questions, exams, practiceRecords, examHistory, systemConfig, mistakes, favorites, srsRecords, students, admins, loginLogs, auditLogs, practicalTasks, practicalRecords, customFieldSchema };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `edumaster_backup_${new Date().toISOString().split('T')[0]}.json`;
+      a.click();
+    },
+    importData: async (file: File) => {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      await fetchApi('/admin/import-all', { method: 'POST', body: JSON.stringify(data) });
+      await refreshAll();
+    },
+
+    // Practical Tasks management methods
+    addPracticalTask: async (task: PracticalTask) => {
+      await fetchApi('/practical/tasks', { method: 'POST', body: JSON.stringify(task) });
+      await refreshAll();
+    },
+    updatePracticalTask: async (task: PracticalTask) => {
+      await fetchApi(`/practical/tasks/${task.id}`, { method: 'PUT', body: JSON.stringify(task) });
+      await refreshAll();
+    },
+    deletePracticalTask: async (id: string) => {
+      await fetchApi(`/practical/tasks/${id}`, { method: 'DELETE' });
+      await refreshAll();
+    },
+    savePracticalRecord: async (record: PracticalTaskRecord) => {
+      await fetchApi('/practical/records', { method: 'POST', body: JSON.stringify(record) });
+      await refreshAll();
+    },
+    deletePracticalRecord: async (id: string) => {
+      await fetchApi(`/practical/records/${id}`, { method: 'DELETE' });
+      await refreshAll();
+    },
+
+    logAction: async (action: string, target: string) => {
+      console.log(`Action: ${action} on ${target}`);
+      // Only send audit logs when current user is admin
+      if (!currentUser || currentUser.role !== 'ADMIN') return;
+      try {
+        await fetchApi('/admin/audit-logs', { 
+          method: 'POST', 
+          body: JSON.stringify({ 
+            action, 
+            target, 
+            operatorId: currentUser.id,
+            operatorName: currentUser.realName || currentUser.nickname || currentUser.phone,
+            timestamp: new Date().toLocaleString() 
+          }) 
+        });
+      } catch (e: any) {
+        // ignore 403/401 for now and log for debugging
+        console.debug('logAction failed', e?.message || e);
+      }
+    },
+
+    // 填空题评分
+    gradeFillInBlank: async (questionId: string, userAnswers: Record<string, string>) => {
+      try {
+        const result = await fetchApi('/questions/grade-fill-blank', {
+          method: 'POST',
+          body: JSON.stringify({ questionId, userAnswers })
+        });
+        return result;
+      } catch (e: any) {
+        console.error('[gradeFillInBlank] Failed:', e);
+        throw e;
+      }
+    },
+
+    // 简答题AI评分
+    gradeShortAnswer: async (questionId: string, userAnswer: string, referenceAnswer: string) => {
+      try {
+        const result = await fetchApi('/ai/grade-answer', {
+          method: 'POST',
+          body: JSON.stringify({ questionId, userAnswer, referenceAnswer })
+        });
+        return result;
+      } catch (e: any) {
+        console.error('[gradeShortAnswer] Failed:', e);
+        throw e;
+      }
+    },
+
+    // ========== 标签系统 ==========
+    
+    // 获取所有标签
+    fetchTags: async () => {
+      try {
+        const result = await fetchApi('/tags');
+        return result.tags || [];
+      } catch (e: any) {
+        console.error('[fetchTags] Failed:', e);
+        throw e;
+      }
+    },
+
+    // 创建标签
+    createTag: async (name: string, color?: string) => {
+      try {
+        const result = await fetchApi('/tags', {
+          method: 'POST',
+          body: JSON.stringify({ name, color })
+        });
+        return result.tag;
+      } catch (e: any) {
+        console.error('[createTag] Failed:', e);
+        throw e;
+      }
+    },
+
+    // 更新标签
+    updateTag: async (id: string, name: string, color?: string) => {
+      try {
+        const result = await fetchApi(`/tags/${id}`, {
+          method: 'PUT',
+          body: JSON.stringify({ name, color })
+        });
+        return result.tag;
+      } catch (e: any) {
+        console.error('[updateTag] Failed:', e);
+        throw e;
+      }
+    },
+
+    // 删除标签
+    deleteTag: async (id: string) => {
+      try {
+        await fetchApi(`/tags/${id}`, { method: 'DELETE' });
+      } catch (e: any) {
+        console.error('[deleteTag] Failed:', e);
+        throw e;
+      }
+    },
+
+    // 合并标签
+    mergeTags: async (sourceTagId: string, targetTagId: string) => {
+      try {
+        await fetchApi('/tags/merge', {
+          method: 'POST',
+          body: JSON.stringify({ sourceTagId, targetTagId })
+        });
+      } catch (e: any) {
+        console.error('[mergeTags] Failed:', e);
+        throw e;
+      }
+    },
+
+    // 按标签筛选题目
+    fetchQuestionsByTags: async (tagIds: string[], bankId?: string) => {
+      try {
+        const params = new URLSearchParams();
+        tagIds.forEach(id => params.append('tagIds', id));
+        if (bankId) params.append('bankId', bankId);
+        
+        const result = await fetchApi(`/questions/by-tags?${params.toString()}`);
+        return result.questions || [];
+      } catch (e: any) {
+        console.error('[fetchQuestionsByTags] Failed:', e);
+        throw e;
+      }
+    },
+
+    // 批量给题目打标签
+    batchTagQuestions: async (questionIds: string[], tagIds: string[]) => {
+      try {
+        await fetchApi('/questions/batch-tag', {
+          method: 'POST',
+          body: JSON.stringify({ questionIds, tagIds })
+        });
+      } catch (e: any) {
+        console.error('[batchTagQuestions] Failed:', e);
+        throw e;
+      }
+    },
+
+    // ========== 讨论系统 ==========
+    
+    // 获取讨论列表
+    fetchDiscussions: async (params?: { 
+      questionId?: string; 
+      sortBy?: 'latest' | 'hot' | 'mostCommented';
+      includeHidden?: boolean;
+    }) => {
+      try {
+        const searchParams = new URLSearchParams();
+        if (params?.questionId) searchParams.append('questionId', params.questionId);
+        if (params?.sortBy) searchParams.append('sortBy', params.sortBy);
+        if (params?.includeHidden) searchParams.append('includeHidden', 'true');
+        
+        const query = searchParams.toString();
+        const result = await fetchApi(`/discussions${query ? '?' + query : ''}`);
+        return result.discussions || [];
+      } catch (e: any) {
+        console.error('[fetchDiscussions] Failed:', e);
+        throw e;
+      }
+    },
+
+    // 获取单个讨论详情
+    fetchDiscussion: async (id: string) => {
+      try {
+        const result = await fetchApi(`/discussions/${id}`);
+        return result.discussion;
+      } catch (e: any) {
+        console.error('[fetchDiscussion] Failed:', e);
+        throw e;
+      }
+    },
+
+    // 创建讨论
+    createDiscussion: async (data: { 
+      title: string; 
+      content: string; 
+      questionId?: string;
+    }) => {
+      try {
+        const result = await fetchApi('/discussions', {
+          method: 'POST',
+          body: JSON.stringify(data)
+        });
+        return result.discussion;
+      } catch (e: any) {
+        console.error('[createDiscussion] Failed:', e);
+        throw e;
+      }
+    },
+
+    // 更新讨论
+    updateDiscussion: async (id: string, data: { 
+      title?: string; 
+      content?: string;
+    }) => {
+      try {
+        const result = await fetchApi(`/discussions/${id}`, {
+          method: 'PUT',
+          body: JSON.stringify(data)
+        });
+        return result.discussion;
+      } catch (e: any) {
+        console.error('[updateDiscussion] Failed:', e);
+        throw e;
+      }
+    },
+
+    // 删除讨论
+    deleteDiscussion: async (id: string) => {
+      try {
+        await fetchApi(`/discussions/${id}`, { method: 'DELETE' });
+      } catch (e: any) {
+        console.error('[deleteDiscussion] Failed:', e);
+        throw e;
+      }
+    },
+
+    // 切换讨论可见性
+    toggleDiscussionVisibility: async (id: string) => {
+      try {
+        const result = await fetchApi(`/discussions/${id}/toggle-visibility`, {
+          method: 'POST'
+        });
+        return result.discussion;
+      } catch (e: any) {
+        console.error('[toggleDiscussionVisibility] Failed:', e);
+        throw e;
+      }
+    },
+
+    // 切换讨论置顶状态
+    toggleDiscussionPin: async (id: string) => {
+      try {
+        const result = await fetchApi(`/discussions/${id}/toggle-pin`, {
+          method: 'POST'
+        });
+        return result.discussion;
+      } catch (e: any) {
+        console.error('[toggleDiscussionPin] Failed:', e);
+        throw e;
+      }
+    },
+
+    // 点赞/取消点赞讨论
+    toggleDiscussionLike: async (id: string) => {
+      try {
+        const result = await fetchApi(`/discussions/${id}/like`, {
+          method: 'POST'
+        });
+        return result;
+      } catch (e: any) {
+        console.error('[toggleDiscussionLike] Failed:', e);
+        throw e;
+      }
+    },
+
+    // 获取讨论的评论列表
+    fetchComments: async (discussionId: string) => {
+      try {
+        const result = await fetchApi(`/discussions/${discussionId}/comments`);
+        return result.comments || [];
+      } catch (e: any) {
+        console.error('[fetchComments] Failed:', e);
+        throw e;
+      }
+    },
+
+    // 创建评论
+    createComment: async (discussionId: string, data: { 
+      content: string; 
+      parentId?: string;
+    }) => {
+      try {
+        const result = await fetchApi(`/discussions/${discussionId}/comments`, {
+          method: 'POST',
+          body: JSON.stringify(data)
+        });
+        return result.comment;
+      } catch (e: any) {
+        console.error('[createComment] Failed:', e);
+        throw e;
+      }
+    },
+
+    // 删除评论
+    deleteComment: async (commentId: string) => {
+      try {
+        await fetchApi(`/comments/${commentId}`, { method: 'DELETE' });
+      } catch (e: any) {
+        console.error('[deleteComment] Failed:', e);
+        throw e;
+      }
+    },
+
+    // 点赞/取消点赞评论
+    toggleCommentLike: async (commentId: string) => {
+      try {
+        const result = await fetchApi(`/comments/${commentId}/like`, {
+          method: 'POST'
+        });
+        return result;
+      } catch (e: any) {
+        console.error('[toggleCommentLike] Failed:', e);
+        throw e;
+      }
+    },
+
+    // 获取题目相关的讨论
+    fetchQuestionDiscussions: async (questionId: string) => {
+      try {
+        const result = await fetchApi(`/questions/${questionId}/discussions`);
+        return result.discussions || [];
+      } catch (e: any) {
+        console.error('[fetchQuestionDiscussions] Failed:', e);
+        throw e;
+      }
+    }
+  }), [isLoading, currentUser, banks, questions, exams, practiceRecords, examHistory, systemConfig, mistakes, favorites, srsRecords, students, admins, loginLogs, auditLogs, practicalTasks, practicalRecords, customFieldSchema, refreshAll]);
+
+  return storeValue;
+};

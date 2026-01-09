@@ -1,0 +1,25 @@
+/* Minimal placeholder stylesheet. For production, integrate Tailwind via PostCSS/build step.
+   This file prevents 404s and allows adding global overrides. */
+html, body, #root { height: 100%; }
+body { margin: 0; }
+
+/* 公告栏滚动动画 */
+@keyframes marquee {
+  0% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
+}
+
+.animate-marquee {
+  display: inline-block;
+  white-space: nowrap;
+  animation: marquee 20s linear infinite;
+  padding-right: 100%;
+}
+
+.animate-marquee:hover {
+  animation-play-state: paused;
+}

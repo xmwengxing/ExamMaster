@@ -1,0 +1,93 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Dependencies
+node_modules
+
+# Build output
+dist
+dist-ssr
+*.local
+
+# Database files
+*.db
+*.db-journal
+edumaster.db
+backups/
+
+# Environment variables
+.env
+.env.local
+.env.production
+.env.*.local
+
+# Editor directories and files
+.vscode/
+.idea/
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS files
+Thumbs.db
+
+# SSL certificates
+*.pem
+*.key
+*.crt
+cloudflare-cert.pem
+cloudflare-key.pem
+
+# Temporary files
+*.tmp
+*.temp
+.cache
+
+# PM2
+.pm2
+
+# Kiro IDE
+.kiro/
+
+# GitHub workflows (if not needed)
+.github/
+
+# Test files
+test-*.html
+test-*.js
+check-*.js
+create-*.js
+fix-*.cjs
+
+# Deployment scripts
+deploy*.bat
+deploy*.sh
+upload-*.sh
+setup-*.bat
+setup-*.sh
+verify-*.sh
+vps-*.sh
+
+# Documentation (Chinese)
+SSH命令集合.txt
+VPS一键修复命令.txt
+在线部署命令.txt
+智能复习测试清单.txt
+
+# Config files
+nginx.conf
+nginx-ssl.conf
+ecosystem.config.cjs
+metadata.json
+
+# Development docs (keep main docs)
+开发文档_*/
