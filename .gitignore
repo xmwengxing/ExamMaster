@@ -87,10 +87,7 @@ verify-*.sh
 vps-*.sh
 
 # Documentation (Chinese)
-SSH命令集合.txt
-VPS一键修复命令.txt
-在线部署命令.txt
-智能复习测试清单.txt
+*.txt
 
 # Config files
 nginx.conf
