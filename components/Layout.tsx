@@ -11,13 +11,15 @@ interface LayoutProps {
   themeConfig?: any;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, user, activeTab, onTabChange, onLogout, themeConfig = {} }) => {
+const Layout: React.FC<LayoutProps> = ({ children, user, activeTab, onTabChange, onLogout, themeConfig }) => {
   const isStudent = user.role === UserRole.STUDENT;
   const isSuperAdmin = user.phone === 'admin';
   
-  const logoIcon = themeConfig.logoIcon || 'fa-graduation-cap';
-  const logoText = themeConfig.logoText || 'EduMaster';
-  const logoImage = themeConfig.logoImage || '';
+  // 确保themeConfig不为null或undefined
+  const config = themeConfig || {};
+  const logoIcon = config.logoIcon || 'fa-graduation-cap';
+  const logoText = config.logoText || 'EduMaster';
+  const logoImage = config.logoImage || '';
 
   const studentTabs = [
     { id: 'home', icon: 'fa-house', label: '首页' },

@@ -94,6 +94,17 @@ export const useAppStore = () => {
   const [activeBank, setActiveBank] = useState<QuestionBank | null>(null);
   const [srsRecords, setSrsRecords] = useState<SrsRecord[]>([]);
 
+  // 缓存：讨论和标签数据（5分钟有效期）
+  const [discussionsCache, setDiscussionsCache] = useState<{
+    data: any[];
+    timestamp: number;
+    params: string;
+  } | null>(null);
+  const [tagsCache, setTagsCache] = useState<{
+    data: any[];
+    timestamp: number;
+  } | null>(null);
+
   // Added missing states for administrative and functional features
   const [students, setStudents] = useState<User[]>([]);
   const [admins, setAdmins] = useState<User[]>([]);
@@ -659,13 +670,36 @@ export const useAppStore = () => {
 
     // ========== 标签系统 ==========
     
-    // 获取所有标签
-    fetchTags: async () => {
+    // 获取所有标签（带缓存）
+    fetchTags: async (forceRefresh = false) => {
+      const now = Date.now();
+      const CACHE_DURATION = 5 * 60 * 1000; // 5分钟
+      
+      // 如果有缓存且未过期，直接返回缓存
+      if (!forceRefresh && tagsCache && (now - tagsCache.timestamp < CACHE_DURATION)) {
+        console.log('[fetchTags] 使用缓存数据');
+        return tagsCache.data;
+      }
+      
       try {
+        console.log('[fetchTags] 从服务器加载');
         const result = await fetchApi('/tags');
-        return result.tags || [];
+        const tags = result.tags || [];
+        
+        // 更新缓存
+        setTagsCache({
+          data: tags,
+          timestamp: now
+        });
+        
+        return tags;
       } catch (e: any) {
         console.error('[fetchTags] Failed:', e);
+        // 如果请求失败但有缓存，返回缓存数据
+        if (tagsCache) {
+          console.log('[fetchTags] 请求失败，使用缓存数据');
+          return tagsCache.data;
+        }
         throw e;
       }
     },
@@ -677,6 +711,8 @@ export const useAppStore = () => {
           method: 'POST',
           body: JSON.stringify({ name, color })
         });
+        // 清除标签缓存
+        setTagsCache(null);
         return result.tag;
       } catch (e: any) {
         console.error('[createTag] Failed:', e);
@@ -691,6 +727,8 @@ export const useAppStore = () => {
           method: 'PUT',
           body: JSON.stringify({ name, color })
         });
+        // 清除标签缓存
+        setTagsCache(null);
         return result.tag;
       } catch (e: any) {
         console.error('[updateTag] Failed:', e);
@@ -702,6 +740,8 @@ export const useAppStore = () => {
     deleteTag: async (id: string) => {
       try {
         await fetchApi(`/tags/${id}`, { method: 'DELETE' });
+        // 清除标签缓存
+        setTagsCache(null);
       } catch (e: any) {
         console.error('[deleteTag] Failed:', e);
         throw e;
@@ -715,6 +755,8 @@ export const useAppStore = () => {
           method: 'POST',
           body: JSON.stringify({ sourceTagId, targetTagId })
         });
+        // 清除标签缓存
+        setTagsCache(null);
       } catch (e: any) {
         console.error('[mergeTags] Failed:', e);
         throw e;
@@ -751,13 +793,26 @@ export const useAppStore = () => {
 
     // ========== 讨论系统 ==========
     
-    // 获取讨论列表
+    // 获取讨论列表（带缓存）
     fetchDiscussions: async (params?: { 
       questionId?: string; 
       sortBy?: 'latest' | 'hot' | 'mostCommented';
       includeHidden?: boolean;
-    }) => {
+    }, forceRefresh = false) => {
+      const now = Date.now();
+      const CACHE_DURATION = 5 * 60 * 1000; // 5分钟
+      const cacheKey = JSON.stringify(params || {});
+      
+      // 如果有缓存且未过期，直接返回缓存
+      if (!forceRefresh && discussionsCache && 
+          discussionsCache.params === cacheKey && 
+          (now - discussionsCache.timestamp < CACHE_DURATION)) {
+        console.log('[fetchDiscussions] 使用缓存数据');
+        return discussionsCache.data;
+      }
+      
       try {
+        console.log('[fetchDiscussions] 从服务器加载');
         const searchParams = new URLSearchParams();
         if (params?.questionId) searchParams.append('questionId', params.questionId);
         if (params?.sortBy) searchParams.append('sortBy', params.sortBy);
@@ -765,9 +820,23 @@ export const useAppStore = () => {
         
         const query = searchParams.toString();
         const result = await fetchApi(`/discussions${query ? '?' + query : ''}`);
-        return result.discussions || [];
+        const discussions = result.discussions || [];
+        
+        // 更新缓存
+        setDiscussionsCache({
+          data: discussions,
+          timestamp: now,
+          params: cacheKey
+        });
+        
+        return discussions;
       } catch (e: any) {
         console.error('[fetchDiscussions] Failed:', e);
+        // 如果请求失败但有缓存，返回缓存数据
+        if (discussionsCache && discussionsCache.params === cacheKey) {
+          console.log('[fetchDiscussions] 请求失败，使用缓存数据');
+          return discussionsCache.data;
+        }
         throw e;
       }
     },
@@ -794,6 +863,8 @@ export const useAppStore = () => {
           method: 'POST',
           body: JSON.stringify(data)
         });
+        // 清除讨论缓存
+        setDiscussionsCache(null);
         return result.discussion;
       } catch (e: any) {
         console.error('[createDiscussion] Failed:', e);
@@ -811,6 +882,8 @@ export const useAppStore = () => {
           method: 'PUT',
           body: JSON.stringify(data)
         });
+        // 清除讨论缓存
+        setDiscussionsCache(null);
         return result.discussion;
       } catch (e: any) {
         console.error('[updateDiscussion] Failed:', e);
@@ -822,6 +895,8 @@ export const useAppStore = () => {
     deleteDiscussion: async (id: string) => {
       try {
         await fetchApi(`/discussions/${id}`, { method: 'DELETE' });
+        // 清除讨论缓存
+        setDiscussionsCache(null);
       } catch (e: any) {
         console.error('[deleteDiscussion] Failed:', e);
         throw e;
@@ -834,6 +909,8 @@ export const useAppStore = () => {
         const result = await fetchApi(`/discussions/${id}/toggle-visibility`, {
           method: 'POST'
         });
+        // 清除讨论缓存
+        setDiscussionsCache(null);
         return result.discussion;
       } catch (e: any) {
         console.error('[toggleDiscussionVisibility] Failed:', e);
@@ -847,6 +924,8 @@ export const useAppStore = () => {
         const result = await fetchApi(`/discussions/${id}/toggle-pin`, {
           method: 'POST'
         });
+        // 清除讨论缓存
+        setDiscussionsCache(null);
         return result.discussion;
       } catch (e: any) {
         console.error('[toggleDiscussionPin] Failed:', e);
