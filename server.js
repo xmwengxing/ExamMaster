@@ -694,27 +694,164 @@ app.post('/api/questions', auth, (req, res) => {
 
 // Import multiple questions into a bank
 app.post('/api/banks/:id/import', auth, (req, res) => {
-  console.log('[import] POST /api/banks/:id/import', { params: req.params, bodySummary: Array.isArray(req.body?.questions) ? req.body.questions.length : undefined, user: req.user && { id: req.user.id, role: req.user.role } });
+  console.log('[import] POST /api/banks/:id/import', { 
+    params: req.params, 
+    bodySummary: Array.isArray(req.body?.questions) ? req.body.questions.length : undefined, 
+    user: req.user && { id: req.user.id, role: req.user.role } 
+  });
+  
   if (!req.user || req.user.role !== 'ADMIN') {
     console.warn('[import] forbidden for user', req.user);
     return res.status(403).send('Forbidden');
   }
+  
   const bankId = req.params.id;
   const { questions } = req.body || {};
-  if (!Array.isArray(questions) || questions.length === 0) return res.json({ success: true, inserted: 0 });
+  
+  if (!Array.isArray(questions) || questions.length === 0) {
+    console.log('[import] No questions to import');
+    return res.json({ success: true, inserted: 0 });
+  }
+  
+  console.log('[import] Importing', questions.length, 'questions to bank', bankId);
+  
   let inserted = 0;
-  const stmt = db.prepare("INSERT INTO questions (id, bankId, type, content, options, answer, explanation) VALUES (?,?,?,?,?,?,?)");
-  db.serialize(() => {
-    for (const q of questions) {
-      const id = q.id || `q-${Date.now()}-${Math.floor(Math.random()*10000)}`;
-      stmt.run(id, bankId, q.type || 'SINGLE', q.content || '', JSON.stringify(q.options || []), JSON.stringify(q.answer || ''), q.explanation || '');
-      inserted++;
+  let skipped = 0;
+  const errors = [];
+  
+  // 使用事务提高性能
+  db.run('BEGIN TRANSACTION', (err) => {
+    if (err) {
+      console.error('[import] Error starting transaction:', err);
+      return res.status(500).json({ error: err.message });
     }
-    stmt.finalize((err) => {
-      if (err) return res.status(500).send(err.message);
-      db.run("UPDATE banks SET questionCount = COALESCE(questionCount, 0) + ? WHERE id = ?", [inserted, bankId], (e) => {
-        if (e) return res.status(500).send(e.message);
-        res.json({ success: true, inserted });
+    
+    let stmt;
+    try {
+      stmt = db.prepare(`
+        INSERT INTO questions (
+          id, bankId, type, content, options, answer, explanation,
+          blanks, referenceAnswer, aiGradingEnabled, tags
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?)
+      `);
+    } catch (prepareErr) {
+      console.error('[import] Error preparing statement:', prepareErr);
+      db.run('ROLLBACK', () => {
+        return res.status(500).json({ 
+          error: prepareErr.message,
+          inserted: 0,
+          skipped: questions.length,
+          errors: [`准备语句失败：${prepareErr.message}`]
+        });
+      });
+      return;
+    }
+    
+    // 同步处理每个题目
+    for (let i = 0; i < questions.length; i++) {
+      const q = questions[i];
+      const rowNum = i + 2; // CSV行号（+1标题行+1从1开始）
+      
+      try {
+        // 生成唯一ID：使用时间戳+随机数+索引，确保唯一性
+        const timestamp = Date.now();
+        const random = Math.floor(Math.random() * 1000000);
+        const id = q.id || `q-${timestamp}-${random}-${i}`;
+        
+        const type = q.type || 'SINGLE';
+        const content = q.content || '';
+        const options = JSON.stringify(q.options || []);
+        const answer = JSON.stringify(q.answer || '');
+        const explanation = q.explanation || '';
+        const blanks = q.blanks ? JSON.stringify(q.blanks) : null;
+        const referenceAnswer = q.referenceAnswer || null;
+        const aiGradingEnabled = q.aiGradingEnabled ? 1 : 0;
+        const tags = q.tags ? JSON.stringify(q.tags) : null;
+        
+        // 执行插入（注意：stmt.run在事务中是同步的，不返回result）
+        stmt.run(
+          id, bankId, type, content, options, answer, explanation,
+          blanks, referenceAnswer, aiGradingEnabled, tags
+        );
+        
+        // 如果没有抛出异常，说明插入成功
+        inserted++;
+      } catch (err) {
+        skipped++;
+        const errorMsg = err.message || String(err);
+        console.error(`[import] Error at row ${rowNum}:`, errorMsg);
+        
+        // 特殊处理ID重复错误
+        if (errorMsg.includes('UNIQUE constraint') && errorMsg.includes('questions.id')) {
+          errors.push(`第${rowNum}行：题目ID重复（请检查是否重复导入）`);
+        } else if (errorMsg.includes('NOT NULL constraint')) {
+          errors.push(`第${rowNum}行：必填字段为空`);
+        } else {
+          errors.push(`第${rowNum}行：${errorMsg}`);
+        }
+      }
+    }
+    
+    stmt.finalize((finalizeErr) => {
+      if (finalizeErr) {
+        console.error('[import] Error finalizing statement:', finalizeErr);
+        db.run('ROLLBACK', () => {
+          return res.status(500).json({ 
+            error: finalizeErr.message,
+            inserted: 0,
+            skipped: questions.length,
+            errors: [`数据库错误：${finalizeErr.message}`]
+          });
+        });
+        return;
+      }
+      
+      // 提交事务
+      db.run('COMMIT', (commitErr) => {
+        if (commitErr) {
+          console.error('[import] Error committing transaction:', commitErr);
+          db.run('ROLLBACK', () => {
+            return res.status(500).json({ 
+              error: commitErr.message,
+              inserted: 0,
+              skipped: questions.length,
+              errors: [`提交失败：${commitErr.message}`]
+            });
+          });
+          return;
+        }
+        
+        console.log(`[import] Transaction committed: ${inserted} inserted, ${skipped} skipped`);
+        
+        // 更新题库题目数量
+        if (inserted > 0) {
+          db.run(
+            "UPDATE banks SET questionCount = COALESCE(questionCount, 0) + ? WHERE id = ?", 
+            [inserted, bankId], 
+            (updateErr) => {
+              if (updateErr) {
+                console.error('[import] Error updating bank count:', updateErr);
+              }
+              
+              // 返回结果
+              res.json({ 
+                success: true, 
+                inserted,
+                skipped,
+                total: questions.length,
+                errors: errors.length > 0 ? errors : undefined
+              });
+            }
+          );
+        } else {
+          res.json({ 
+            success: true, 
+            inserted: 0,
+            skipped,
+            total: questions.length,
+            errors: errors.length > 0 ? errors : undefined
+          });
+        }
       });
     });
   });

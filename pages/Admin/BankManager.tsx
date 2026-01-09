@@ -197,15 +197,44 @@ const BankManager: React.FC<BankManagerProps> = ({
         if (!line) continue;
         
         try {
-          // 使用正则表达式解析CSV，支持引号包裹的字段
-          const regex = /("([^"]*)"|([^,]+))/g;
+          // 改进的CSV解析：正确处理引号包裹和转义
           const parts: string[] = [];
-          let match;
+          let current = '';
+          let inQuotes = false;
+          let i = 0;
           
-          while ((match = regex.exec(line)) !== null) {
-            // 如果是引号包裹的内容，取group 2，否则取group 3
-            parts.push((match[2] !== undefined ? match[2] : match[3]).trim());
+          while (i < line.length) {
+            const char = line[i];
+            const nextChar = line[i + 1];
+            
+            if (char === '"') {
+              if (inQuotes && nextChar === '"') {
+                // 转义的引号（""）
+                current += '"';
+                i += 2;
+                continue;
+              } else {
+                // 切换引号状态
+                inQuotes = !inQuotes;
+                i++;
+                continue;
+              }
+            }
+            
+            if (char === ',' && !inQuotes) {
+              // 字段分隔符
+              parts.push(current.trim());
+              current = '';
+              i++;
+              continue;
+            }
+            
+            current += char;
+            i++;
           }
+          
+          // 添加最后一个字段
+          parts.push(current.trim());
           
           if (parts.length < 4) {
             errors.push(`第${i+1}行：字段不足（至少需要4个字段）`);
@@ -286,7 +315,7 @@ const BankManager: React.FC<BankManagerProps> = ({
           }
 
           newQs.push({
-            id: `q-imp-${Date.now()}-${i}`,
+            id: `q-imp-${Date.now()}-${Math.floor(Math.random()*1000000)}-${i}`,
             bankId: editingBankId,
             type: type,
             content: content.trim(),
@@ -314,11 +343,38 @@ const BankManager: React.FC<BankManagerProps> = ({
       
       if (newQs.length > 0) {
         try {
+          console.log('[BankManager] Importing questions:', newQs.length);
           const res = await onImportQuestions(editingBankId, newQs as Question[]);
-          const inserted = res?.inserted ?? newQs.length;
-          alert(`✓ 成功导入 ${inserted} 题${errors.length > 0 ? `\n✗ 跳过 ${errors.length} 条错误` : ''}`);
+          
+          const inserted = res?.inserted ?? 0;
+          const skipped = res?.skipped ?? 0;
+          const total = res?.total ?? newQs.length;
+          const serverErrors = res?.errors || [];
+          
+          // 合并前端和后端的错误
+          const allErrors = [...errors, ...serverErrors];
+          
+          // 构建结果消息
+          let message = `导入完成！\n\n`;
+          message += `总计：${total} 题\n`;
+          message += `✓ 成功：${inserted} 题\n`;
+          if (skipped > 0) {
+            message += `✗ 失败：${skipped} 题\n`;
+          }
+          
+          if (allErrors.length > 0) {
+            message += `\n错误详情（前${Math.min(10, allErrors.length)}条）：\n`;
+            message += allErrors.slice(0, 10).join('\n');
+            if (allErrors.length > 10) {
+              message += `\n...(还有${allErrors.length - 10}条错误)`;
+            }
+          }
+          
+          alert(message);
           setIsImportModalOpen(false);
+          
         } catch (err: any) {
+          console.error('[BankManager] Import error:', err);
           alert('导入失败：' + (err?.message || err));
         }
       }

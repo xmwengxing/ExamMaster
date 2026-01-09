@@ -1057,33 +1057,114 @@ const PracticeModeView: React.FC<PracticeModeProps> = ({
       {isNavOpen && (
         <div className="fixed inset-0 bg-indigo-900/40 backdrop-blur-sm z-[100] flex items-end md:items-center justify-center p-4" onClick={(e) => { e.stopPropagation(); setIsNavOpen(false); }}>
           <div className="bg-white rounded-[2.5rem] w-full max-w-lg p-8 shadow-2xl flex flex-col max-h-[85vh]" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-6 shrink-0"><h3 className="text-xl font-black text-gray-900">答题卡</h3><button onClick={() => setIsNavOpen(false)} className="text-gray-300"><i className="fa-solid fa-xmark text-xl"></i></button></div>
-            <div className="flex-1 overflow-y-auto space-y-8 pr-2 custom-scrollbar">
+            <div className="flex justify-between items-center mb-6 shrink-0">
+              <h3 className="text-xl font-black text-gray-900">答题卡</h3>
+              <button onClick={() => setIsNavOpen(false)} className="text-gray-300 hover:text-gray-500 transition-colors">
+                <i className="fa-solid fa-xmark text-xl"></i>
+              </button>
+            </div>
+            
+            {/* 快速导航栏 */}
+            <div className="flex gap-2 mb-6 shrink-0 overflow-x-auto pb-2 custom-scrollbar">
+              {groupedNavItems.map((group, idx) => (
+                <button
+                  key={group.label}
+                  onClick={() => {
+                    const firstItem = group.items[0];
+                    if (firstItem) {
+                      setCurrentIndex(firstItem.index);
+                      setIsNavOpen(false);
+                    }
+                  }}
+                  className="px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all shrink-0 bg-gradient-to-r from-indigo-50 to-purple-50 text-indigo-600 hover:from-indigo-100 hover:to-purple-100 border border-indigo-100"
+                >
+                  <i className={`fa-solid ${
+                    group.label.includes('单选') ? 'fa-circle-dot' :
+                    group.label.includes('多选') ? 'fa-square-check' :
+                    'fa-circle-question'
+                  } mr-1.5`}></i>
+                  {group.label} ({group.items.length})
+                </button>
+              ))}
+            </div>
+            
+            {/* 统计信息 */}
+            <div className="grid grid-cols-3 gap-3 mb-6 shrink-0">
+              <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-2xl p-3 text-center">
+                <div className="text-2xl font-black text-indigo-600">{questions.length}</div>
+                <div className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider mt-1">总题数</div>
+              </div>
+              <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-2xl p-3 text-center">
+                <div className="text-2xl font-black text-emerald-600">{Object.keys(userAnswers).length}</div>
+                <div className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider mt-1">已答题</div>
+              </div>
+              <div className="bg-gradient-to-br from-amber-50 to-amber-100 rounded-2xl p-3 text-center">
+                <div className="text-2xl font-black text-amber-600">{questions.length - Object.keys(userAnswers).length}</div>
+                <div className="text-[10px] font-bold text-amber-400 uppercase tracking-wider mt-1">未答题</div>
+              </div>
+            </div>
+            
+            {/* 题目列表 */}
+            <div className="flex-1 overflow-y-auto space-y-6 pr-2 custom-scrollbar">
                {groupedNavItems.map((group) => (
-                 <div key={group.label} className="space-y-4">
-                    <div className="flex items-center gap-2">
-                       <span className="w-1 h-4 bg-indigo-600 rounded-full"></span>
-                       <h4 className="text-xs font-black text-gray-500 uppercase tracking-widest">{group.label}</h4>
+                 <div key={group.label} className="space-y-3">
+                    <div className="flex items-center justify-between sticky top-0 bg-white py-2 z-10">
+                       <div className="flex items-center gap-2">
+                         <span className="w-1 h-4 bg-indigo-600 rounded-full"></span>
+                         <h4 className="text-xs font-black text-gray-500 uppercase tracking-widest">{group.label}</h4>
+                       </div>
+                       <span className="text-xs font-bold text-gray-400">{group.items.length}题</span>
                     </div>
-                    <div className="grid grid-cols-5 md:grid-cols-6 gap-3">
-                      {group.items.map((item) => (
-                        <button 
-                          key={item.id} 
-                          onClick={() => { setCurrentIndex(item.index); setIsNavOpen(false); }} 
-                          className={`aspect-square rounded-2xl font-black text-sm border-2 transition-all ${
-                            currentIndex === item.index 
-                              ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg' 
-                              : userAnswers[item.id] 
-                                ? 'bg-indigo-50 border-indigo-100 text-indigo-600' 
-                                : 'bg-gray-50 border-gray-50 text-gray-300 hover:border-gray-200'
-                          }`}
-                        >
-                          {item.index + 1}
-                        </button>
-                      ))}
+                    <div className="grid grid-cols-5 md:grid-cols-6 gap-2.5">
+                      {group.items.map((item) => {
+                        const isAnswered = !!userAnswers[item.id];
+                        const isCurrent = currentIndex === item.index;
+                        return (
+                          <button 
+                            key={item.id} 
+                            onClick={() => { setCurrentIndex(item.index); setIsNavOpen(false); }} 
+                            className={`aspect-square rounded-xl font-black text-sm border-2 transition-all relative ${
+                              isCurrent
+                                ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg scale-105' 
+                                : isAnswered
+                                  ? 'bg-emerald-50 border-emerald-200 text-emerald-600 hover:bg-emerald-100' 
+                                  : 'bg-gray-50 border-gray-200 text-gray-400 hover:border-gray-300 hover:bg-gray-100'
+                            }`}
+                          >
+                            {item.index + 1}
+                            {isAnswered && !isCurrent && (
+                              <i className="fa-solid fa-check absolute top-0.5 right-0.5 text-[8px] text-emerald-500"></i>
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
                  </div>
                ))}
+            </div>
+            
+            {/* 底部操作栏 */}
+            <div className="flex gap-3 mt-6 pt-6 border-t border-gray-100 shrink-0">
+              <button
+                onClick={() => {
+                  // 跳转到第一题未答的题目
+                  const firstUnanswered = questions.findIndex(q => !userAnswers[q.id]);
+                  if (firstUnanswered !== -1) {
+                    setCurrentIndex(firstUnanswered);
+                    setIsNavOpen(false);
+                  }
+                }}
+                className="flex-1 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl text-sm font-bold hover:from-amber-600 hover:to-orange-600 transition-all shadow-md"
+              >
+                <i className="fa-solid fa-forward mr-2"></i>
+                跳至未答题
+              </button>
+              <button
+                onClick={() => setIsNavOpen(false)}
+                className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-xl text-sm font-bold hover:bg-gray-200 transition-colors"
+              >
+                关闭
+              </button>
             </div>
           </div>
         </div>

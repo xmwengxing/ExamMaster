@@ -104,3 +104,14 @@ metadata.json
 
 # Git helper documentation
 
+
+# Question conversion files (local use only)
+convert-questions.bat
+convert-questions-python.bat
+test-questions.csv
+test-csv-parsing.html
+批量导入性能优化说明.md
+测试-*.csv
+紧急修复-导入全部失败.md
+转换后的题目*.csv
+题目导入*.csv
