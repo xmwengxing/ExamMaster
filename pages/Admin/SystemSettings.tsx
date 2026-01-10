@@ -522,34 +522,78 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({ config, onUpdate, onCha
               </h3>
               <button onClick={() => addItem('videos')} className="text-xs font-black text-purple-600 bg-purple-50 px-3 py-1.5 rounded-xl hover:bg-purple-100">新增课程</button>
             </div>
+            
+            {/* 视频类型说明 */}
+            <div className="bg-purple-50 p-4 rounded-xl border border-purple-100">
+              <div className="flex items-start gap-3">
+                <i className="fa-solid fa-circle-info text-purple-600 mt-0.5"></i>
+                <div className="flex-1">
+                  <p className="text-xs text-purple-700 font-bold mb-2">支持的视频类型</p>
+                  <ul className="text-[10px] text-purple-600 font-medium space-y-1 leading-relaxed">
+                    <li>• <strong>直接视频文件</strong>：.mp4、.webm、.ogg、.m3u8 格式，使用内建播放器</li>
+                    <li>• <strong>嵌入式视频</strong>：YouTube、Bilibili、爱奇艺、腾讯视频等，自动嵌入播放</li>
+                    <li>• <strong>API接口</strong>：选择"API"类型，支持带token等参数的接口地址</li>
+                    <li>• <strong>外部链接</strong>：其他类型链接将在新窗口打开</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+            
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {form.videos?.map((video: any) => (
                 <div key={video.id} className="p-4 bg-gray-50 rounded-2xl border border-gray-100 space-y-3 relative group">
                   <button onClick={() => removeItem('videos', video.id)} className="absolute top-2 right-2 p-2 text-gray-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-all">
                     <i className="fa-solid fa-circle-xmark"></i>
                   </button>
+                  
+                  {/* 视频类型选择 */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">视频类型</label>
+                    <select
+                      className="w-full bg-white border-none rounded-lg px-3 py-2 text-sm font-bold"
+                      value={video.type || 'LINK'}
+                      onChange={e => updateItemField('videos', video.id, 'type', e.target.value)}
+                    >
+                      <option value="LINK">普通链接</option>
+                      <option value="API">API接口</option>
+                    </select>
+                  </div>
+                  
                   <div className="space-y-1">
                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">课程标题</label>
                     <input 
                       className="w-full bg-white border-none rounded-lg px-3 py-2 text-sm font-bold" 
                       value={video.title} 
                       onChange={e => updateItemField('videos', video.id, 'title', e.target.value)}
+                      placeholder="例如：Python基础入门"
                     />
                   </div>
+                  
                   <div className="space-y-1">
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">跳转链接</label>
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                      {video.type === 'API' ? 'API接口地址' : '视频链接'}
+                    </label>
                     <input 
                       className="w-full bg-white border-none rounded-lg px-3 py-2 text-xs font-mono" 
                       value={video.url} 
                       onChange={e => updateItemField('videos', video.id, 'url', e.target.value)}
+                      placeholder={video.type === 'API' ? 'https://api.example.com/video?token=xxx' : 'https://www.youtube.com/watch?v=xxx'}
                     />
+                    {video.type === 'API' && (
+                      <p className="text-[9px] text-gray-400 mt-1">
+                        <i className="fa-solid fa-lightbulb mr-1"></i>
+                        可包含token等认证参数，系统会直接使用此URL
+                      </p>
+                    )}
                   </div>
+                  
                   <div className="space-y-1">
                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">简介描述</label>
                     <input 
                       className="w-full bg-white border-none rounded-lg px-3 py-2 text-xs" 
                       value={video.desc} 
                       onChange={e => updateItemField('videos', video.id, 'desc', e.target.value)}
+                      placeholder="课程简介，帮助学员了解课程内容"
                     />
                   </div>
                 </div>

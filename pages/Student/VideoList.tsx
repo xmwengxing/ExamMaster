@@ -1,6 +1,7 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { VideoConfig } from '../../types';
+import VideoPlayer from '../../components/VideoPlayer';
 
 interface VideoListProps {
   videos: VideoConfig[];
@@ -8,6 +9,32 @@ interface VideoListProps {
 }
 
 const VideoList: React.FC<VideoListProps> = ({ videos, onBack }) => {
+  const [selectedVideo, setSelectedVideo] = useState<VideoConfig | null>(null);
+
+  // 判断是否应该使用内建播放器
+  const shouldUseBuiltInPlayer = (video: VideoConfig) => {
+    const url = video.url.toLowerCase();
+    // 支持直接视频文件、嵌入式视频、API类型
+    return video.type === 'API' ||
+           url.endsWith('.mp4') || 
+           url.endsWith('.webm') || 
+           url.endsWith('.ogg') ||
+           url.endsWith('.m3u8') ||
+           url.includes('youtube.com') || 
+           url.includes('youtu.be') ||
+           url.includes('bilibili.com') ||
+           url.includes('iqiyi.com') ||
+           url.includes('qq.com/v');
+  };
+
+  const handleVideoClick = (video: VideoConfig) => {
+    if (shouldUseBuiltInPlayer(video)) {
+      setSelectedVideo(video);
+    } else {
+      window.open(video.url, '_blank');
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
@@ -21,7 +48,8 @@ const VideoList: React.FC<VideoListProps> = ({ videos, onBack }) => {
         {videos.map((video) => (
           <div 
             key={video.id} 
-            className="bg-white rounded-[2rem] overflow-hidden border border-gray-100 shadow-sm hover:shadow-xl transition-all group flex flex-col"
+            className="bg-white rounded-[2rem] overflow-hidden border border-gray-100 shadow-sm hover:shadow-xl transition-all group flex flex-col cursor-pointer"
+            onClick={() => handleVideoClick(video)}
           >
             <div className="aspect-video bg-gray-900 relative flex items-center justify-center">
               <img 
@@ -30,13 +58,13 @@ const VideoList: React.FC<VideoListProps> = ({ videos, onBack }) => {
                 className="w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-500" 
               />
               <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-white border border-white/30 group-hover:scale-110 transition-transform cursor-pointer shadow-2xl">
+                <div className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-white border border-white/30 group-hover:scale-110 transition-transform shadow-2xl">
                   <i className="fa-solid fa-play ml-1"></i>
                 </div>
               </div>
               <div className="absolute top-4 left-4">
                 <span className="bg-indigo-600 text-white text-[10px] font-black px-2 py-1 rounded-lg uppercase tracking-widest shadow-lg">
-                  {video.type === 'LINK' ? '外部课' : '平台课'}
+                  {video.type === 'API' ? 'API接口' : shouldUseBuiltInPlayer(video) ? '内建播放' : '外部链接'}
                 </span>
               </div>
             </div>
@@ -56,12 +84,9 @@ const VideoList: React.FC<VideoListProps> = ({ videos, onBack }) => {
                    </div>
                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">官方精选</span>
                 </div>
-                <button 
-                  onClick={() => window.open(video.url, '_blank')}
-                  className="text-xs font-black text-indigo-600 hover:text-indigo-800 flex items-center gap-1 group/btn"
-                >
+                <div className="text-xs font-black text-indigo-600 hover:text-indigo-800 flex items-center gap-1 group/btn">
                   立即观看 <i className="fa-solid fa-circle-arrow-right group-hover/btn:translate-x-1 transition-transform"></i>
-                </button>
+                </div>
               </div>
             </div>
           </div>
@@ -73,6 +98,14 @@ const VideoList: React.FC<VideoListProps> = ({ videos, onBack }) => {
            <i className="fa-solid fa-video-slash text-5xl mb-4 opacity-20"></i>
            <p className="font-bold">暂无精选视频课程</p>
         </div>
+      )}
+
+      {/* 视频播放器 */}
+      {selectedVideo && (
+        <VideoPlayer
+          video={selectedVideo}
+          onClose={() => setSelectedVideo(null)}
+        />
       )}
     </div>
   );
