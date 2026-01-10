@@ -52,10 +52,16 @@ const fetchApi = async (endpoint: string, options: any = {}, retries: number = 2
     if (!response.ok) {
       const text = await response.text();
       console.warn(`[fetchApi] ${endpoint} -> ${response.status} ${text}`);
-      // 仅当 401 Unauthorized 时触发重新认证提示；403 Forbidden 代表权限不足，不应导致登录弹窗
-      if (response.status === 401) {
-        console.warn('[fetchApi] Received 401 — dispatching auth event for UI');
-        try { dispatchErrorEvent('edu:auth-error', { status: response.status, message: text }); } catch (e) { console.debug(e); }
+      // 只在以下情况触发auth-error事件：
+      // 1. 401错误
+      // 2. 有token（排除token缺失导致的401）
+      // 3. 不是登录接口（登录失败不应该触发auth-error）
+      const isLoginEndpoint = endpoint.includes('/auth/login');
+      if (response.status === 401 && token && !isLoginEndpoint) {
+        console.warn('[fetchApi] Received 401 with token present — token may be expired or invalid');
+        try { dispatchErrorEvent('edu:auth-error', { status: response.status, message: 'Token已过期或无效，请重新登录' }); } catch (e) { console.debug(e); }
+      } else if (response.status === 401 && !token) {
+        console.debug('[fetchApi] Received 401 without token — this is expected, not triggering auth-error');
       }
       throw new Error(text);
     }
@@ -129,24 +135,31 @@ export const useAppStore = () => {
         return null;
       });
 
+      // 如果获取用户信息失败，说明token无效，停止后续调用
+      if (!userProfile) {
+        console.warn('[refreshAll] User profile is null, stopping refresh');
+        setIsLoading(false);
+        return;
+      }
+
       const promises: Array<Promise<any>> = [
         Promise.resolve(userProfile),
-        fetchApi('/banks').catch(() => []),
-        fetchApi('/questions').catch(() => []),
-        fetchApi('/exams').catch(() => []),
-        fetchApi('/config').catch(() => null),
-        fetchApi('/practice').catch(() => []),
-        fetchApi('/favorites').catch(() => []),
-        fetchApi('/user/progress').catch(() => []),
+        fetchApi('/banks').catch(err => { console.debug('[refreshAll] /banks failed:', err); return []; }),
+        fetchApi('/questions').catch(err => { console.debug('[refreshAll] /questions failed:', err); return []; }),
+        fetchApi('/exams').catch(err => { console.debug('[refreshAll] /exams failed:', err); return []; }),
+        fetchApi('/config').catch(err => { console.debug('[refreshAll] /config failed:', err); return null; }),
+        fetchApi('/practice').catch(err => { console.debug('[refreshAll] /practice failed:', err); return []; }),
+        fetchApi('/favorites').catch(err => { console.debug('[refreshAll] /favorites failed:', err); return []; }),
+        fetchApi('/user/progress').catch(err => { console.debug('[refreshAll] /user/progress failed:', err); return []; }),
       ];
 
       // Conditionally add admin-only endpoints
       if (userProfile && userProfile.role === 'ADMIN') {
-        promises.push(fetchApi('/admin/students').catch(() => []));
-        promises.push(fetchApi('/admin/admins').catch(() => []));
-        promises.push(fetchApi('/admin/login-logs').catch(() => []));
-        promises.push(fetchApi('/admin/audit-logs').catch(() => []));
-        promises.push(fetchApi('/admin/all-progress').catch(() => []));
+        promises.push(fetchApi('/admin/students').catch(err => { console.debug('[refreshAll] /admin/students failed:', err); return []; }));
+        promises.push(fetchApi('/admin/admins').catch(err => { console.debug('[refreshAll] /admin/admins failed:', err); return []; }));
+        promises.push(fetchApi('/admin/login-logs').catch(err => { console.debug('[refreshAll] /admin/login-logs failed:', err); return []; }));
+        promises.push(fetchApi('/admin/audit-logs').catch(err => { console.debug('[refreshAll] /admin/audit-logs failed:', err); return []; }));
+        promises.push(fetchApi('/admin/all-progress').catch(err => { console.debug('[refreshAll] /admin/all-progress failed:', err); return []; }));
       } else {
         // placeholders for indexes consistency
         promises.push(Promise.resolve([])); // students
@@ -157,11 +170,11 @@ export const useAppStore = () => {
       }
 
       // Non-admin functional endpoints
-      promises.push(fetchApi('/practical/tasks').catch(() => []));
-      promises.push(fetchApi('/practical/records').catch(() => []));
-      promises.push(fetchApi('/srs/records').catch(() => []));
-      promises.push(fetchApi('/mistakes').catch(() => []));
-      promises.push(fetchApi('/exams/history').catch(() => []));
+      promises.push(fetchApi('/practical/tasks').catch(err => { console.debug('[refreshAll] /practical/tasks failed:', err); return []; }));
+      promises.push(fetchApi('/practical/records').catch(err => { console.debug('[refreshAll] /practical/records failed:', err); return []; }));
+      promises.push(fetchApi('/srs/records').catch(err => { console.debug('[refreshAll] /srs/records failed:', err); return []; }));
+      promises.push(fetchApi('/mistakes').catch(err => { console.debug('[refreshAll] /mistakes failed:', err); return []; }));
+      promises.push(fetchApi('/exams/history').catch(err => { console.debug('[refreshAll] /exams/history failed:', err); return []; }));
 
       const results = await Promise.all(promises);
 
@@ -1005,6 +1018,55 @@ export const useAppStore = () => {
         return result.discussions || [];
       } catch (e: any) {
         console.error('[fetchQuestionDiscussions] Failed:', e);
+        throw e;
+      }
+    },
+
+    // ========== AI解析相关方法 ==========
+    
+    // 保存AI解析内容
+    saveAiAnalysis: async (questionId: string, content: string) => {
+      try {
+        await fetchApi('/ai/analysis', {
+          method: 'POST',
+          body: JSON.stringify({ questionId, content })
+        });
+      } catch (e: any) {
+        console.error('[saveAiAnalysis] Failed:', e);
+        throw e;
+      }
+    },
+
+    // 获取AI解析内容
+    getAiAnalysis: async (questionId: string) => {
+      try {
+        const result = await fetchApi(`/ai/analysis/${questionId}`);
+        return result;
+      } catch (e: any) {
+        console.error('[getAiAnalysis] Failed:', e);
+        return null;
+      }
+    },
+
+    // 管理员获取所有AI解析记录
+    fetchAdminAiAnalysis: async (params?: {
+      page?: number;
+      pageSize?: number;
+      search?: string;
+      type?: string;
+    }) => {
+      try {
+        const searchParams = new URLSearchParams();
+        if (params?.page) searchParams.append('page', params.page.toString());
+        if (params?.pageSize) searchParams.append('pageSize', params.pageSize.toString());
+        if (params?.search) searchParams.append('search', params.search);
+        if (params?.type) searchParams.append('type', params.type);
+        
+        const query = searchParams.toString();
+        const result = await fetchApi(`/admin/ai-analysis${query ? '?' + query : ''}`);
+        return result;
+      } catch (e: any) {
+        console.error('[fetchAdminAiAnalysis] Failed:', e);
         throw e;
       }
     }

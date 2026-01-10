@@ -13,12 +13,35 @@ interface DeepSeekConfig {
  * 优先级：学员个人配置 > 管理员全局配置
  */
 export function getEffectiveApiKey(config: DeepSeekConfig): string | null {
-  if (config.userApiKey && config.userApiKey.trim()) {
+  console.log('[getEffectiveApiKey] 输入配置:', {
+    hasUserKey: !!config.userApiKey,
+    userKeyLength: config.userApiKey?.length || 0,
+    userKeyValue: config.userApiKey,
+    hasAdminKey: !!config.adminApiKey,
+    adminKeyLength: config.adminApiKey?.length || 0
+  });
+  
+  // 检查用户API Key是否有效（不为空、不为"null"、不为"undefined"字符串）
+  if (config.userApiKey && 
+      config.userApiKey.trim() && 
+      config.userApiKey !== 'null' && 
+      config.userApiKey !== 'undefined' &&
+      config.userApiKey.length > 10) { // API Key通常很长
+    console.log('[getEffectiveApiKey] 使用用户API Key');
     return config.userApiKey.trim();
   }
-  if (config.adminApiKey && config.adminApiKey.trim()) {
+  
+  // 检查管理员API Key是否有效
+  if (config.adminApiKey && 
+      config.adminApiKey.trim() && 
+      config.adminApiKey !== 'null' && 
+      config.adminApiKey !== 'undefined' &&
+      config.adminApiKey.length > 10) {
+    console.log('[getEffectiveApiKey] 使用管理员API Key');
     return config.adminApiKey.trim();
   }
+  
+  console.log('[getEffectiveApiKey] 未找到有效的API Key');
   return null;
 }
 
@@ -53,6 +76,11 @@ export async function callDeepSeekAPI(params: {
     temperature = 0.7,
     maxTokens = 2000
   } = params;
+
+  // 调试：打印API Key信息
+  console.log('[DeepSeek API] 接收到的API Key:', apiKey ? `${apiKey.substring(0, 10)}...` : 'null');
+  console.log('[DeepSeek API] API Key类型:', typeof apiKey);
+  console.log('[DeepSeek API] API Key长度:', apiKey?.length || 0);
 
   try {
     const response = await fetch('https://api.deepseek.com/v1/chat/completions', {

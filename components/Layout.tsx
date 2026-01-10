@@ -39,6 +39,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, activeTab, onTabChange,
     { id: 'supervisor', icon: 'fa-user-check', label: '督学管理' },
     { id: 'discussion-manager', icon: 'fa-comments', label: '讨论管理' },
     { id: 'tags', icon: 'fa-tags', label: '标签管理' },
+    { id: 'ai-analysis', icon: 'fa-wand-magic-sparkles', label: 'AI解析' },
     { id: 'settings', icon: 'fa-gears', label: '系统设置' },
   ];
 

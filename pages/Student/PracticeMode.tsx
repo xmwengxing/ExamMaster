@@ -27,6 +27,15 @@ const PracticeModeView: React.FC<PracticeModeProps> = ({
   const prevInitialIndexRef = useRef(initialIndex);
   const prevInitialAnswersRef = useRef(JSON.stringify(initialAnswers));
   
+  // 调试：监控systemConfig的变化
+  useEffect(() => {
+    console.log('[PracticeMode] systemConfig更新:', {
+      hasConfig: !!store.systemConfig,
+      hasDeepseekKey: !!store.systemConfig?.deepseekApiKey,
+      keyLength: store.systemConfig?.deepseekApiKey?.length || 0
+    });
+  }, [store.systemConfig]);
+  
   // 使用 ref 追踪最新的进度状态，用于退出时保存
   const currentProgressRef = useRef({ currentIndex: initialIndex, userAnswers: initialAnswers });
 
@@ -601,9 +610,30 @@ const PracticeModeView: React.FC<PracticeModeProps> = ({
         setShowExplanation(isMemoryMode || isMistakeMode || isSmartReviewMode || !!userAnswers[currentQuestion?.id]);
       }
     }
-    setAiAnalysis(null);
+    
+    // 加载已保存的AI解析
+    const loadSavedAnalysis = async () => {
+      if (currentQuestion?.id) {
+        try {
+          const saved = await store.getAiAnalysis(currentQuestion.id);
+          if (saved && saved.content) {
+            setAiAnalysis(saved.content);
+            console.log('[AI Analysis] 已加载保存的解析');
+          } else {
+            setAiAnalysis(null);
+          }
+        } catch (e) {
+          console.error('[AI Analysis] 加载失败:', e);
+          setAiAnalysis(null);
+        }
+      } else {
+        setAiAnalysis(null);
+      }
+    };
+    
+    loadSavedAnalysis();
     setGroundingChunks([]);
-  }, [currentIndex, isMemoryMode, isMistakeMode, isSequentialMode, isMockMode, isSmartReviewMode, userAnswers, currentQuestion?.id, confirmedIds]);
+  }, [currentIndex, isMemoryMode, isMistakeMode, isSequentialMode, isMockMode, isSmartReviewMode, userAnswers, currentQuestion?.id, confirmedIds, store]);
 
   const triggerArrows = useCallback(() => {
     setShowArrows(true);
@@ -674,11 +704,19 @@ const PracticeModeView: React.FC<PracticeModeProps> = ({
   const handleAIExplain = async () => {
     if (isAiLoading) return;
     
+    // 调试：打印配置信息
+    console.log('[AI Analysis] 当前用户:', store.currentUser?.id);
+    console.log('[AI Analysis] 用户API Key:', store.currentUser?.deepseekApiKey);
+    console.log('[AI Analysis] 系统配置:', store.systemConfig);
+    console.log('[AI Analysis] 系统API Key:', store.systemConfig?.deepseekApiKey);
+    
     // 获取有效的 API Key
     const apiKey = getEffectiveApiKey({
       userApiKey: store.currentUser?.deepseekApiKey,
       adminApiKey: store.systemConfig?.deepseekApiKey
     });
+    
+    console.log('[AI Analysis] 最终使用的API Key:', apiKey ? '已获取' : 'null');
     
     if (!apiKey) {
       alert(getApiKeyMissingMessage());
@@ -696,6 +734,15 @@ const PracticeModeView: React.FC<PracticeModeProps> = ({
       });
       setAiAnalysis(analysis);
       setGroundingChunks([]); // DeepSeek 不提供 grounding chunks
+      
+      // 保存AI解析内容到数据库
+      try {
+        await store.saveAiAnalysis(currentQuestion.id, analysis);
+        console.log('[AI Analysis] 解析内容已保存');
+      } catch (saveError) {
+        console.error('[AI Analysis] 保存失败:', saveError);
+        // 保存失败不影响显示
+      }
     } catch (e: any) {
       console.error('[AI Analysis Error]', e);
       setAiAnalysis(`解析加载失败：${e.message || '未知错误'}`);

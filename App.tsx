@@ -25,6 +25,7 @@ import PracticalManager from './pages/Admin/PracticalManager';
 import TagManager from './components/TagManager';
 import Discussions from './pages/Student/Discussions';
 import DiscussionManager from './pages/Admin/DiscussionManager';
+import AiAnalysisViewer from './pages/Admin/AiAnalysisViewer';
 
 const App: React.FC = () => {
   const store = useAppStore();
@@ -117,6 +118,12 @@ const App: React.FC = () => {
   const checkPracticeSession = async (mode: PracticeMode, params: any) => {
     const isCustom = params?.isCustom === true;
     const bankId = params?.bankId || store.activeBank?.id;
+
+    // 如果传递了skipCheck标志，直接开始练习，不检查历史进度
+    if (params?.skipCheck) {
+      console.log('[继续练习检查] skipCheck=true，跳过检查，直接开始');
+      return handleNavigate('practice-mode', { mode, ...params });
+    }
 
     // 当前没有明确题库时，直接进入练习
     if (!bankId) return handleNavigate('practice-mode', { mode, ...params });
@@ -263,6 +270,7 @@ const App: React.FC = () => {
         case 'practical-center': return <PracticalManager />;
         case 'tags': return <TagManager />;
         case 'discussion-manager': return <DiscussionManager />;
+        case 'ai-analysis': return <AiAnalysisViewer />;
         case 'supervisor': return <Supervisor students={store.students} logs={store.loginLogs} />;
         case 'settings': return <SystemSettings config={store.systemConfig} onUpdate={store.updateSystemSettings} onChangeAdminPass={store.changeAdminPassword} />;
         case 'admin-user': return <AdminUserMgt currentUser={store.currentUser!} admins={store.admins} students={store.students} banks={store.banks} onAddAdmin={store.addAdmin} onUpdateAdmin={store.updateAdmin} onDeleteAdmin={store.deleteAdmin} onBatchStudentPerms={store.batchSetStudentPerms} onUpdateStudentPerms={store.updateStudentPerms} />;
@@ -294,12 +302,22 @@ const App: React.FC = () => {
         const isCustom = activeParams?.isCustom === true;
         const mockConfig = activeParams?.exam || activeParams?.config || activeParams;
         const orderedQuestionIds = activeParams?.orderedQuestionIds;
+        const customCounts = activeParams?.customCounts;
 
         if (isMistake) {
           questionsToLoad = store.mistakes.filter(q => q.bankId === activeBank.id);
           if (activeParams?.type) {
             questionsToLoad = questionsToLoad.filter(q => q.type === activeParams.type);
           }
+        } else if (customCounts) {
+          // 处理自定义练习的题数配置
+          const bankQs = store.questions.filter(q => q.bankId === activeBank.id);
+          const singles = bankQs.filter(q => q.type === QuestionType.SINGLE).sort(() => Math.random() - 0.5).slice(0, customCounts[QuestionType.SINGLE] || 0);
+          const multiples = bankQs.filter(q => q.type === QuestionType.MULTIPLE).sort(() => Math.random() - 0.5).slice(0, customCounts[QuestionType.MULTIPLE] || 0);
+          const judges = bankQs.filter(q => q.type === QuestionType.JUDGE).sort(() => Math.random() - 0.5).slice(0, customCounts[QuestionType.JUDGE] || 0);
+          const fillInBlanks = bankQs.filter(q => q.type === QuestionType.FILL_IN_BLANK).sort(() => Math.random() - 0.5).slice(0, customCounts[QuestionType.FILL_IN_BLANK] || 0);
+          const shortAnswers = bankQs.filter(q => q.type === QuestionType.SHORT_ANSWER).sort(() => Math.random() - 0.5).slice(0, customCounts[QuestionType.SHORT_ANSWER] || 0);
+          questionsToLoad = [...singles, ...multiples, ...judges, ...fillInBlanks, ...shortAnswers];
         } else if (isMock && mockConfig) {
           const bankQs = store.questions.filter(q => q.bankId === (mockConfig.bankId || activeBank.id));
           if (orderedQuestionIds) {

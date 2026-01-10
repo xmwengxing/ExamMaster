@@ -18,8 +18,14 @@ const PracticeList: React.FC<PracticeProps> = ({ banks, activeBank, history, onS
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isOperating, setIsOperating] = useState(false);
   const [form, setForm] = useState({
-    type: 'ALL',
-    strategy: 'SEQUENTIAL', // 默认改为顺序练习
+    strategy: 'SEQUENTIAL', // 默认顺序练习
+    counts: {
+      [QuestionType.SINGLE]: 0,
+      [QuestionType.MULTIPLE]: 0,
+      [QuestionType.JUDGE]: 0,
+      [QuestionType.FILL_IN_BLANK]: 0,
+      [QuestionType.SHORT_ANSWER]: 0,
+    }
   });
 
   // 严格过滤：仅显示 isCustom 为 1 (true) 的记录
@@ -30,7 +36,6 @@ const PracticeList: React.FC<PracticeProps> = ({ banks, activeBank, history, onS
   const typeStats = useMemo(() => {
     const bankQs = store.questions.filter(q => q.bankId === activeBank.id);
     return {
-      ALL: bankQs.length,
       [QuestionType.SINGLE]: bankQs.filter(q => q.type === QuestionType.SINGLE).length,
       [QuestionType.MULTIPLE]: bankQs.filter(q => q.type === QuestionType.MULTIPLE).length,
       [QuestionType.JUDGE]: bankQs.filter(q => q.type === QuestionType.JUDGE).length,
@@ -39,31 +44,80 @@ const PracticeList: React.FC<PracticeProps> = ({ banks, activeBank, history, onS
     };
   }, [store.questions, activeBank.id]);
 
-  const estimatedCount = useMemo(() => {
-    return typeStats[form.type as keyof typeof typeStats] || 0;
-  }, [typeStats, form.type]);
+  const totalCount = useMemo(() => {
+    return Object.values(form.counts).reduce((sum, count) => sum + count, 0);
+  }, [form.counts]);
+
+  const getTypeLabel = (type: string) => {
+    const labels: Record<string, string> = {
+      [QuestionType.SINGLE]: '单选',
+      [QuestionType.MULTIPLE]: '多选',
+      [QuestionType.JUDGE]: '判断',
+      [QuestionType.FILL_IN_BLANK]: '填空',
+      [QuestionType.SHORT_ANSWER]: '简答',
+      'ALL': '全题型',
+    };
+    return labels[type] || type;
+  };
+
+  const getTypeSummary = (record: PracticeRecord) => {
+    // 如果有questionTypeFilter，使用它
+    if (record.questionTypeFilter && record.questionTypeFilter !== 'ALL') {
+      return getTypeLabel(record.questionTypeFilter);
+    }
+    // 否则使用type字段
+    return record.type || '全题型';
+  };
+
+  const handleCountChange = (type: QuestionType, value: number) => {
+    const maxCount = typeStats[type];
+    const validValue = Math.max(0, Math.min(value, maxCount));
+    setForm({
+      ...form,
+      counts: {
+        ...form.counts,
+        [type]: validValue
+      }
+    });
+  };
+
+  const handleQuickSet = (type: QuestionType) => {
+    const maxCount = typeStats[type];
+    setForm({
+      ...form,
+      counts: {
+        ...form.counts,
+        [type]: maxCount
+      }
+    });
+  };
 
   const handleCreatePractice = async () => {
-    if (estimatedCount === 0) return alert('当前选中的分类下没有题目');
-    if (isOperating) return; // 防止重复提交
+    if (totalCount === 0) return alert('请至少选择一道题目');
+    if (isOperating) return;
 
     setIsOperating(true);
     try {
       const newId = Date.now().toString();
+      
+      // 生成类型摘要
+      const selectedTypes = Object.entries(form.counts)
+        .filter(([_, count]) => count > 0)
+        .map(([type, count]) => `${getTypeLabel(type as QuestionType)}×${count}`)
+        .join(' + ');
+
       const newRecord: PracticeRecord = {
         id: newId,
         bankId: activeBank.id,
         bankName: activeBank.name,
-        type: form.type === 'ALL' ? '全题型' : 
-              form.type === 'SINGLE' ? '单选题' : 
-              form.type === 'MULTIPLE' ? '多选题' : '判断题',
-        questionTypeFilter: form.type, // 保存原始题型过滤值
+        type: selectedTypes,
+        questionTypeFilter: 'CUSTOM', // 标记为自定义组合
         mode: PracticeMode.SEQUENTIAL,
-        count: estimatedCount,
+        count: totalCount,
         date: new Date().toLocaleString(),
         currentIndex: 0,
         userAnswers: {},
-        isCustom: true // 此处传 true，store.addPracticeRecord 会自动转为 1
+        isCustom: true
       };
 
       // 1. 先保存到数据库
@@ -72,13 +126,26 @@ const PracticeList: React.FC<PracticeProps> = ({ banks, activeBank, history, onS
       // 2. 关闭弹窗
       setIsModalOpen(false);
       
-      // 3. 开始练习
+      // 3. 直接开始练习，传递skipCheck标志跳过历史进度检查
       onStart(PracticeMode.SEQUENTIAL, {
         ...newRecord,
         strategy: form.strategy,
         isCustom: true,
         bankId: activeBank.id,
-        type: form.type 
+        customCounts: form.counts, // 传递自定义题数配置
+        skipCheck: true
+      });
+      
+      // 重置表单
+      setForm({
+        strategy: 'SEQUENTIAL',
+        counts: {
+          [QuestionType.SINGLE]: 0,
+          [QuestionType.MULTIPLE]: 0,
+          [QuestionType.JUDGE]: 0,
+          [QuestionType.FILL_IN_BLANK]: 0,
+          [QuestionType.SHORT_ANSWER]: 0,
+        }
       });
     } catch (err) {
       console.error('创建练习失败', err);
@@ -179,7 +246,7 @@ const PracticeList: React.FC<PracticeProps> = ({ banks, activeBank, history, onS
                     <div>
                       <div className="font-bold text-gray-800 leading-tight">{item.bankName}</div>
                       <div className="flex items-center gap-3 mt-1">
-                        <span className="text-[10px] bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded font-black uppercase">{item.type}</span>
+                        <span className="text-[10px] bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded font-black uppercase">{getTypeSummary(item)}</span>
                         <span className="text-xs text-gray-400 font-medium">进度: {item.currentIndex + 1}/{item.count} 题</span>
                         <span className="text-xs text-gray-300">|</span>
                         <span className="text-xs text-gray-400">{item.date}</span>
@@ -215,7 +282,7 @@ const PracticeList: React.FC<PracticeProps> = ({ banks, activeBank, history, onS
 
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-[2.5rem] w-full max-w-md p-8 animate-in zoom-in-95 duration-200 shadow-2xl">
+          <div className="bg-white rounded-[2.5rem] w-full max-w-2xl p-8 animate-in zoom-in-95 duration-200 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-2xl font-black text-gray-900 tracking-tight">配置练习任务</h3>
               <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600">
@@ -232,30 +299,55 @@ const PracticeList: React.FC<PracticeProps> = ({ banks, activeBank, history, onS
               </div>
 
               <div>
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2 ml-1">练习题型 (当前题库实有题数)</label>
-                <div className="grid grid-cols-2 gap-3">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-3 ml-1">选择题型和题数</label>
+                <div className="space-y-3">
                   {[
-                    { id: 'ALL', label: '全部题型', count: typeStats.ALL },
-                    { id: QuestionType.SINGLE, label: '单选题', count: typeStats[QuestionType.SINGLE] },
-                    { id: QuestionType.MULTIPLE, label: '多选题', count: typeStats[QuestionType.MULTIPLE] },
-                    { id: QuestionType.JUDGE, label: '判断题', count: typeStats[QuestionType.JUDGE] },
-                    { id: QuestionType.FILL_IN_BLANK, label: '填空题', count: typeStats[QuestionType.FILL_IN_BLANK] },
-                    { id: QuestionType.SHORT_ANSWER, label: '简答题', count: typeStats[QuestionType.SHORT_ANSWER] }
-                  ].map(opt => (
-                    <button
-                      key={opt.id}
-                      onClick={() => setForm({...form, type: opt.id})}
-                      className={`relative py-3 px-4 rounded-2xl text-sm font-bold border-2 transition-all text-left ${
-                        form.type === opt.id 
-                          ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-100' 
-                          : 'bg-white border-gray-100 text-gray-500 hover:border-indigo-200'
-                      }`}
-                    >
-                      {opt.label}
-                      <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black opacity-60`}>
-                        {opt.count}
-                      </span>
-                    </button>
+                    { type: QuestionType.SINGLE, label: '单选题', icon: 'fa-circle-dot', color: 'indigo' },
+                    { type: QuestionType.MULTIPLE, label: '多选题', icon: 'fa-square-check', color: 'purple' },
+                    { type: QuestionType.JUDGE, label: '判断题', icon: 'fa-circle-question', color: 'blue' },
+                    { type: QuestionType.FILL_IN_BLANK, label: '填空题', icon: 'fa-pen-to-square', color: 'emerald' },
+                    { type: QuestionType.SHORT_ANSWER, label: '简答题', icon: 'fa-align-left', color: 'amber' }
+                  ].map(({ type, label, icon, color }) => (
+                    <div key={type} className="flex items-center gap-3 p-4 bg-gray-50 rounded-2xl">
+                      <div className={`w-10 h-10 bg-${color}-100 rounded-xl flex items-center justify-center text-${color}-600 shrink-0`}>
+                        <i className={`fa-solid ${icon}`}></i>
+                      </div>
+                      <div className="flex-1">
+                        <div className="font-bold text-gray-800 text-sm">{label}</div>
+                        <div className="text-xs text-gray-400">题库可用: {typeStats[type]} 题</div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleCountChange(type, form.counts[type] - 1)}
+                          disabled={form.counts[type] === 0}
+                          className="w-8 h-8 rounded-lg bg-white border-2 border-gray-200 text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                        >
+                          <i className="fa-solid fa-minus text-xs"></i>
+                        </button>
+                        <input
+                          type="number"
+                          min="0"
+                          max={typeStats[type]}
+                          value={form.counts[type]}
+                          onChange={(e) => handleCountChange(type, parseInt(e.target.value) || 0)}
+                          className="w-16 text-center py-2 border-2 border-gray-200 rounded-lg font-bold text-gray-800 focus:border-indigo-400 outline-none"
+                        />
+                        <button
+                          onClick={() => handleCountChange(type, form.counts[type] + 1)}
+                          disabled={form.counts[type] >= typeStats[type]}
+                          className="w-8 h-8 rounded-lg bg-white border-2 border-gray-200 text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                        >
+                          <i className="fa-solid fa-plus text-xs"></i>
+                        </button>
+                        <button
+                          onClick={() => handleQuickSet(type)}
+                          disabled={typeStats[type] === 0}
+                          className="ml-2 px-3 py-2 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-bold hover:bg-indigo-100 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                        >
+                          全选
+                        </button>
+                      </div>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -288,7 +380,7 @@ const PracticeList: React.FC<PracticeProps> = ({ banks, activeBank, history, onS
 
               <div className="bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100 text-center">
                  <p className="text-xs text-indigo-400 font-bold">生成题目总计</p>
-                 <p className="text-2xl font-black text-indigo-600 mt-1">{estimatedCount} <span className="text-xs font-bold">题</span></p>
+                 <p className="text-2xl font-black text-indigo-600 mt-1">{totalCount} <span className="text-xs font-bold">题</span></p>
               </div>
 
               <div className="flex gap-4 pt-2">
@@ -300,9 +392,9 @@ const PracticeList: React.FC<PracticeProps> = ({ banks, activeBank, history, onS
                 </button>
                 <button 
                   onClick={handleCreatePractice}
-                  disabled={isOperating}
+                  disabled={isOperating || totalCount === 0}
                   className={`flex-1 py-4 rounded-[1.5rem] font-black shadow-xl ${
-                    isOperating 
+                    isOperating || totalCount === 0
                       ? 'bg-gray-400 text-gray-200 cursor-not-allowed' 
                       : 'bg-indigo-600 text-white shadow-indigo-100'
                   }`}

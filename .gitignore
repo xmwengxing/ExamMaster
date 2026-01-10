@@ -108,6 +108,4 @@ metadata.json
 # Question conversion files (local use only)
 convert-questions.bat
 convert-questions-python.bat
-test-questions.csv
-test-csv-parsing.html
 测试-*.csv

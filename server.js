@@ -333,6 +333,21 @@ db.serialize(() => {
     else console.log('[DB] Created discussion_likes table');
   });
 
+  // AI解析记录表
+  db.run(`CREATE TABLE IF NOT EXISTS ai_analysis (
+    userId TEXT NOT NULL,
+    questionId TEXT NOT NULL,
+    content TEXT NOT NULL,
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL,
+    PRIMARY KEY (userId, questionId),
+    FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (questionId) REFERENCES questions(id) ON DELETE CASCADE
+  )`, (err) => {
+    if (err) console.log('[DB] ai_analysis table may already exist');
+    else console.log('[DB] Created ai_analysis table');
+  });
+
   // 创建索引以提升查询性能
   db.run("CREATE INDEX IF NOT EXISTS idx_discussions_questionId ON discussions(questionId)", (err) => {
     if (!err) console.log('[DB] Created index idx_discussions_questionId');
@@ -1892,9 +1907,9 @@ app.post('/api/ai/generate', auth, async (req, res) => {
     if (userResult && userResult.deepseekApiKey) {
       apiKey = userResult.deepseekApiKey;
     } else {
-      // 获取管理员的全局 API Key
+      // 获取管理员的全局 API Key（从 system_config_kv 表）
       const configResult = await new Promise((resolve, reject) => {
-        db.get("SELECT value FROM system_config WHERE key = 'deepseekApiKey'", (err, row) => {
+        db.get("SELECT value FROM system_config_kv WHERE key = 'deepseekApiKey'", (err, row) => {
           if (err) reject(err);
           else resolve(row);
         });
@@ -1945,6 +1960,165 @@ app.post('/api/ai/generate', auth, async (req, res) => {
   }
 });
 
+// 保存AI解析内容
+app.post('/api/ai/analysis', auth, async (req, res) => {
+  const { questionId, content } = req.body;
+  
+  if (!questionId || !content) {
+    return res.status(400).json({ error: '缺少必要参数' });
+  }
+  
+  try {
+    const now = new Date().toISOString();
+    
+    // 检查是否已存在该用户对该题目的解析
+    const existing = await new Promise((resolve, reject) => {
+      db.get(
+        "SELECT * FROM ai_analysis WHERE userId = ? AND questionId = ?",
+        [req.user.id, questionId],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
+    
+    if (existing) {
+      // 更新现有记录
+      await new Promise((resolve, reject) => {
+        db.run(
+          "UPDATE ai_analysis SET content = ?, updatedAt = ? WHERE userId = ? AND questionId = ?",
+          [content, now, req.user.id, questionId],
+          (err) => {
+            if (err) reject(err);
+            else resolve();
+          }
+        );
+      });
+    } else {
+      // 插入新记录
+      await new Promise((resolve, reject) => {
+        db.run(
+          "INSERT INTO ai_analysis (userId, questionId, content, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?)",
+          [req.user.id, questionId, content, now, now],
+          (err) => {
+            if (err) reject(err);
+            else resolve();
+          }
+        );
+      });
+    }
+    
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[Save AI Analysis Error]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 获取AI解析内容
+app.get('/api/ai/analysis/:questionId', auth, async (req, res) => {
+  try {
+    const result = await new Promise((resolve, reject) => {
+      db.get(
+        "SELECT * FROM ai_analysis WHERE userId = ? AND questionId = ?",
+        [req.user.id, req.params.questionId],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
+    
+    res.json(result || null);
+  } catch (err) {
+    console.error('[Get AI Analysis Error]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 管理员获取所有AI解析记录（分页、搜索、筛选）
+app.get('/api/admin/ai-analysis', auth, async (req, res) => {
+  if (!req.user || req.user.role !== 'ADMIN') {
+    return res.status(403).send('Forbidden');
+  }
+  
+  try {
+    const { page = 1, pageSize = 30, search = '', type = '' } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(pageSize);
+    
+    // 构建查询条件
+    let whereClause = '1=1';
+    const params = [];
+    
+    if (search) {
+      whereClause += ' AND (q.content LIKE ? OR u.nickname LIKE ? OR u.realName LIKE ?)';
+      const searchPattern = `%${search}%`;
+      params.push(searchPattern, searchPattern, searchPattern);
+    }
+    
+    if (type && type !== 'ALL') {
+      whereClause += ' AND q.type = ?';
+      params.push(type);
+    }
+    
+    // 获取总数
+    const countResult = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT COUNT(*) as total 
+         FROM ai_analysis a
+         JOIN questions q ON a.questionId = q.id
+         JOIN users u ON a.userId = u.id
+         WHERE ${whereClause}`,
+        params,
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
+    
+    // 获取分页数据
+    const records = await new Promise((resolve, reject) => {
+      db.all(
+        `SELECT 
+           a.userId,
+           a.questionId,
+           a.content,
+           a.createdAt,
+           a.updatedAt,
+           u.nickname as userName,
+           u.realName as userRealName,
+           q.type as questionType,
+           q.content as questionContent,
+           q.bankId
+         FROM ai_analysis a
+         JOIN questions q ON a.questionId = q.id
+         JOIN users u ON a.userId = u.id
+         WHERE ${whereClause}
+         ORDER BY a.updatedAt DESC
+         LIMIT ? OFFSET ?`,
+        [...params, parseInt(pageSize), offset],
+        (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows || []);
+        }
+      );
+    });
+    
+    res.json({
+      records,
+      total: countResult.total,
+      page: parseInt(page),
+      pageSize: parseInt(pageSize),
+      totalPages: Math.ceil(countResult.total / parseInt(pageSize))
+    });
+  } catch (err) {
+    console.error('[Get Admin AI Analysis Error]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // 7. 每日进度统计
 app.get('/api/user/progress', auth, (req, res) => {
   db.all("SELECT * FROM daily_progress WHERE userId = ?", [req.user.id], (err, rows) => res.json(rows || []));
@@ -1967,20 +2141,79 @@ app.post('/api/user/progress/increment', auth, (req, res) => {
 });
 
 // 8. 系统配置
-app.get('/api/config', (req, res) => {
-  db.get("SELECT data FROM system_config WHERE id = 'main'", (err, row) => {
-    res.json(row ? JSON.parse(row.data) : null);
-  });
+app.get('/api/config', async (req, res) => {
+  try {
+    // 获取主配置
+    const mainConfig = await new Promise((resolve, reject) => {
+      db.get("SELECT data FROM system_config WHERE id = 'main'", (err, row) => {
+        if (err) reject(err);
+        else resolve(row ? JSON.parse(row.data) : {});
+      });
+    });
+    
+    // 获取 deepseekApiKey（从 system_config_kv 表）
+    const deepseekKey = await new Promise((resolve, reject) => {
+      db.get("SELECT value FROM system_config_kv WHERE key = 'deepseekApiKey'", (err, row) => {
+        if (err) reject(err);
+        else resolve(row ? row.value : null);
+      });
+    });
+    
+    // 合并配置
+    const config = {
+      ...mainConfig,
+      deepseekApiKey: deepseekKey
+    };
+    
+    res.json(config);
+  } catch (err) {
+    console.error('[Config API Error]', err);
+    res.json(null);
+  }
 });
 
 // PUT 更新系统配置（需要管理员权限）
-app.put('/api/config', auth, (req, res) => {
+app.put('/api/config', auth, async (req, res) => {
   if (!req.user || req.user.role !== 'ADMIN') return res.status(403).send('Forbidden');
-  const data = JSON.stringify(req.body || {});
-  db.run("INSERT OR REPLACE INTO system_config (id, data) VALUES ('main', ?)", [data], (err) => {
-    if (err) return res.status(500).send(err.message);
+  
+  try {
+    const configData = req.body || {};
+    
+    // 提取 deepseekApiKey
+    const deepseekApiKey = configData.deepseekApiKey;
+    
+    // 从主配置中移除 deepseekApiKey（它将单独存储）
+    const mainConfigData = { ...configData };
+    delete mainConfigData.deepseekApiKey;
+    
+    // 保存主配置到 system_config 表
+    const data = JSON.stringify(mainConfigData);
+    await new Promise((resolve, reject) => {
+      db.run("INSERT OR REPLACE INTO system_config (id, data) VALUES ('main', ?)", [data], (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+    
+    // 保存 deepseekApiKey 到 system_config_kv 表
+    if (deepseekApiKey !== undefined) {
+      await new Promise((resolve, reject) => {
+        db.run(
+          "INSERT OR REPLACE INTO system_config_kv (key, value) VALUES ('deepseekApiKey', ?)",
+          [deepseekApiKey || ''],
+          (err) => {
+            if (err) reject(err);
+            else resolve();
+          }
+        );
+      });
+    }
+    
     res.json({ success: true });
-  });
+  } catch (err) {
+    console.error('[Update Config Error]', err);
+    res.status(500).send(err.message);
+  }
 });
 // ========== 新增API端点 - 标签系统 ==========
 
