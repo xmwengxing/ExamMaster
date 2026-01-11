@@ -7,9 +7,10 @@ interface FavoritesProps {
   banks: QuestionBank[];
   onStart: (questions: Question[]) => void;
   onToggleFavorite: (q: Question) => void;
+  onBack: () => void;
 }
 
-const Favorites: React.FC<FavoritesProps> = ({ favorites, banks, onStart, onToggleFavorite }) => {
+const Favorites: React.FC<FavoritesProps> = ({ favorites, banks, onStart, onToggleFavorite, onBack }) => {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [filterType, setFilterType] = useState<QuestionType | 'ALL'>('ALL');
 
@@ -55,21 +56,30 @@ const Favorites: React.FC<FavoritesProps> = ({ favorites, banks, onStart, onTogg
 
   return (
     <div className="space-y-6 flex flex-col min-h-full pb-20 animate-in fade-in duration-500">
-      <div className="flex justify-between items-center px-1">
-        <div>
-          <h2 className="text-2xl font-black text-gray-900 tracking-tight">我的收藏</h2>
-          <p className="text-xs text-gray-400 mt-1 font-bold">
-            {filterType === 'ALL' ? `共收藏 ${favorites.length} 道题目` : `当前筛选下有 ${filteredFavorites.length} 道题目`}
-          </p>
+      <div className="flex items-center gap-4 px-1">
+        <button 
+          onClick={onBack}
+          className="w-10 h-10 rounded-full bg-white border flex items-center justify-center text-gray-500 shadow-sm active:scale-90 transition-transform shrink-0"
+          title="返回练习"
+        >
+          <i className="fa-solid fa-arrow-left"></i>
+        </button>
+        <div className="flex-1 flex justify-between items-center">
+          <div>
+            <h2 className="text-2xl font-black text-gray-900 tracking-tight">我的收藏</h2>
+            <p className="text-xs text-gray-400 mt-1 font-bold">
+              {filterType === 'ALL' ? `共收藏 ${favorites.length} 道题目` : `当前筛选下有 ${filteredFavorites.length} 道题目`}
+            </p>
+          </div>
+          {filteredFavorites.length > 0 && (
+            <button 
+              onClick={toggleSelectAll}
+              className="text-indigo-600 text-xs font-black bg-indigo-50 px-4 py-2 rounded-xl hover:bg-indigo-100 transition-all active:scale-95"
+            >
+              {selectedIds.length === filteredFavorites.length ? '取消全选' : '全部选择'}
+            </button>
+          )}
         </div>
-        {filteredFavorites.length > 0 && (
-          <button 
-            onClick={toggleSelectAll}
-            className="text-indigo-600 text-xs font-black bg-indigo-50 px-4 py-2 rounded-xl hover:bg-indigo-100 transition-all active:scale-95"
-          >
-            {selectedIds.length === filteredFavorites.length ? '取消全选' : '全部选择'}
-          </button>
-        )}
       </div>
 
       {/* 题型筛选器 */}
