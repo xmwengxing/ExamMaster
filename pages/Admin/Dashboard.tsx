@@ -8,6 +8,8 @@ const AdminDashboard: React.FC = () => {
   const [showPracticeHistory, setShowPracticeHistory] = useState(false);
   const [showQuestionStats, setShowQuestionStats] = useState(false);
   const [showExamList, setShowExamList] = useState(false);
+  const [showTopScores, setShowTopScores] = useState(false);
+  const [topScoresTab, setTopScoresTab] = useState<'recent' | 'all'>('recent');
 
   const COLORS = ['#4f46e5', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981'];
 
@@ -15,6 +17,15 @@ const AdminDashboard: React.FC = () => {
   const formatDate = (dateStr: string) => {
     try {
       const d = new Date(dateStr);
+      // 检查日期是否有效
+      if (isNaN(d.getTime())) {
+        // 尝试解析中文格式 YYYY/MM/DD HH:mm:ss
+        const parts = dateStr.split(/[\/\s:]/);
+        if (parts.length >= 3) {
+          return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+        }
+        return dateStr.split(' ')[0];
+      }
       const year = d.getFullYear();
       const month = (d.getMonth() + 1).toString().padStart(2, '0');
       const day = d.getDate().toString().padStart(2, '0');
@@ -60,6 +71,38 @@ const AdminDashboard: React.FC = () => {
       .map(b => ({ name: b.name.substring(0, 6), value: b.usageCount || 0 }));
   }, [banks]);
 
+  // 高分榜TOP10（近30天）
+  const topScoresRecent = useMemo(() => {
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    
+    return examHistory
+      .filter(record => {
+        // 只统计已完成的考试
+        if (!record.isFinished || record.score < 0) return false;
+        // 过滤近30天的记录
+        try {
+          const recordDate = new Date(record.submitTime);
+          return recordDate >= thirtyDaysAgo;
+        } catch {
+          return false;
+        }
+      })
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 10)
+      .map((record, index) => {
+        const student = students.find(s => s.id === record.userId);
+        return {
+          rank: index + 1,
+          name: student?.realName || student?.nickname || '未知学员',
+          score: record.score,
+          totalScore: record.totalScore,
+          examTitle: record.examTitle,
+          submitTime: record.submitTime
+        };
+      });
+  }, [examHistory, students]);
+
   // 活跃趋势（近7日登录人数）
   const chartData = useMemo(() => {
     const days = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
@@ -70,7 +113,8 @@ const AdminDashboard: React.FC = () => {
       const dStr = formatDate(d.toISOString());
       const count = new Set(
         loginLogs.filter(log => {
-          const logDate = formatDate(log.loginTime);
+          // 使用 log.time 字段（ISO格式）
+          const logDate = formatDate(log.time || log.loginTime || '');
           return logDate === dStr;
         }).map(log => log.userId)
       ).size;
@@ -98,7 +142,7 @@ const AdminDashboard: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
         {stats.map((stat, i) => (
           <div 
             key={i} 
@@ -107,17 +151,17 @@ const AdminDashboard: React.FC = () => {
               if (stat.id === 'questions') setShowQuestionStats(true);
               if (stat.id === 'exams') setShowExamList(true);
             }}
-            className={`bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm hover:shadow-xl transition-all group ${stat.clickable ? 'cursor-pointer border-indigo-100 bg-indigo-50/10' : ''}`}
+            className={`bg-white p-4 md:p-6 rounded-[2rem] border border-gray-100 shadow-sm hover:shadow-xl transition-all group ${stat.clickable ? 'cursor-pointer border-indigo-100 bg-indigo-50/10' : ''}`}
           >
-            <div className={`w-12 h-12 rounded-2xl bg-${stat.color}-50 flex items-center justify-center text-${stat.color}-600 mb-4 shadow-inner group-hover:scale-110 transition-transform`}>
-              <i className={`fa-solid ${stat.icon} text-xl`}></i>
+            <div className={`w-10 h-10 md:w-12 md:h-12 rounded-2xl bg-${stat.color}-50 flex items-center justify-center text-${stat.color}-600 mb-3 md:mb-4 shadow-inner group-hover:scale-110 transition-transform`}>
+              <i className={`fa-solid ${stat.icon} text-lg md:text-xl`}></i>
             </div>
             <div className="flex justify-between items-center mb-1">
-              <div className="text-xs font-black text-gray-400 uppercase tracking-widest">{stat.label}</div>
+              <div className="text-[10px] md:text-xs font-black text-gray-400 uppercase tracking-widest">{stat.label}</div>
               {stat.clickable && <i className="fa-solid fa-circle-chevron-right text-gray-300 text-xs"></i>}
             </div>
-            <div className="text-3xl font-black text-gray-900 tracking-tighter">{stat.value}</div>
-            <div className="text-[10px] text-gray-400 font-bold mt-1">{stat.sub}</div>
+            <div className="text-2xl md:text-3xl font-black text-gray-900 tracking-tighter">{stat.value}</div>
+            <div className="text-[9px] md:text-[10px] text-gray-400 font-bold mt-1">{stat.sub}</div>
           </div>
         ))}
       </div>
@@ -139,22 +183,49 @@ const AdminDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* 题库排行 */}
-        <div className="bg-white p-8 rounded-[2.5rem] border shadow-sm">
-          <h3 className="font-black text-lg text-gray-800 mb-8">热门题库 Top 5</h3>
-          <div className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={bankHeatData} layout="vertical">
-                <XAxis type="number" hide />
-                <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{fill: '#4b5563', fontWeight: 'bold', fontSize: 10}} width={60} />
-                <Tooltip cursor={{fill: 'transparent'}} />
-                <Bar dataKey="value" radius={[0, 10, 10, 0]} barSize={20}>
-                  {bankHeatData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+        {/* 高分榜TOP */}
+        <div 
+          className="bg-white p-8 rounded-[2.5rem] border shadow-sm cursor-pointer hover:shadow-xl transition-all group"
+          onClick={() => setShowTopScores(true)}
+        >
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="font-black text-lg text-gray-800 flex items-center gap-2">
+              <i className="fa-solid fa-trophy text-amber-500"></i>
+              高分榜 TOP
+            </h3>
+            <span className="text-xs font-bold text-indigo-600 group-hover:text-indigo-800 flex items-center gap-1">
+              查看详情 <i className="fa-solid fa-arrow-right group-hover:translate-x-1 transition-transform"></i>
+            </span>
+          </div>
+          
+          <div className="space-y-3">
+            {topScoresRecent.length > 0 ? (
+              topScoresRecent.map((record) => (
+                <div key={`${record.rank}-${record.submitTime}`} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl hover:bg-indigo-50 transition-colors">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-sm ${
+                    record.rank === 1 ? 'bg-amber-500 text-white' :
+                    record.rank === 2 ? 'bg-gray-400 text-white' :
+                    record.rank === 3 ? 'bg-orange-600 text-white' :
+                    'bg-gray-200 text-gray-600'
+                  }`}>
+                    {record.rank}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-sm text-gray-800 truncate">{record.name}</div>
+                    <div className="text-xs text-gray-400 truncate">{record.examTitle}</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-black text-lg text-indigo-600">{record.score}</div>
+                    <div className="text-[10px] text-gray-400">/{record.totalScore}分</div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-8 text-gray-400">
+                <i className="fa-solid fa-trophy text-4xl mb-2 opacity-20"></i>
+                <p className="text-xs font-medium">暂无考试记录</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -355,6 +426,171 @@ const AdminDashboard: React.FC = () => {
             >
               返回看板
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* 高分榜详情弹窗 */}
+      {showTopScores && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-[2.5rem] w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="p-8 border-b bg-gradient-to-r from-amber-50 to-orange-50">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-black text-gray-900 flex items-center gap-3">
+                    <i className="fa-solid fa-trophy text-amber-500"></i>
+                    高分榜
+                  </h2>
+                  <p className="text-sm text-gray-500 mt-1">系统考试和自主模拟考试得分排名</p>
+                </div>
+                <button
+                  onClick={() => setShowTopScores(false)}
+                  className="w-10 h-10 rounded-full bg-white/50 hover:bg-white flex items-center justify-center text-gray-600 transition-all"
+                >
+                  <i className="fa-solid fa-xmark"></i>
+                </button>
+              </div>
+            </div>
+
+            <div className="p-8 overflow-y-auto max-h-[calc(90vh-200px)]">
+              {/* 标签切换 */}
+              <div className="flex gap-2 mb-6">
+                <button 
+                  className={`flex-1 py-3 rounded-xl font-bold transition-all ${
+                    topScoresTab === 'recent'
+                      ? 'bg-indigo-600 text-white shadow-lg'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                  onClick={() => setTopScoresTab('recent')}
+                >
+                  <i className="fa-solid fa-calendar-days mr-2"></i>
+                  近30天排名
+                </button>
+                <button 
+                  className={`flex-1 py-3 rounded-xl font-bold transition-all ${
+                    topScoresTab === 'all'
+                      ? 'bg-indigo-600 text-white shadow-lg'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                  onClick={() => setTopScoresTab('all')}
+                >
+                  <i className="fa-solid fa-clock-rotate-left mr-2"></i>
+                  历史总排名
+                </button>
+              </div>
+
+              {/* 排名列表 */}
+              <div className="space-y-3">
+                {(() => {
+                  let topRecords;
+                  
+                  if (topScoresTab === 'recent') {
+                    // 近30天排名
+                    const thirtyDaysAgo = new Date();
+                    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+                    
+                    topRecords = examHistory
+                      .filter(record => {
+                        if (!record.isFinished || record.score < 0) return false;
+                        try {
+                          const recordDate = new Date(record.submitTime);
+                          return recordDate >= thirtyDaysAgo;
+                        } catch {
+                          return false;
+                        }
+                      })
+                      .sort((a, b) => b.score - a.score)
+                      .slice(0, 30);
+                  } else {
+                    // 历史总排名
+                    topRecords = examHistory
+                      .filter(record => record.isFinished && record.score >= 0)
+                      .sort((a, b) => b.score - a.score)
+                      .slice(0, 30);
+                  }
+
+                  const formattedRecords = topRecords.map((record, index) => {
+                    const student = students.find(s => s.id === record.userId);
+                    return {
+                      rank: index + 1,
+                      name: student?.realName || student?.nickname || '未知学员',
+                      phone: student?.phone || '',
+                      score: record.score,
+                      totalScore: record.totalScore,
+                      percentage: ((record.score / record.totalScore) * 100).toFixed(1),
+                      examTitle: record.examTitle,
+                      submitTime: record.submitTime
+                    };
+                  });
+
+                  return formattedRecords.length > 0 ? (
+                    formattedRecords.map((record) => (
+                      <div 
+                        key={`${record.rank}-${record.submitTime}`}
+                        className={`flex items-center gap-4 p-4 rounded-2xl border transition-all ${
+                          record.rank <= 3 
+                            ? 'bg-gradient-to-r from-amber-50 to-orange-50 border-amber-200' 
+                            : 'bg-gray-50 border-gray-100 hover:bg-gray-100'
+                        }`}
+                      >
+                        {/* 排名 */}
+                        <div className={`w-12 h-12 rounded-full flex items-center justify-center font-black text-lg shrink-0 ${
+                          record.rank === 1 ? 'bg-gradient-to-br from-amber-400 to-amber-600 text-white shadow-lg' :
+                          record.rank === 2 ? 'bg-gradient-to-br from-gray-300 to-gray-500 text-white shadow-lg' :
+                          record.rank === 3 ? 'bg-gradient-to-br from-orange-400 to-orange-600 text-white shadow-lg' :
+                          'bg-white border-2 border-gray-200 text-gray-600'
+                        }`}>
+                          {record.rank <= 3 ? (
+                            <i className="fa-solid fa-crown"></i>
+                          ) : (
+                            record.rank
+                          )}
+                        </div>
+
+                        {/* 学员信息 */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="font-bold text-gray-800">{record.name}</span>
+                            <span className="text-xs text-gray-400 font-mono">{record.phone}</span>
+                          </div>
+                          <div className="text-xs text-gray-500 truncate">{record.examTitle}</div>
+                          <div className="text-[10px] text-gray-400 mt-1">{record.submitTime}</div>
+                        </div>
+
+                        {/* 分数 */}
+                        <div className="text-right shrink-0">
+                          <div className="font-black text-2xl text-indigo-600">{record.score}</div>
+                          <div className="text-xs text-gray-400">/{record.totalScore}分</div>
+                          <div className={`text-[10px] font-bold mt-1 ${
+                            parseFloat(record.percentage) >= 90 ? 'text-emerald-600' :
+                            parseFloat(record.percentage) >= 60 ? 'text-amber-600' :
+                            'text-rose-600'
+                          }`}>
+                            {record.percentage}%
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-20 text-gray-400">
+                      <i className="fa-solid fa-trophy text-5xl mb-4 opacity-20"></i>
+                      <p className="font-bold">
+                        {topScoresTab === 'recent' ? '近30天暂无考试记录' : '暂无考试记录'}
+                      </p>
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+
+            <div className="p-6 border-t bg-gray-50">
+              <button 
+                onClick={() => setShowTopScores(false)}
+                className="w-full py-4 bg-gray-900 text-white rounded-2xl font-black hover:bg-black transition-all shadow-xl active:scale-95"
+              >
+                关闭
+              </button>
+            </div>
           </div>
         </div>
       )}

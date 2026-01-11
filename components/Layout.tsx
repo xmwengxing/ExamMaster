@@ -58,8 +58,9 @@ const Layout: React.FC<LayoutProps> = ({ children, user, activeTab, onTabChange,
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-gray-50">
-      <aside className="hidden md:flex flex-col w-64 bg-white border-r sticky top-0 h-screen p-4 shadow-sm z-30">
-        <div className="flex items-center gap-3 mb-8 px-2">
+      <aside className="hidden md:flex flex-col w-64 bg-white border-r sticky top-0 h-screen shadow-sm z-30">
+        {/* Logo区域 - 固定不滚动 */}
+        <div className="flex items-center gap-3 p-4 px-6 border-b shrink-0">
           {logoImage ? (
             <img src={logoImage} alt="Logo" className="w-10 h-10 object-contain" />
           ) : (
@@ -69,7 +70,9 @@ const Layout: React.FC<LayoutProps> = ({ children, user, activeTab, onTabChange,
           )}
           {logoText && <span className="font-bold text-xl tracking-tight">{logoText}</span>}
         </div>
-        <nav className="flex-1 space-y-1">
+        
+        {/* 导航区域 - 可滚动 */}
+        <nav className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-1 custom-scrollbar">
           {currentTabs.map(tab => (
             <button
               key={tab.id}
@@ -85,13 +88,17 @@ const Layout: React.FC<LayoutProps> = ({ children, user, activeTab, onTabChange,
             </button>
           ))}
         </nav>
-        <button 
-          onClick={onLogout}
-          className="mt-auto flex items-center gap-3 px-4 py-3 text-red-500 hover:bg-red-50 rounded-xl transition-all font-bold"
-        >
-          <i className="fa-solid fa-right-from-bracket w-6 text-center"></i>
-          退出登录
-        </button>
+        
+        {/* 退出按钮 - 固定在底部 */}
+        <div className="p-4 border-t shrink-0">
+          <button 
+            onClick={onLogout}
+            className="w-full flex items-center gap-3 px-4 py-3 text-red-500 hover:bg-red-50 rounded-xl transition-all font-bold"
+          >
+            <i className="fa-solid fa-right-from-bracket w-6 text-center"></i>
+            退出登录
+          </button>
+        </div>
       </aside>
 
       <main className="flex-1 flex flex-col min-h-0 relative">

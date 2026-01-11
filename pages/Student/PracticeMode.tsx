@@ -78,6 +78,8 @@ const PracticeModeView: React.FC<PracticeModeProps> = ({
   // 触摸滑动相关状态
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
+  const [swipeOffset, setSwipeOffset] = useState(0); // 滑动偏移量
+  const [isTransitioning, setIsTransitioning] = useState(false); // 是否在过渡动画中
 
   // 填空题状态
   const [fillBlankAnswers, setFillBlankAnswers] = useState<Record<string, string>>({});
@@ -652,29 +654,68 @@ const PracticeModeView: React.FC<PracticeModeProps> = ({
 
   // 触摸滑动处理
   const minSwipeDistance = 50;
+  const maxSwipeDistance = 300; // 最大滑动距离，超过此距离不再增加偏移
 
   const onTouchStart = (e: React.TouchEvent) => {
     setTouchEnd(null);
     setTouchStart(e.targetTouches[0].clientX);
+    setSwipeOffset(0);
+    setIsTransitioning(false);
   };
 
   const onTouchMove = (e: React.TouchEvent) => {
-    setTouchEnd(e.targetTouches[0].clientX);
+    if (!touchStart) return;
+    
+    const currentTouch = e.targetTouches[0].clientX;
+    setTouchEnd(currentTouch);
+    
+    // 计算滑动距离
+    const distance = currentTouch - touchStart;
+    
+    // 限制滑动距离，并添加阻尼效果
+    let offset = distance;
+    
+    // 边界检查：如果已经是第一题，限制右滑；如果是最后一题，限制左滑
+    if ((currentIndex === 0 && distance > 0) || (currentIndex === questions.length - 1 && distance < 0)) {
+      // 添加阻尼效果：滑动距离越大，实际偏移越小
+      offset = distance * 0.3;
+    } else {
+      // 正常滑动也添加轻微阻尼，让滑动更平滑
+      if (Math.abs(distance) > maxSwipeDistance) {
+        offset = Math.sign(distance) * (maxSwipeDistance + (Math.abs(distance) - maxSwipeDistance) * 0.2);
+      }
+    }
+    
+    setSwipeOffset(offset);
   };
 
   const onTouchEnd = () => {
-    if (!touchStart || !touchEnd) return;
+    if (!touchStart || !touchEnd) {
+      setSwipeOffset(0);
+      return;
+    }
     
     const distance = touchStart - touchEnd;
     const isLeftSwipe = distance > minSwipeDistance;
     const isRightSwipe = distance < -minSwipeDistance;
     
+    setIsTransitioning(true);
+    
     if (isLeftSwipe && currentIndex < questions.length - 1) {
+      // 左滑切换到下一题
       handleNext();
-    }
-    if (isRightSwipe && currentIndex > 0) {
+    } else if (isRightSwipe && currentIndex > 0) {
+      // 右滑切换到上一题
       handlePrev();
     }
+    
+    // 重置滑动状态
+    setTimeout(() => {
+      setSwipeOffset(0);
+      setIsTransitioning(false);
+      setTouchStart(null);
+      setTouchEnd(null);
+    }, 300);
   };
 
   const getQuestionTypeLabel = (type: QuestionType) => {
@@ -775,22 +816,31 @@ const PracticeModeView: React.FC<PracticeModeProps> = ({
         <button onClick={(e) => { e.stopPropagation(); setIsNavOpen(true); }} className="bg-indigo-600 text-white px-4 py-1.5 rounded-2xl text-xs font-black shadow-lg">{currentIndex + 1} / {questions.length} <i className="fa-solid fa-list-check ml-1"></i></button>
       </div>
 
-      <div className={`bg-white rounded-[2.5rem] p-4 md:p-12 shadow-sm border border-gray-100 animate-in fade-in duration-500 z-10 ${feedbackClass}`}>
-        <div className="flex justify-between items-start mb-4 md:mb-8">
-           <div className="flex gap-2">
-             <span className="bg-indigo-600 text-white px-3 py-1 rounded-lg text-[10px] font-black uppercase">第 {currentIndex+1} 题</span>
-             <span className="bg-indigo-50 text-indigo-600 px-3 py-1 rounded-lg text-[10px] font-black">{getQuestionTypeLabel(currentQuestion.type)}</span>
-             {isSmartReviewMode && <span className="bg-amber-50 text-amber-600 px-3 py-1 rounded-lg text-[10px] font-black uppercase border border-amber-100 shadow-sm"><i className="fa-solid fa-brain mr-1"></i> 智能复习</span>}
-           </div>
-           <div className="flex gap-3">
-             <button onClick={(e) => { e.stopPropagation(); handleTtsRead(); }} className={`w-10 h-10 rounded-2xl flex items-center justify-center border transition-all ${isTtsLoading ? 'bg-indigo-600 text-white' : 'bg-gray-50 border-gray-100 text-gray-400'}`}>
-               {isTtsLoading ? <i className="fa-solid fa-spinner animate-spin"></i> : <i className="fa-solid fa-volume-high"></i>}
-             </button>
-             {!isMockMode && <button onClick={(e) => { e.stopPropagation(); onToggleFavorite(currentQuestion); }} className={`w-10 h-10 rounded-2xl flex items-center justify-center border transition-all ${isFavorite ? 'bg-rose-50 border-rose-100 text-rose-500' : 'bg-gray-50 border-gray-100 text-gray-300'}`}><i className={`fa-${isFavorite?'solid':'regular'} fa-star`}></i></button>}
-           </div>
-        </div>
+      {/* 题目卡片容器 - 添加滑动动画 */}
+      <div 
+        className="relative"
+        style={{
+          transform: `translateX(${swipeOffset}px)`,
+          transition: isTransitioning ? 'transform 0.3s ease-out' : 'none',
+          opacity: Math.max(0.5, 1 - Math.abs(swipeOffset) / 400)
+        }}
+      >
+        <div className={`bg-white rounded-[2.5rem] p-4 md:p-12 shadow-sm border border-gray-100 animate-in fade-in duration-500 z-10 ${feedbackClass}`}>
+          <div className="flex justify-between items-start mb-4 md:mb-8">
+             <div className="flex gap-2">
+               <span className="bg-indigo-600 text-white px-3 py-1 rounded-lg text-[10px] font-black uppercase">第 {currentIndex+1} 题</span>
+               <span className="bg-indigo-50 text-indigo-600 px-3 py-1 rounded-lg text-[10px] font-black">{getQuestionTypeLabel(currentQuestion.type)}</span>
+               {isSmartReviewMode && <span className="bg-amber-50 text-amber-600 px-3 py-1 rounded-lg text-[10px] font-black uppercase border border-amber-100 shadow-sm"><i className="fa-solid fa-brain mr-1"></i> 智能复习</span>}
+             </div>
+             <div className="flex gap-3">
+               <button onClick={(e) => { e.stopPropagation(); handleTtsRead(); }} className={`w-10 h-10 rounded-2xl flex items-center justify-center border transition-all ${isTtsLoading ? 'bg-indigo-600 text-white' : 'bg-gray-50 border-gray-100 text-gray-400'}`}>
+                 {isTtsLoading ? <i className="fa-solid fa-spinner animate-spin"></i> : <i className="fa-solid fa-volume-high"></i>}
+               </button>
+               {!isMockMode && <button onClick={(e) => { e.stopPropagation(); onToggleFavorite(currentQuestion); }} className={`w-10 h-10 rounded-2xl flex items-center justify-center border transition-all ${isFavorite ? 'bg-rose-50 border-rose-100 text-rose-500' : 'bg-gray-50 border-gray-100 text-gray-300'}`}><i className={`fa-${isFavorite?'solid':'regular'} fa-star`}></i></button>}
+             </div>
+          </div>
 
-        <h2 className="text-xl md:text-3xl font-black text-gray-900 leading-tight mb-6 md:mb-12">{currentQuestion.content}</h2>
+          <h2 className="text-xl md:text-3xl font-black text-gray-900 leading-tight mb-6 md:mb-12">{currentQuestion.content}</h2>
 
         {/* 填空题渲染 */}
         {currentQuestion.type === QuestionType.FILL_IN_BLANK && (
@@ -1087,6 +1137,7 @@ const PracticeModeView: React.FC<PracticeModeProps> = ({
              )}
           </div>
         )}
+        </div>
       </div>
 
       {/* 底部按钮 - 只在模拟考试、错题模式和智能复习模式下显示 */}

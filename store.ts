@@ -174,7 +174,13 @@ export const useAppStore = () => {
       promises.push(fetchApi('/practical/records').catch(err => { console.debug('[refreshAll] /practical/records failed:', err); return []; }));
       promises.push(fetchApi('/srs/records').catch(err => { console.debug('[refreshAll] /srs/records failed:', err); return []; }));
       promises.push(fetchApi('/mistakes').catch(err => { console.debug('[refreshAll] /mistakes failed:', err); return []; }));
-      promises.push(fetchApi('/exams/history').catch(err => { console.debug('[refreshAll] /exams/history failed:', err); return []; }));
+      
+      // 管理员获取所有考试历史，学员只获取自己的
+      if (userProfile && userProfile.role === 'ADMIN') {
+        promises.push(fetchApi('/admin/exam-history').catch(err => { console.debug('[refreshAll] /admin/exam-history failed:', err); return []; }));
+      } else {
+        promises.push(fetchApi('/exams/history').catch(err => { console.debug('[refreshAll] /exams/history failed:', err); return []; }));
+      }
 
       const results = await Promise.all(promises);
 

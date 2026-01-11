@@ -409,7 +409,8 @@ app.post('/api/auth/login', (req, res) => {
   const { phone, password, role } = req.body;
   db.get("SELECT * FROM users WHERE phone = ? AND role = ?", [phone, role], (err, user) => {
     if (user && bcrypt.compareSync(password, user.password)) {
-      // 更新登录历史
+      // 使用ISO格式的时间戳
+      const nowISO = new Date().toISOString();
       const now = new Date().toLocaleString('zh-CN', { 
         year: 'numeric', 
         month: '2-digit', 
@@ -434,12 +435,23 @@ app.post('/api/auth/login', (req, res) => {
       }
       
       // 更新数据库（包括 lastActivity）
-      const lastActivity = new Date().toISOString();
       db.run(
         "UPDATE users SET lastLogin = ?, loginHistory = ?, lastActivity = ? WHERE id = ?",
-        [now, JSON.stringify(loginHistory), lastActivity, user.id],
+        [now, JSON.stringify(loginHistory), nowISO, user.id],
         (updateErr) => {
           if (updateErr) console.error('[Login] Failed to update login history:', updateErr);
+        }
+      );
+      
+      // 插入登录日志到 login_logs 表（使用ISO格式便于统计）
+      const logId = `log-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+      const ip = req.ip || req.connection.remoteAddress || 'unknown';
+      db.run(
+        "INSERT INTO login_logs (id, userId, phone, role, time, ip) VALUES (?, ?, ?, ?, ?, ?)",
+        [logId, user.id, phone, role, nowISO, ip],
+        (logErr) => {
+          if (logErr) console.error('[Login] Failed to insert login log:', logErr);
+          else console.log('[Login] Login log recorded:', { userId: user.id, phone, role });
         }
       );
       
@@ -1464,6 +1476,23 @@ app.post('/api/exams/:id/toggle-visibility', auth, (req, res) => {
 // Exams history: read from exam_history table (for current user)
 app.get('/api/exams/history', auth, (req, res) => {
   db.all("SELECT * FROM exam_history WHERE userId = ?", [req.user.id], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    // 解析 JSON 字段
+    const parsed = (rows || []).map(r => ({
+      ...r,
+      wrongQuestionIds: r.wrongQuestionIds ? JSON.parse(r.wrongQuestionIds) : [],
+      userAnswers: r.userAnswers ? JSON.parse(r.userAnswers) : {},
+      examConfig: r.examConfig ? JSON.parse(r.examConfig) : null,
+      orderedQuestionIds: r.orderedQuestionIds ? JSON.parse(r.orderedQuestionIds) : []
+    }));
+    res.json(parsed);
+  });
+});
+
+// 管理员获取所有考试历史记录
+app.get('/api/admin/exam-history', auth, (req, res) => {
+  if (!req.user || req.user.role !== 'ADMIN') return res.status(403).send('Forbidden');
+  db.all("SELECT * FROM exam_history ORDER BY submitTime DESC", [], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     // 解析 JSON 字段
     const parsed = (rows || []).map(r => ({
