@@ -492,6 +492,56 @@ app.put('/api/user/profile', auth, (req, res) => {
   });
 });
 
+// Change user password (for students and admins)
+app.post('/api/user/change-password', auth, (req, res) => {
+  console.log('[change-password] POST /api/user/change-password', { user: req.user && { id: req.user.id, role: req.user.role } });
+  
+  const { old, newP } = req.body;
+  
+  if (!old || !newP) {
+    console.warn('[change-password] Missing old or new password');
+    return res.status(400).json({ error: '请提供旧密码和新密码' });
+  }
+  
+  if (newP.length < 4) {
+    console.warn('[change-password] New password too short');
+    return res.status(400).json({ error: '新密码长度至少为4位' });
+  }
+  
+  // 获取当前用户信息
+  db.get("SELECT * FROM users WHERE id = ?", [req.user.id], (err, user) => {
+    if (err) {
+      console.error('[change-password] Database error:', err);
+      return res.status(500).send(err.message);
+    }
+    
+    if (!user) {
+      console.warn('[change-password] User not found:', req.user.id);
+      return res.status(404).json({ error: '用户不存在' });
+    }
+    
+    // 验证旧密码
+    if (!bcrypt.compareSync(old, user.password)) {
+      console.warn('[change-password] Old password incorrect');
+      return res.status(401).json({ error: '旧密码不正确' });
+    }
+    
+    // 加密新密码
+    const newHash = bcrypt.hashSync(newP, 10);
+    
+    // 更新密码
+    db.run("UPDATE users SET password = ? WHERE id = ?", [newHash, req.user.id], (updateErr) => {
+      if (updateErr) {
+        console.error('[change-password] Failed to update password:', updateErr);
+        return res.status(500).send(updateErr.message);
+      }
+      
+      console.log('[change-password] Password changed successfully for user:', req.user.id);
+      res.json({ success: true, message: '密码修改成功' });
+    });
+  });
+});
+
 // Heartbeat endpoint - updates lastActivity to track online status
 app.post('/api/user/heartbeat', auth, (req, res) => {
   const lastActivity = new Date().toISOString();

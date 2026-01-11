@@ -291,7 +291,7 @@ const App: React.FC = () => {
       case 'exams': return <Exams initialView={activeParams?.view} exams={store.exams.filter(e => store.currentUser?.allowedBankIds?.includes(e.bankId))} history={store.examHistory} banks={studentBanks} allQuestions={store.questions} hasPermission={store.currentUser?.studentPerms?.includes('EXAM')} onStartExam={(e) => handleNavigate('practice-mode', { mode: PracticeMode.MOCK, exam: e })} onStartMock={(c) => handleNavigate('practice-mode', { mode: PracticeMode.MOCK, ...c })} onDeleteHistory={store.deleteExamHistory} />;
       case 'videos': return <VideoList videos={store.currentUser!.studentPerms?.includes('VIDEO') ? (store.systemConfig?.videos || []) : []} onBack={() => setActiveTab('home')} />;
       case 'discussions': return <Discussions questionId={activeParams?.questionId} />;
-      case 'account': return <AccountSettings onBack={() => setActiveTab('home')} onChangePassword={store.changeAdminPassword} onResetData={store.resetUserData} onLogout={store.logout} onDeleteAccount={store.logout} currentUser={store.currentUser} onUpdateApiKey={async (apiKey) => { await store.updateProfile({ deepseekApiKey: apiKey }); }} />;
+      case 'account': return <AccountSettings onBack={() => setActiveTab('home')} onChangePassword={store.changePassword} onResetData={store.resetUserData} onLogout={store.logout} onDeleteAccount={store.logout} currentUser={store.currentUser} onUpdateApiKey={async (apiKey) => { await store.updateProfile({ deepseekApiKey: apiKey }); }} />;
       case 'practical-practice': return <PracticalPractice onBackToPractice={() => setActiveTab('practice')} />;
       case 'practice-mode': {
         const activeBankId = activeParams?.bankId || currentActiveBank.id;

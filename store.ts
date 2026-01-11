@@ -548,6 +548,16 @@ export const useAppStore = () => {
       }
     },
 
+    // Change password for any user (students and admins)
+    changePassword: async (old: string, newP: string) => {
+      try {
+        await fetchApi('/user/change-password', { method: 'POST', body: JSON.stringify({ old, newP }) });
+        return true;
+      } catch {
+        return false;
+      }
+    },
+
     // Administrative: Student permissions methods
     batchSetStudentPerms: async (data: Record<string, { studentPerms: StudentPermission[], allowedBankIds: string[] }>) => {
       console.log('[store.batchSetStudentPerms] Batch updating students:', Object.keys(data).length, 'students');
