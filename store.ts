@@ -41,6 +41,14 @@ const dispatchErrorEvent = (eventName: string, detail: any) => {
 
 const fetchApi = async (endpoint: string, options: any = {}, retries: number = 2): Promise<any> => {
   const token = localStorage.getItem('edu_token');
+  
+  // 如果没有 token 且不是登录接口，直接拒绝请求
+  const isLoginEndpoint = endpoint.includes('/auth/login');
+  if (!token && !isLoginEndpoint) {
+    console.debug(`[fetchApi] Skipping ${endpoint} - no token available`);
+    throw new Error('No authentication token');
+  }
+  
   const headers = {
     'Content-Type': 'application/json',
     ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
@@ -56,17 +64,19 @@ const fetchApi = async (endpoint: string, options: any = {}, retries: number = 2
       // 1. 401错误
       // 2. 有token（排除token缺失导致的401）
       // 3. 不是登录接口（登录失败不应该触发auth-error）
-      const isLoginEndpoint = endpoint.includes('/auth/login');
       if (response.status === 401 && token && !isLoginEndpoint) {
         console.warn('[fetchApi] Received 401 with token present — token may be expired or invalid');
         try { dispatchErrorEvent('edu:auth-error', { status: response.status, message: 'Token已过期或无效，请重新登录' }); } catch (e) { console.debug(e); }
-      } else if (response.status === 401 && !token) {
-        console.debug('[fetchApi] Received 401 without token — this is expected, not triggering auth-error');
       }
       throw new Error(text);
     }
     return response.json();
   } catch (err: any) {
+    // 如果是 "No authentication token" 错误，不要重试和派发事件
+    if (err.message === 'No authentication token') {
+      throw err;
+    }
+    
     // 处理瞬态网络错误（例如 ERR_NETWORK_CHANGED）——简单重试策略
     const isNetworkError = err instanceof TypeError || /network|failed to fetch|ECONNREFUSED|NetworkError|ERR_NETWORK_CHANGED/i.test(err.message || '');
     console.warn(`[fetchApi] Network error on ${endpoint}:`, err && err.message ? err.message : err);
@@ -342,19 +352,31 @@ export const useAppStore = () => {
     },
 
     logout: () => {
+      // 先清除 token，这样后续的 API 调用会被阻止
       localStorage.removeItem('edu_token');
+      
+      // 清空所有状态
       setCurrentUser(null);
-      // Reset state upon logout
       setBanks([]);
+      setQuestions([]);
       setExams([]);
       setPracticeRecords([]);
       setExamHistory([]);
+      setSystemConfig(null);
+      setMistakes([]);
+      setFavorites([]);
+      setActiveBank(null);
+      setSrsRecords([]);
       setStudents([]);
       setAdmins([]);
       setLoginLogs([]);
       setAuditLogs([]);
       setPracticalTasks([]);
       setPracticalRecords([]);
+      setCustomFieldSchema([]);
+      setAllProgress([]);
+      setDiscussionsCache(null);
+      setTagsCache(null);
       
       // 通知其他标签页退出登录
       localStorage.setItem('edu_logout_event', Date.now().toString());

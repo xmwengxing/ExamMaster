@@ -1047,11 +1047,24 @@ app.post('/api/admin/students', auth, (req, res) => {
   if (!req.user || req.user.role !== 'ADMIN') return res.status(403).send('Forbidden');
   const s = req.body;
   const id = s.id || `student-${Date.now()}`;
-  const password = s.password || '123456';
+  
+  // 默认密码逻辑：如果没有提供密码，使用手机号后6位；如果手机号不足6位，使用123456
+  let password = s.password;
+  if (!password) {
+    const phone = s.phone || '';
+    password = phone.length >= 6 ? phone.slice(-6) : '123456';
+  }
+  
   const hash = bcrypt.hashSync(password, 10);
+  console.log('[add-student] Adding student:', { phone: s.phone, passwordUsed: password === '123456' ? '123456 (fallback)' : 'phone last 6 digits' });
+  
   db.run("INSERT INTO users (id, phone, password, role, nickname, realName, avatar) VALUES (?,?,?,?,?,?,?)",
     [id, s.phone || `phone-${Date.now()}`, hash, 'STUDENT', s.nickname || '', s.realName || '', s.avatar || ''], (err) => {
-      if (err) return res.status(500).send(err.message);
+      if (err) {
+        console.error('[add-student] Error:', err);
+        return res.status(500).send(err.message);
+      }
+      console.log('[add-student] Student added successfully:', id);
       res.json({ success: true, id });
     });
 });
