@@ -3,6 +3,8 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { Question, QuestionType, PracticeMode, QuestionBank, PracticeRecord } from '../../types';
 import { useAppStore } from '../../store';
 import { getEffectiveApiKey, hasApiKey, getApiKeyMissingMessage, generateQuestionAnalysis } from '../../utils/deepseek';
+import RichTextDisplay from '../../components/RichTextDisplay';
+import RichTextEditor from '../../components/RichTextEditor';
 
 interface PracticeModeProps {
   mode: PracticeMode;
@@ -840,7 +842,12 @@ const PracticeModeView: React.FC<PracticeModeProps> = ({
              </div>
           </div>
 
-          <h2 className="text-xl md:text-3xl font-black text-gray-900 leading-tight mb-6 md:mb-12">{currentQuestion.content}</h2>
+          <div className="mb-6 md:mb-12">
+            <RichTextDisplay 
+              content={currentQuestion.content} 
+              className="text-xl md:text-3xl font-black text-gray-900 leading-tight"
+            />
+          </div>
 
         {/* 填空题渲染 */}
         {currentQuestion.type === QuestionType.FILL_IN_BLANK && (
@@ -923,15 +930,17 @@ const PracticeModeView: React.FC<PracticeModeProps> = ({
         {/* 简答题渲染 */}
         {currentQuestion.type === QuestionType.SHORT_ANSWER && (
           <div className="space-y-4 mb-8">
-            <textarea
+            <div className="text-sm font-bold text-gray-700 mb-2">
+              <i className="fa-solid fa-pen-to-square mr-2 text-indigo-600"></i>
+              请输入你的答案（支持插入图片）
+            </div>
+            <RichTextEditor
               value={shortAnswer}
-              onChange={(e) => setShortAnswer(e.target.value)}
-              disabled={isAnswered && !isMockMode}
-              className="w-full px-4 py-3 border-2 border-gray-100 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-medium h-48 resize-none disabled:bg-gray-50 disabled:text-gray-500"
-              placeholder="请输入你的答案..."
+              onChange={(value) => setShortAnswer(value)}
+              placeholder="请输入你的答案，可插入图片..."
             />
             <div className="flex items-center justify-between text-xs text-gray-400">
-              <span>字数：{shortAnswer.length}</span>
+              <span>已输入内容</span>
               {currentQuestion.aiGradingEnabled && (
                 <span className="flex items-center gap-1">
                   <i className="fa-solid fa-wand-magic-sparkles"></i>
@@ -1000,7 +1009,7 @@ const PracticeModeView: React.FC<PracticeModeProps> = ({
             }
             return (
               <button key={idx} onClick={(e) => { e.stopPropagation(); handleOptionClick(label); }} className={`p-3 md:p-5 text-left rounded-3xl border-2 transition-all flex items-center gap-4 ${style}`}>
-                <div className="w-10 h-10 rounded-2xl bg-white border-2 flex items-center justify-center font-black">{label}</div>
+                <div className="w-10 h-10 rounded-2xl bg-white border-2 flex items-center justify-center font-black shrink-0">{label}</div>
                 <span className="font-bold text-sm md:text-base">{opt}</span>
               </button>
             );
@@ -1074,13 +1083,19 @@ const PracticeModeView: React.FC<PracticeModeProps> = ({
                  <div className="w-full p-8 bg-amber-50 rounded-[2.5rem] border border-amber-100">
                    {currentQuestion.type === QuestionType.SHORT_ANSWER ? (
                      <>
-                       <div className="text-indigo-600 font-black mb-2">参考答案：</div>
-                       <div className="text-amber-800 text-sm font-medium whitespace-pre-wrap">{currentQuestion.referenceAnswer}</div>
+                       <div className="text-indigo-600 font-black mb-3">参考答案：</div>
+                       <RichTextDisplay 
+                         content={currentQuestion.referenceAnswer || ''} 
+                         className="text-amber-800 text-sm font-medium"
+                       />
                      </>
                    ) : (
                      <>
-                       <div className="text-emerald-600 font-black mb-2">正确答案：{Array.isArray(currentQuestion.answer) ? currentQuestion.answer.join('') : currentQuestion.answer}</div>
-                       <div className="text-amber-800 text-sm font-medium">{currentQuestion.explanation}</div>
+                       <div className="text-emerald-600 font-black mb-3">正确答案：{Array.isArray(currentQuestion.answer) ? currentQuestion.answer.join('') : currentQuestion.answer}</div>
+                       <RichTextDisplay 
+                         content={currentQuestion.explanation || ''} 
+                         className="text-amber-800 text-sm font-medium"
+                       />
                      </>
                    )}
                  </div>

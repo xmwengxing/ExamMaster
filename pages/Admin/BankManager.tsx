@@ -2,6 +2,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { QuestionBank, QuestionType, Question, Tag } from '../../types';
 import TagSelector from '../../components/TagSelector';
+import RichTextEditor from '../../components/RichTextEditor';
 import { useAppStore } from '../../store';
 
 interface BankManagerProps {
@@ -36,6 +37,7 @@ const BankManager: React.FC<BankManagerProps> = ({
 
   const [qSearch, setQSearch] = useState('');
   const [qTypeFilter, setQTypeFilter] = useState<string>('ALL');
+  const [qChapterFilter, setQChapterFilter] = useState<string[]>([]); // 新增：章节筛选
   const [currentPage, setCurrentPage] = useState(1);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pageSize = 20;
@@ -65,7 +67,25 @@ const BankManager: React.FC<BankManagerProps> = ({
 
   const editingBank = useMemo(() => banks.find(b => b.id === editingBankId) || null, [banks, editingBankId]);
   const bankQuestions = useMemo(() => editingBankId ? allQuestions.filter(q => q.bankId === editingBankId) : [], [allQuestions, editingBankId]);
-  const filteredQuestions = useMemo(() => bankQuestions.filter(q => (qTypeFilter === 'ALL' || q.type === qTypeFilter) && q.content.toLowerCase().includes(qSearch.toLowerCase())), [bankQuestions, qSearch, qTypeFilter]);
+  
+  // 获取当前题库的所有章节（去重）
+  const availableChapters = useMemo(() => {
+    const chapters = bankQuestions
+      .map(q => q.chapter)
+      .filter(c => c && c.trim())
+      .filter((v, i, a) => a.indexOf(v) === i)
+      .sort();
+    return chapters;
+  }, [bankQuestions]);
+  
+  const filteredQuestions = useMemo(() => {
+    return bankQuestions.filter(q => {
+      const matchType = qTypeFilter === 'ALL' || q.type === qTypeFilter;
+      const matchSearch = q.content.toLowerCase().includes(qSearch.toLowerCase());
+      const matchChapter = qChapterFilter.length === 0 || (q.chapter && qChapterFilter.includes(q.chapter));
+      return matchType && matchSearch && matchChapter;
+    });
+  }, [bankQuestions, qSearch, qTypeFilter, qChapterFilter]);
   
   const totalPages = Math.ceil(filteredQuestions.length / pageSize);
   const paginatedQuestions = useMemo(() => filteredQuestions.slice((currentPage - 1) * pageSize, currentPage * pageSize), [filteredQuestions, currentPage]);
@@ -201,22 +221,22 @@ const BankManager: React.FC<BankManagerProps> = ({
           const parts: string[] = [];
           let current = '';
           let inQuotes = false;
-          let i = 0;
+          let j = 0;
           
-          while (i < line.length) {
-            const char = line[i];
-            const nextChar = line[i + 1];
+          while (j < line.length) {
+            const char = line[j];
+            const nextChar = line[j + 1];
             
             if (char === '"') {
               if (inQuotes && nextChar === '"') {
                 // 转义的引号（""）
                 current += '"';
-                i += 2;
+                j += 2;
                 continue;
               } else {
                 // 切换引号状态
                 inQuotes = !inQuotes;
-                i++;
+                j++;
                 continue;
               }
             }
@@ -225,28 +245,29 @@ const BankManager: React.FC<BankManagerProps> = ({
               // 字段分隔符
               parts.push(current.trim());
               current = '';
-              i++;
+              j++;
               continue;
             }
             
             current += char;
-            i++;
+            j++;
           }
           
           // 添加最后一个字段
           parts.push(current.trim());
           
+          // 新格式：题型,题干,选项,答案,解析,单元/章节,填空配置,简答参考答案
           if (parts.length < 4) {
             errors.push(`第${i+1}行：字段不足（至少需要4个字段）`);
             continue;
           }
           
-          const [typeStr, content, optionsStr, answer, explanation = ''] = parts;
+          const [typeStr, content, optionsStr, answer, explanation = '', chapter = '', fillBlanksStr = '', shortAnswerRef = ''] = parts;
           const type = typeStr.toUpperCase() as QuestionType;
           
           // 验证题型
-          if (![QuestionType.SINGLE, QuestionType.MULTIPLE, QuestionType.JUDGE].includes(type)) {
-            errors.push(`第${i+1}行：题型无效（${typeStr}），应为SINGLE/MULTIPLE/JUDGE`);
+          if (![QuestionType.SINGLE, QuestionType.MULTIPLE, QuestionType.JUDGE, QuestionType.FILL_IN_BLANK, QuestionType.SHORT_ANSWER].includes(type)) {
+            errors.push(`第${i+1}行：题型无效（${typeStr}），应为SINGLE/MULTIPLE/JUDGE/FILL_IN_BLANK/SHORT_ANSWER`);
             continue;
           }
           
@@ -256,7 +277,77 @@ const BankManager: React.FC<BankManagerProps> = ({
             continue;
           }
           
-          // 处理选项
+          // 处理填空题
+          if (type === QuestionType.FILL_IN_BLANK) {
+            if (!fillBlanksStr || fillBlanksStr.trim() === '') {
+              errors.push(`第${i+1}行：填空题需要填空配置（格式：blank1:答案1|答案2;blank2:答案3）`);
+              continue;
+            }
+            
+            try {
+              const blanks: any[] = [];
+              const blankConfigs = fillBlanksStr.split(';').filter(b => b.trim());
+              
+              blankConfigs.forEach((config, idx) => {
+                const [blankId, answersStr] = config.split(':');
+                if (!blankId || !answersStr) {
+                  throw new Error('填空配置格式错误');
+                }
+                
+                const acceptedAnswers = answersStr.split('|').map(a => a.trim()).filter(a => a);
+                if (acceptedAnswers.length === 0) {
+                  throw new Error(`${blankId} 至少需要一个答案`);
+                }
+                
+                blanks.push({
+                  id: blankId.trim(),
+                  position: idx,
+                  acceptedAnswers: acceptedAnswers,
+                  caseSensitive: false
+                });
+              });
+              
+              newQs.push({
+                id: `q-imp-${Date.now()}-${Math.floor(Math.random()*1000000)}-${i}`,
+                bankId: editingBankId,
+                type: type,
+                content: content.trim(),
+                options: [],
+                answer: '',
+                explanation: explanation.trim(),
+                chapter: chapter.trim() || undefined,
+                blanks: blanks
+              });
+              continue;
+            } catch (err: any) {
+              errors.push(`第${i+1}行：填空题配置解析失败 - ${err.message}`);
+              continue;
+            }
+          }
+          
+          // 处理简答题
+          if (type === QuestionType.SHORT_ANSWER) {
+            if (!shortAnswerRef || shortAnswerRef.trim() === '') {
+              errors.push(`第${i+1}行：简答题需要参考答案`);
+              continue;
+            }
+            
+            newQs.push({
+              id: `q-imp-${Date.now()}-${Math.floor(Math.random()*1000000)}-${i}`,
+              bankId: editingBankId,
+              type: type,
+              content: content.trim(),
+              options: [],
+              answer: '',
+              explanation: explanation.trim(),
+              chapter: chapter.trim() || undefined,
+              referenceAnswer: shortAnswerRef.trim(),
+              aiGradingEnabled: false
+            });
+            continue;
+          }
+          
+          // 处理选择题和判断题
           let options: string[] = [];
           if (type === QuestionType.JUDGE) {
             options = ['正确', '错误'];
@@ -321,7 +412,8 @@ const BankManager: React.FC<BankManagerProps> = ({
             content: content.trim(),
             options: options,
             answer: finalAnswer,
-            explanation: explanation.trim()
+            explanation: explanation.trim(),
+            chapter: chapter.trim() || undefined
           });
         } catch (err: any) {
           errors.push(`第${i+1}行：解析失败 - ${err.message}`);
@@ -384,25 +476,28 @@ const BankManager: React.FC<BankManagerProps> = ({
   };
 
   const downloadTemplate = () => {
-    const headers = '题型(SINGLE/MULTIPLE/JUDGE),题干,选项(用|分隔;判断题可留空),答案(如A或ABC),解析\n';
-    const example1 = 'SINGLE,下列哪个协议用于加密网页传输？,HTTP|FTP|HTTPS|SMTP,C,HTTPS是HTTP的安全版本\n';
-    const example2 = 'JUDGE,防火墙主要用于监控和过滤进出网络的数据包。,,A,防火墙是网络安全的第一道防线\n';
-    const example3 = 'MULTIPLE,发现账号被盗应采取哪些措施？(多选),立即修改密码|通知银行|告知好友|举报异常,ABCD,这些都是减少损失的重要步骤\n';
-    const example4 = 'MULTIPLE,"以下哪些是常见的网络攻击方式？（多选，题干中可以包含逗号、引号等特殊字符）",DDoS攻击|SQL注入|XSS跨站脚本|钓鱼攻击|中间人攻击|暴力破解,ABCDEF,"这些都是常见攻击方式，需要采取相应防护措施"\n';
-    const example5 = 'SINGLE,"在OSI七层模型中，负责端到端通信的是哪一层？",物理层|数据链路层|网络层|传输层|会话层|表示层|应用层,D,传输层负责端到端的可靠数据传输\n';
+    const headers = '题型(SINGLE/MULTIPLE/JUDGE/FILL_IN_BLANK/SHORT_ANSWER),题干,选项(用|分隔),答案,解析,单元/章节,填空配置(格式:blank1:答案1|答案2;blank2:答案3),简答参考答案\n';
+    const example1 = 'SINGLE,下列哪个协议用于加密网页传输？,HTTP|FTP|HTTPS|SMTP,C,HTTPS是HTTP的安全版本,第一章,,\n';
+    const example2 = 'JUDGE,防火墙主要用于监控和过滤进出网络的数据包。,,A,防火墙是网络安全的第一道防线,网络基础,,\n';
+    const example3 = 'MULTIPLE,发现账号被盗应采取哪些措施？(多选),立即修改密码|通知银行|告知好友|举报异常,ABCD,这些都是减少损失的重要步骤,第二章,,\n';
+    const example4 = 'FILL_IN_BLANK,"JavaScript是一种{{blank1}}语言，常用于{{blank2}}开发。",,,,模块1,blank1:脚本|编程|动态;blank2:前端|Web|网页,\n';
+    const example5 = 'SHORT_ANSWER,请简述HTTPS的工作原理。,,,,网络安全,,HTTPS通过SSL/TLS协议对HTTP通信进行加密。客户端与服务器建立连接时会进行握手，交换密钥，之后的数据传输都经过加密处理，确保数据的机密性和完整性。\n';
     
     const instructions = '\n# 导入说明：\n' +
-      '# 1. 题型：SINGLE(单选) / MULTIPLE(多选) / JUDGE(判断)\n' +
+      '# 1. 题型：SINGLE(单选) / MULTIPLE(多选) / JUDGE(判断) / FILL_IN_BLANK(填空) / SHORT_ANSWER(简答)\n' +
       '# 2. 题干：如包含逗号或引号，请用英文双引号包裹整个题干\n' +
-      '# 3. 选项：用竖线|分隔，支持2-8个选项；判断题可留空\n' +
-      '# 4. 答案：单选填A/B/C等，多选填ABC等（无需分隔），判断题A=正确/B=错误\n' +
+      '# 3. 选项：用竖线|分隔，支持2-8个选项；判断题/填空题/简答题可留空\n' +
+      '# 4. 答案：单选填A/B/C等，多选填ABC等（无需分隔），判断题A=正确/B=错误；填空题/简答题可留空\n' +
       '# 5. 解析：选填，如包含逗号请用双引号包裹\n' +
-      '# 6. 特殊字符：题干或解析中如有逗号、引号等，请用双引号包裹该字段\n\n';
+      '# 6. 单元/章节：选填，用于分类和筛选题目\n' +
+      '# 7. 填空配置：仅填空题需要，格式：blank1:答案1|答案2;blank2:答案3（多个空白用分号分隔）\n' +
+      '# 8. 简答参考答案：仅简答题需要，用于AI评分参考\n' +
+      '# 9. 特殊字符：题干或解析中如有逗号、引号等，请用双引号包裹该字段\n\n';
     
     const blob = new Blob([`\uFEFF${instructions}${headers}${example1}${example2}${example3}${example4}${example5}`], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = "题目导入模板.csv";
+    link.download = "题目导入模板_完整版.csv";
     link.click();
   };
 
@@ -519,6 +614,49 @@ const BankManager: React.FC<BankManagerProps> = ({
                  <option value={QuestionType.FILL_IN_BLANK}>填空题</option>
                  <option value={QuestionType.SHORT_ANSWER}>简答题</option>
                </select>
+               
+               {/* 单元/章节多选筛选器 */}
+               <div className="space-y-2">
+                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1">单元/章节筛选</label>
+                 {availableChapters.length > 0 ? (
+                   <>
+                     <div className="bg-gray-50 rounded-xl p-3 max-h-64 overflow-y-auto space-y-2">
+                       {availableChapters.map(chapter => (
+                         <label key={chapter} className="flex items-center gap-2 cursor-pointer hover:bg-white p-2 rounded-lg transition-colors">
+                           <input 
+                             type="checkbox" 
+                             className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                             checked={qChapterFilter.includes(chapter)}
+                             onChange={e => {
+                               if (e.target.checked) {
+                                 setQChapterFilter([...qChapterFilter, chapter]);
+                               } else {
+                                 setQChapterFilter(qChapterFilter.filter(c => c !== chapter));
+                               }
+                               setCurrentPage(1);
+                             }}
+                           />
+                           <span className="text-xs font-bold text-gray-700">{chapter}</span>
+                         </label>
+                       ))}
+                     </div>
+                     {qChapterFilter.length > 0 && (
+                       <button 
+                         onClick={() => { setQChapterFilter([]); setCurrentPage(1); }}
+                         className="text-[10px] font-black text-rose-500 hover:underline w-full text-center"
+                       >
+                         清除筛选 ({qChapterFilter.length})
+                       </button>
+                     )}
+                   </>
+                 ) : (
+                   <div className="bg-gray-50 rounded-xl p-4 text-center">
+                     <i className="fa-solid fa-book-open text-gray-300 text-2xl mb-2"></i>
+                     <p className="text-[10px] text-gray-400 font-medium">暂无章节数据</p>
+                     <p className="text-[9px] text-gray-300 mt-1">添加题目时可设置章节</p>
+                   </div>
+                 )}
+               </div>
             </aside>
             <div className="md:col-span-3 flex flex-col space-y-4">
               <div className="bg-white rounded-3xl border shadow-sm divide-y overflow-hidden">
@@ -530,6 +668,12 @@ const BankManager: React.FC<BankManagerProps> = ({
                         <div className="flex items-center gap-2">
                           <span className="text-[9px] bg-indigo-600 text-white px-2 py-0.5 rounded font-black">#{(currentPage-1)*pageSize+i+1}</span>
                           <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{q.type}</span>
+                          {q.chapter && (
+                            <span className="text-[9px] font-black bg-purple-100 text-purple-600 px-2 py-0.5 rounded border border-purple-200">
+                              <i className="fa-solid fa-book-open text-[8px] mr-1"></i>
+                              {q.chapter}
+                            </span>
+                          )}
                           {isDup && <span className="text-[9px] font-black bg-rose-100 text-rose-600 px-2 py-0.5 rounded border border-rose-200">重复标记</span>}
                           {q.type === QuestionType.FILL_IN_BLANK && q.blanks && (
                             <span className="text-[9px] font-black bg-amber-100 text-amber-600 px-2 py-0.5 rounded border border-amber-200">{q.blanks.length}个空白</span>
@@ -714,9 +858,38 @@ const BankManager: React.FC<BankManagerProps> = ({
                 )}
               </div>
 
+              {/* 单元/章节输入框 */}
               <div>
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1 ml-1">题目正文</label>
-                <textarea required className="w-full bg-gray-50 border-none rounded-2xl px-5 py-4 font-bold outline-none h-24" value={editingQuestion?.content} onChange={e => setEditingQuestion({...editingQuestion, content: e.target.value})} placeholder="输入题目内容..." />
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1 ml-1">
+                  单元/章节 (选填)
+                  <span className="text-gray-300 ml-2 normal-case font-medium">用于分类和筛选题目</span>
+                </label>
+                <input 
+                  className="w-full bg-gray-50 border-none rounded-2xl px-5 py-3.5 font-bold outline-none" 
+                  value={editingQuestion?.chapter || ''} 
+                  onChange={e => setEditingQuestion({...editingQuestion, chapter: e.target.value})} 
+                  placeholder="例如：第一章、网络基础、模块1..." 
+                  list="chapter-suggestions"
+                />
+                {availableChapters.length > 0 && (
+                  <datalist id="chapter-suggestions">
+                    {availableChapters.map(chapter => (
+                      <option key={chapter} value={chapter} />
+                    ))}
+                  </datalist>
+                )}
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2 ml-1">
+                  题目正文
+                  <span className="text-indigo-500 ml-2 normal-case font-medium">支持插入图片</span>
+                </label>
+                <RichTextEditor
+                  value={editingQuestion?.content || ''}
+                  onChange={(value) => setEditingQuestion({...editingQuestion, content: value})}
+                  placeholder="输入题目内容，可插入图片..."
+                />
               </div>
 
               {/* 填空题配置 */}
@@ -804,12 +977,14 @@ const BankManager: React.FC<BankManagerProps> = ({
               {editingQuestion?.type === QuestionType.SHORT_ANSWER && (
                 <div className="space-y-4">
                   <div>
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1 ml-1">参考答案</label>
-                    <textarea 
-                      className="w-full bg-gray-50 border-none rounded-2xl px-5 py-4 font-bold outline-none h-32" 
-                      value={editingQuestion?.referenceAnswer || ''} 
-                      onChange={e => setEditingQuestion({...editingQuestion, referenceAnswer: e.target.value})} 
-                      placeholder="输入参考答案，用于AI评分参考..."
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2 ml-1">
+                      参考答案
+                      <span className="text-indigo-500 ml-2 normal-case font-medium">支持插入图片</span>
+                    </label>
+                    <RichTextEditor
+                      value={editingQuestion?.referenceAnswer || ''}
+                      onChange={(value) => setEditingQuestion({...editingQuestion, referenceAnswer: value})}
+                      placeholder="输入参考答案，用于AI评分参考，可插入图片..."
                     />
                   </div>
                   <div>
@@ -869,8 +1044,15 @@ const BankManager: React.FC<BankManagerProps> = ({
               ) : null}
 
               <div>
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1 ml-1">专家解析 (选填)</label>
-                <textarea className="w-full bg-gray-50 border-none rounded-2xl px-5 py-4 font-bold outline-none h-24" value={editingQuestion?.explanation} onChange={e => setEditingQuestion({...editingQuestion, explanation: e.target.value})} placeholder="输入题目解析..." />
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2 ml-1">
+                  专家解析 (选填)
+                  <span className="text-indigo-500 ml-2 normal-case font-medium">支持插入图片</span>
+                </label>
+                <RichTextEditor
+                  value={editingQuestion?.explanation || ''}
+                  onChange={(value) => setEditingQuestion({...editingQuestion, explanation: value})}
+                  placeholder="输入题目解析，可插入图片..."
+                />
               </div>
 
               {/* 标签选择器 */}
@@ -947,10 +1129,13 @@ const BankManager: React.FC<BankManagerProps> = ({
               <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100">
                 <h4 className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-3">填写规范说明</h4>
                 <ul className="text-[11px] text-amber-700/80 space-y-1.5 list-disc pl-4 leading-relaxed">
-                  <li>题型标识符: <strong>SINGLE</strong>(单选), <strong>MULTIPLE</strong>(多选), <strong>JUDGE</strong>(判断)</li>
+                  <li>题型标识符: <strong>SINGLE</strong>(单选), <strong>MULTIPLE</strong>(多选), <strong>JUDGE</strong>(判断), <strong>FILL_IN_BLANK</strong>(填空), <strong>SHORT_ANSWER</strong>(简答)</li>
                   <li>选项分隔符: 使用英文半角 <strong>|</strong> 分隔，支持 <strong>2-8个</strong> 选项</li>
                   <li>答案规范: 单选填A/B/C等，多选填ABC等（无需分隔符）</li>
                   <li>判断题: 选项可留空，答案 <strong>A</strong>=正确，<strong>B</strong>=错误</li>
+                  <li>填空题: 在题干中使用 <strong>{'{{'} blank1 {'}}'}</strong> 标记，填空配置格式：<strong>blank1:答案1|答案2;blank2:答案3</strong></li>
+                  <li>简答题: 需填写参考答案，用于AI评分参考</li>
+                  <li>单元/章节: 选填，用于分类和筛选题目</li>
                   <li>特殊字符: 题干或解析中如有<strong>逗号、引号</strong>，请用<strong>英文双引号</strong>包裹该字段</li>
                   <li>系统会自动验证格式并提示错误行，只导入有效题目</li>
                 </ul>

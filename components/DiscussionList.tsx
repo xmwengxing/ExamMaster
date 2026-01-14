@@ -22,6 +22,7 @@ const DiscussionList: React.FC<DiscussionListProps> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [sortBy, setSortBy] = useState<SortOption>('latest');
   const [filterQuestionId, setFilterQuestionId] = useState<string | undefined>(questionId);
+  const [searchKeyword, setSearchKeyword] = useState<string>('');
 
   useEffect(() => {
     loadDiscussions();
@@ -59,9 +60,17 @@ const DiscussionList: React.FC<DiscussionListProps> = ({
     return date.toLocaleDateString('zh-CN');
   };
 
-  // 分离置顶和普通讨论
-  const pinnedDiscussions = discussions.filter(d => d.isPinned);
-  const normalDiscussions = discussions.filter(d => !d.isPinned);
+  // 分离置顶和普通讨论，并应用搜索过滤
+  const filteredDiscussions = discussions.filter(d => {
+    if (!searchKeyword.trim()) return true;
+    const keyword = searchKeyword.toLowerCase();
+    const titleMatch = d.title.toLowerCase().includes(keyword);
+    const contentMatch = d.content.toLowerCase().includes(keyword);
+    return titleMatch || contentMatch;
+  });
+
+  const pinnedDiscussions = filteredDiscussions.filter(d => d.isPinned);
+  const normalDiscussions = filteredDiscussions.filter(d => !d.isPinned);
 
   if (isLoading) {
     return (
@@ -74,45 +83,71 @@ const DiscussionList: React.FC<DiscussionListProps> = ({
   return (
     <div className="space-y-6">
       {/* 头部工具栏 */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div className="flex items-center gap-3">
-          <h2 className="text-2xl font-black text-gray-900">讨论区</h2>
-          <span className="text-sm text-gray-400">({discussions.length})</span>
-        </div>
-        
-        <div className="flex items-center gap-3 w-full sm:w-auto">
-          {/* 排序选择 */}
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as SortOption)}
-            className="px-4 py-2 border-2 border-gray-100 rounded-xl font-medium text-sm outline-none focus:ring-2 focus:ring-indigo-500"
-          >
-            <option value="latest">最新发布</option>
-            <option value="hot">最热讨论</option>
-            <option value="mostCommented">最多评论</option>
-          </select>
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="flex items-center gap-3">
+            <h2 className="text-2xl font-black text-gray-900">讨论区</h2>
+            <span className="text-sm text-gray-400">({filteredDiscussions.length})</span>
+          </div>
+          
+          <div className="flex items-center gap-3 w-full sm:w-auto">
+            {/* 排序选择 */}
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as SortOption)}
+              className="px-4 py-2 border-2 border-gray-100 rounded-xl font-medium text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value="latest">最新发布</option>
+              <option value="hot">最热讨论</option>
+              <option value="mostCommented">最多评论</option>
+            </select>
 
-          {/* 创建讨论按钮 */}
-          <button
-            onClick={onCreateNew}
-            className="px-4 py-2 bg-indigo-600 text-white rounded-xl font-black hover:bg-indigo-700 transition-colors whitespace-nowrap"
-          >
-            <i className="fa-solid fa-plus mr-2"></i>发起讨论
-          </button>
+            {/* 创建讨论按钮 */}
+            <button
+              onClick={onCreateNew}
+              className="px-4 py-2 bg-indigo-600 text-white rounded-xl font-black hover:bg-indigo-700 transition-colors whitespace-nowrap"
+            >
+              <i className="fa-solid fa-plus mr-2"></i>发起讨论
+            </button>
+          </div>
+        </div>
+
+        {/* 搜索框 */}
+        <div className="relative">
+          <input
+            type="text"
+            value={searchKeyword}
+            onChange={(e) => setSearchKeyword(e.target.value)}
+            placeholder="搜索话题或内容关键词..."
+            className="w-full px-4 py-3 pl-12 border-2 border-gray-100 rounded-xl font-medium text-sm outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+          />
+          <i className="fa-solid fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
+          {searchKeyword && (
+            <button
+              onClick={() => setSearchKeyword('')}
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            >
+              <i className="fa-solid fa-times"></i>
+            </button>
+          )}
         </div>
       </div>
 
       {/* 讨论列表 */}
-      {discussions.length === 0 ? (
+      {filteredDiscussions.length === 0 ? (
         <div className="text-center py-16 bg-white rounded-3xl border">
           <i className="fa-solid fa-comments text-5xl text-gray-300 mb-4"></i>
-          <p className="text-gray-400 font-medium">暂无讨论，发起第一个讨论吧</p>
-          <button
-            onClick={onCreateNew}
-            className="mt-4 px-6 py-3 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-700 transition-colors"
-          >
-            发起讨论
-          </button>
+          <p className="text-gray-400 font-medium">
+            {searchKeyword ? '未找到匹配的讨论' : '暂无讨论，发起第一个讨论吧'}
+          </p>
+          {!searchKeyword && (
+            <button
+              onClick={onCreateNew}
+              className="mt-4 px-6 py-3 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-700 transition-colors"
+            >
+              发起讨论
+            </button>
+          )}
         </div>
       ) : (
         <div className="space-y-3">

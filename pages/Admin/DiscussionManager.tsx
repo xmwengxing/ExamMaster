@@ -13,6 +13,7 @@ const DiscussionManager: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [sortBy, setSortBy] = useState<'latest' | 'hot' | 'mostCommented'>('latest');
   const [filterHidden, setFilterHidden] = useState<'all' | 'visible' | 'hidden'>('all');
+  const [searchKeyword, setSearchKeyword] = useState<string>('');
 
   useEffect(() => {
     loadDiscussions();
@@ -127,8 +128,18 @@ const DiscussionManager: React.FC = () => {
 
   // 筛选讨论
   const filteredDiscussions = discussions.filter(d => {
-    if (filterHidden === 'visible') return !d.isHidden;
-    if (filterHidden === 'hidden') return d.isHidden;
+    // 可见性筛选
+    if (filterHidden === 'visible' && d.isHidden) return false;
+    if (filterHidden === 'hidden' && !d.isHidden) return false;
+    
+    // 关键词搜索（搜索标题和内容）
+    if (searchKeyword.trim()) {
+      const keyword = searchKeyword.toLowerCase();
+      const titleMatch = d.title.toLowerCase().includes(keyword);
+      const contentMatch = d.content.toLowerCase().includes(keyword);
+      return titleMatch || contentMatch;
+    }
+    
     return true;
   });
 
@@ -171,34 +182,56 @@ const DiscussionManager: React.FC = () => {
       {viewMode === 'list' ? (
         <>
           {/* 标题和工具栏 */}
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <div>
-              <h2 className="text-2xl font-black text-gray-900">讨论管理</h2>
-              <p className="text-sm text-gray-500 mt-1">管理所有讨论，包括隐藏、置顶和删除</p>
-            </div>
-            
-            <div className="flex items-center gap-3">
-              {/* 筛选 */}
-              <select
-                value={filterHidden}
-                onChange={(e) => setFilterHidden(e.target.value as any)}
-                className="px-4 py-2 border-2 border-gray-100 rounded-xl font-medium text-sm outline-none"
-              >
-                <option value="all">全部 ({discussions.length})</option>
-                <option value="visible">可见 ({discussions.filter(d => !d.isHidden).length})</option>
-                <option value="hidden">隐藏 ({discussions.filter(d => d.isHidden).length})</option>
-              </select>
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <div>
+                <h2 className="text-2xl font-black text-gray-900">讨论管理</h2>
+                <p className="text-sm text-gray-500 mt-1">管理所有讨论，包括隐藏、置顶和删除</p>
+              </div>
+              
+              <div className="flex items-center gap-3">
+                {/* 筛选 */}
+                <select
+                  value={filterHidden}
+                  onChange={(e) => setFilterHidden(e.target.value as any)}
+                  className="px-4 py-2 border-2 border-gray-100 rounded-xl font-medium text-sm outline-none"
+                >
+                  <option value="all">全部 ({discussions.length})</option>
+                  <option value="visible">可见 ({discussions.filter(d => !d.isHidden).length})</option>
+                  <option value="hidden">隐藏 ({discussions.filter(d => d.isHidden).length})</option>
+                </select>
 
-              {/* 排序 */}
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as any)}
-                className="px-4 py-2 border-2 border-gray-100 rounded-xl font-medium text-sm outline-none"
-              >
-                <option value="latest">最新发布</option>
-                <option value="hot">最热讨论</option>
-                <option value="mostCommented">最多评论</option>
-              </select>
+                {/* 排序 */}
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as any)}
+                  className="px-4 py-2 border-2 border-gray-100 rounded-xl font-medium text-sm outline-none"
+                >
+                  <option value="latest">最新发布</option>
+                  <option value="hot">最热讨论</option>
+                  <option value="mostCommented">最多评论</option>
+                </select>
+              </div>
+            </div>
+
+            {/* 搜索框 */}
+            <div className="relative">
+              <input
+                type="text"
+                value={searchKeyword}
+                onChange={(e) => setSearchKeyword(e.target.value)}
+                placeholder="搜索话题或内容关键词..."
+                className="w-full px-4 py-3 pl-12 border-2 border-gray-100 rounded-xl font-medium text-sm outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              />
+              <i className="fa-solid fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
+              {searchKeyword && (
+                <button
+                  onClick={() => setSearchKeyword('')}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  <i className="fa-solid fa-times"></i>
+                </button>
+              )}
             </div>
           </div>
 

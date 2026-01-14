@@ -33,6 +33,22 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange, placeh
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // 验证文件类型
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      alert('只支持 JPG、PNG、GIF、WebP 格式的图片');
+      e.target.value = '';
+      return;
+    }
+
+    // 验证文件大小（限制 500KB）
+    const maxSize = 500 * 1024; // 500KB
+    if (file.size > maxSize) {
+      alert(`图片大小不能超过 500KB\n当前图片: ${(file.size / 1024).toFixed(0)}KB`);
+      e.target.value = '';
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = (event) => {
       const base64 = event.target?.result as string;

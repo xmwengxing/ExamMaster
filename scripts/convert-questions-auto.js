@@ -315,7 +315,7 @@ async function convertWordFile(filePath) {
 
 // 生成CSV文件
 function generateCSV(questions, outputFile) {
-  const header = '题型(SINGLE/MULTIPLE/JUDGE),题干,选项(用|分隔;判断题可留空),答案(如A或ABC),解析\n';
+  const header = '题型(SINGLE/MULTIPLE/JUDGE/FILL_IN_BLANK/SHORT_ANSWER),题干,选项(用|分隔),答案,解析,单元/章节,填空配置(格式:blank1:答案1|答案2;blank2:答案3),简答参考答案\n';
   
   const rows = questions.map(q => {
     return [
@@ -323,7 +323,10 @@ function generateCSV(questions, outputFile) {
       escapeCsvField(q.question),
       escapeCsvField(q.options),
       q.answer,
-      escapeCsvField(q.explanation)
+      escapeCsvField(q.explanation),
+      escapeCsvField(q.chapter || ''),  // 单元/章节
+      escapeCsvField(q.fillBlanks || ''),  // 填空配置
+      escapeCsvField(q.shortAnswer || '')  // 简答参考答案
     ].join(',');
   });
   
@@ -420,7 +423,9 @@ async function main() {
   }
   
   console.log('\n✅ 转换完成！');
-  console.log('\n📝 提示：请检查生成的CSV文件，确认格式正确后再导入系统。');
+  console.log('\n📝 提示：生成的CSV文件已更新为新格式（8个字段）');
+  console.log('        包含：题型、题干、选项、答案、解析、单元/章节、填空配置、简答参考答案');
+  console.log('        请检查生成的CSV文件，确认格式正确后再导入系统。');
 }
 
 // 运行

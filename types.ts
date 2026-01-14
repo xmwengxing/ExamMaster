@@ -77,6 +77,7 @@ export interface Question {
   referenceAnswer?: string;    // 简答题参考答案
   aiGradingEnabled?: boolean;  // 是否启用AI评分
   tags?: string[];             // 题目标签ID列表
+  chapter?: string;            // 单元/章节
 }
 
 // 填空题配置

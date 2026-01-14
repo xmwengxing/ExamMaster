@@ -307,8 +307,17 @@ def generate_csv(questions, output_file):
     with open(output_file, 'w', encoding='utf-8-sig', newline='') as f:
         writer = csv.writer(f)
         
-        # 写入标题
-        writer.writerow(['题型(SINGLE/MULTIPLE/JUDGE)', '题干', '选项(用|分隔;判断题可留空)', '答案(如A或ABC)', '解析'])
+        # 写入标题（新格式：8个字段）
+        writer.writerow([
+            '题型(SINGLE/MULTIPLE/JUDGE/FILL_IN_BLANK/SHORT_ANSWER)', 
+            '题干', 
+            '选项(用|分隔)', 
+            '答案', 
+            '解析',
+            '单元/章节',
+            '填空配置(格式:blank1:答案1|答案2;blank2:答案3)',
+            '简答参考答案'
+        ])
         
         # 写入数据
         for q in questions:
@@ -317,7 +326,10 @@ def generate_csv(questions, output_file):
                 q['question'],
                 q['options'],
                 q['answer'],
-                q['explanation']
+                q['explanation'],
+                q.get('chapter', ''),  # 单元/章节
+                q.get('fillBlanks', ''),  # 填空配置
+                q.get('shortAnswer', '')  # 简答参考答案
             ])
     
     print(f"\n✓ 已生成: {output_file}")
@@ -413,7 +425,9 @@ def main():
         generate_csv(judge_questions, '转换后的题目-判断题.csv')
     
     print('\n✅ 转换完成！')
-    print('\n📝 提示: 请检查生成的CSV文件，确认格式正确后再导入系统。')
+    print('\n📝 提示: 生成的CSV文件已更新为新格式（8个字段）')
+    print('        包含：题型、题干、选项、答案、解析、单元/章节、填空配置、简答参考答案')
+    print('        请检查生成的CSV文件，确认格式正确后再导入系统。')
 
 
 if __name__ == '__main__':

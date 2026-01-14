@@ -47,6 +47,7 @@ const AdminUserMgt: React.FC<AdminUserMgtProps> = ({ currentUser, admins, studen
     { id: 'supervisor', label: '督学管理' },
     { id: 'discussion-manager', label: '讨论管理' },
     { id: 'tags', label: '标签管理' },
+    { id: 'ai-analysis', label: 'AI解析' },
     { id: 'settings', label: '系统设置' },
   ];
 
