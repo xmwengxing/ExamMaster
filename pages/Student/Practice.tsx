@@ -19,6 +19,7 @@ const PracticeList: React.FC<PracticeProps> = ({ banks, activeBank, history, onS
   const [isOperating, setIsOperating] = useState(false);
   const [form, setForm] = useState({
     strategy: 'SEQUENTIAL', // 默认顺序练习
+    selectedChapters: [] as string[], // 选中的章节
     counts: {
       [QuestionType.SINGLE]: 0,
       [QuestionType.MULTIPLE]: 0,
@@ -33,16 +34,31 @@ const PracticeList: React.FC<PracticeProps> = ({ banks, activeBank, history, onS
     history.filter(h => (h.isCustom === true || (h.isCustom as any) === 1))
   , [history]);
 
+  // 获取当前题库的所有章节（去重）
+  const availableChapters = useMemo(() => {
+    const bankQs = store.questions.filter(q => q.bankId === activeBank.id);
+    const chapters = bankQs
+      .map(q => q.chapter)
+      .filter((c): c is string => !!c && c.trim() !== '');
+    return Array.from(new Set(chapters)).sort();
+  }, [store.questions, activeBank.id]);
+
+  // 根据选中的章节过滤题目，然后统计题型
   const typeStats = useMemo(() => {
     const bankQs = store.questions.filter(q => q.bankId === activeBank.id);
+    // 如果选择了章节，只统计这些章节的题目
+    const filteredQs = form.selectedChapters.length > 0
+      ? bankQs.filter(q => q.chapter && form.selectedChapters.includes(q.chapter))
+      : bankQs;
+    
     return {
-      [QuestionType.SINGLE]: bankQs.filter(q => q.type === QuestionType.SINGLE).length,
-      [QuestionType.MULTIPLE]: bankQs.filter(q => q.type === QuestionType.MULTIPLE).length,
-      [QuestionType.JUDGE]: bankQs.filter(q => q.type === QuestionType.JUDGE).length,
-      [QuestionType.FILL_IN_BLANK]: bankQs.filter(q => q.type === QuestionType.FILL_IN_BLANK).length,
-      [QuestionType.SHORT_ANSWER]: bankQs.filter(q => q.type === QuestionType.SHORT_ANSWER).length,
+      [QuestionType.SINGLE]: filteredQs.filter(q => q.type === QuestionType.SINGLE).length,
+      [QuestionType.MULTIPLE]: filteredQs.filter(q => q.type === QuestionType.MULTIPLE).length,
+      [QuestionType.JUDGE]: filteredQs.filter(q => q.type === QuestionType.JUDGE).length,
+      [QuestionType.FILL_IN_BLANK]: filteredQs.filter(q => q.type === QuestionType.FILL_IN_BLANK).length,
+      [QuestionType.SHORT_ANSWER]: filteredQs.filter(q => q.type === QuestionType.SHORT_ANSWER).length,
     };
-  }, [store.questions, activeBank.id]);
+  }, [store.questions, activeBank.id, form.selectedChapters]);
 
   const totalCount = useMemo(() => {
     return Object.values(form.counts).reduce((sum, count) => sum + count, 0);
@@ -133,12 +149,14 @@ const PracticeList: React.FC<PracticeProps> = ({ banks, activeBank, history, onS
         isCustom: true,
         bankId: activeBank.id,
         customCounts: form.counts, // 传递自定义题数配置
+        selectedChapters: form.selectedChapters, // 传递选中的章节
         skipCheck: true
       });
       
       // 重置表单
       setForm({
         strategy: 'SEQUENTIAL',
+        selectedChapters: [],
         counts: {
           [QuestionType.SINGLE]: 0,
           [QuestionType.MULTIPLE]: 0,
@@ -297,6 +315,49 @@ const PracticeList: React.FC<PracticeProps> = ({ banks, activeBank, history, onS
                   {activeBank.name}
                 </div>
               </div>
+
+              {/* 章节选择器 */}
+              {availableChapters.length > 0 && (
+                <div>
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-3 ml-1">
+                    单元/章节筛选 <span className="text-gray-300">(可选，不选则从全部章节抽题)</span>
+                  </label>
+                  <div className="bg-gray-50 rounded-2xl p-4 max-h-48 overflow-y-auto">
+                    <div className="flex flex-wrap gap-2">
+                      {availableChapters.map(chapter => (
+                        <button
+                          key={chapter}
+                          onClick={() => {
+                            const isSelected = form.selectedChapters.includes(chapter);
+                            setForm({
+                              ...form,
+                              selectedChapters: isSelected
+                                ? form.selectedChapters.filter(c => c !== chapter)
+                                : [...form.selectedChapters, chapter]
+                            });
+                          }}
+                          className={`px-3 py-2 rounded-xl text-xs font-bold transition-all ${
+                            form.selectedChapters.includes(chapter)
+                              ? 'bg-indigo-600 text-white shadow-md'
+                              : 'bg-white text-gray-600 border-2 border-gray-200 hover:border-indigo-300'
+                          }`}
+                        >
+                          {form.selectedChapters.includes(chapter) && <i className="fa-solid fa-check mr-1"></i>}
+                          {chapter}
+                        </button>
+                      ))}
+                    </div>
+                    {form.selectedChapters.length > 0 && (
+                      <button
+                        onClick={() => setForm({ ...form, selectedChapters: [] })}
+                        className="mt-3 text-xs text-gray-400 hover:text-rose-500 font-bold"
+                      >
+                        <i className="fa-solid fa-xmark mr-1"></i> 清空选择
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
 
               <div>
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-3 ml-1">选择题型和题数</label>

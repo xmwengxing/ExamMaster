@@ -7,11 +7,13 @@
 使用方法：
 1. 安装依赖：pip install openpyxl python-docx
 2. 运行脚本：python scripts/convert-questions.py
+3. 指定章节：python scripts/convert-questions.py --chapter "九上第一单元"
 """
 
 import os
 import re
 import csv
+import sys
 from pathlib import Path
 
 try:
@@ -29,6 +31,9 @@ except ImportError:
     WORD_AVAILABLE = False
     print("警告: 未安装 python-docx，无法处理Word文件")
     print("安装命令: pip install python-docx")
+
+# 全局变量：用户指定的章节名称
+CUSTOM_CHAPTER = None
 
 
 def normalize_question_type(type_str):
@@ -356,10 +361,26 @@ def generate_report(questions):
 
 def main():
     """主函数"""
+    global CUSTOM_CHAPTER
+    
+    # 解析命令行参数
+    if '--chapter' in sys.argv:
+        try:
+            chapter_index = sys.argv.index('--chapter')
+            if chapter_index + 1 < len(sys.argv):
+                CUSTOM_CHAPTER = sys.argv[chapter_index + 1]
+        except (ValueError, IndexError):
+            pass
+    
     print('=' * 60)
     print('题目格式转换工具 - Python版本')
     print('=' * 60)
     print()
+    
+    if CUSTOM_CHAPTER:
+        print(f'📌 已设置章节信息: {CUSTOM_CHAPTER}')
+        print('   所有题目将统一使用此章节信息')
+        print()
     
     # 检查依赖
     if not EXCEL_AVAILABLE and not WORD_AVAILABLE:
@@ -398,6 +419,11 @@ def main():
         else:
             continue
         
+        # 如果用户指定了章节，覆盖所有题目的章节信息
+        if CUSTOM_CHAPTER:
+            for q in questions:
+                q['chapter'] = CUSTOM_CHAPTER
+        
         all_questions.extend(questions)
         print()
     
@@ -425,6 +451,8 @@ def main():
         generate_csv(judge_questions, '转换后的题目-判断题.csv')
     
     print('\n✅ 转换完成！')
+    if CUSTOM_CHAPTER:
+        print(f'\n📌 所有题目已设置章节: {CUSTOM_CHAPTER}')
     print('\n📝 提示: 生成的CSV文件已更新为新格式（8个字段）')
     print('        包含：题型、题干、选项、答案、解析、单元/章节、填空配置、简答参考答案')
     print('        请检查生成的CSV文件，确认格式正确后再导入系统。')

@@ -50,7 +50,7 @@ db.serialize(() => {
   // 题目表
   db.run(`CREATE TABLE IF NOT EXISTS questions (
     id TEXT PRIMARY KEY, bankId TEXT, type TEXT, content TEXT, 
-    options TEXT, answer TEXT, explanation TEXT
+    options TEXT, answer TEXT, explanation TEXT, chapter TEXT
   )`);
 
   // 练习记录表
@@ -224,6 +224,15 @@ db.serialize(() => {
         db.run("ALTER TABLE questions ADD COLUMN tags TEXT", (err) => {
           if (err) console.log('[DB] tags column may already exist');
           else console.log('[DB] Added tags column to questions table');
+        });
+      }
+      
+      // 添加 chapter 字段（单元/章节）
+      const hasChapter = columns.some(col => col.name === 'chapter');
+      if (!hasChapter) {
+        db.run("ALTER TABLE questions ADD COLUMN chapter TEXT", (err) => {
+          if (err) console.log('[DB] chapter column may already exist');
+          else console.log('[DB] Added chapter column to questions table');
         });
       }
     }
@@ -737,8 +746,8 @@ app.post('/api/questions', auth, (req, res) => {
   // Build SQL with new fields
   const sql = `INSERT INTO questions (
     id, bankId, type, content, options, answer, explanation, 
-    blanks, referenceAnswer, aiGradingEnabled, tags
-  ) VALUES (?,?,?,?,?,?,?,?,?,?,?)`;
+    blanks, referenceAnswer, aiGradingEnabled, tags, chapter
+  ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`;
   
   const params = [
     id,
@@ -751,7 +760,8 @@ app.post('/api/questions', auth, (req, res) => {
     q.blanks ? JSON.stringify(q.blanks) : null,
     q.referenceAnswer || null,
     q.aiGradingEnabled ? 1 : 0,
-    q.tags ? JSON.stringify(q.tags) : null
+    q.tags ? JSON.stringify(q.tags) : null,
+    q.chapter || null
   ];
   
   db.run(sql, params, function(err) {
@@ -831,8 +841,8 @@ app.post('/api/banks/:id/import', auth, (req, res) => {
       stmt = db.prepare(`
         INSERT INTO questions (
           id, bankId, type, content, options, answer, explanation,
-          blanks, referenceAnswer, aiGradingEnabled, tags
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?)
+          blanks, referenceAnswer, aiGradingEnabled, tags, chapter
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
       `);
     } catch (prepareErr) {
       console.error('[import] Error preparing statement:', prepareErr);
@@ -867,11 +877,12 @@ app.post('/api/banks/:id/import', auth, (req, res) => {
         const referenceAnswer = q.referenceAnswer || null;
         const aiGradingEnabled = q.aiGradingEnabled ? 1 : 0;
         const tags = q.tags ? JSON.stringify(q.tags) : null;
+        const chapter = q.chapter || null;
         
         // 执行插入（注意：stmt.run在事务中是同步的，不返回result）
         stmt.run(
           id, bankId, type, content, options, answer, explanation,
-          blanks, referenceAnswer, aiGradingEnabled, tags
+          blanks, referenceAnswer, aiGradingEnabled, tags, chapter
         );
         
         // 如果没有抛出异常，说明插入成功

@@ -303,6 +303,7 @@ const App: React.FC = () => {
         const mockConfig = activeParams?.exam || activeParams?.config || activeParams;
         const orderedQuestionIds = activeParams?.orderedQuestionIds;
         const customCounts = activeParams?.customCounts;
+        const selectedChapters = activeParams?.selectedChapters || mockConfig?.selectedChapters;
 
         if (isMistake) {
           questionsToLoad = store.mistakes.filter(q => q.bankId === activeBank.id);
@@ -311,7 +312,13 @@ const App: React.FC = () => {
           }
         } else if (customCounts) {
           // 处理自定义练习的题数配置
-          const bankQs = store.questions.filter(q => q.bankId === activeBank.id);
+          let bankQs = store.questions.filter(q => q.bankId === activeBank.id);
+          
+          // 如果选择了章节，先按章节过滤
+          if (selectedChapters && selectedChapters.length > 0) {
+            bankQs = bankQs.filter(q => q.chapter && selectedChapters.includes(q.chapter));
+          }
+          
           const singles = bankQs.filter(q => q.type === QuestionType.SINGLE).sort(() => Math.random() - 0.5).slice(0, customCounts[QuestionType.SINGLE] || 0);
           const multiples = bankQs.filter(q => q.type === QuestionType.MULTIPLE).sort(() => Math.random() - 0.5).slice(0, customCounts[QuestionType.MULTIPLE] || 0);
           const judges = bankQs.filter(q => q.type === QuestionType.JUDGE).sort(() => Math.random() - 0.5).slice(0, customCounts[QuestionType.JUDGE] || 0);
@@ -319,7 +326,13 @@ const App: React.FC = () => {
           const shortAnswers = bankQs.filter(q => q.type === QuestionType.SHORT_ANSWER).sort(() => Math.random() - 0.5).slice(0, customCounts[QuestionType.SHORT_ANSWER] || 0);
           questionsToLoad = [...singles, ...multiples, ...judges, ...fillInBlanks, ...shortAnswers];
         } else if (isMock && mockConfig) {
-          const bankQs = store.questions.filter(q => q.bankId === (mockConfig.bankId || activeBank.id));
+          let bankQs = store.questions.filter(q => q.bankId === (mockConfig.bankId || activeBank.id));
+          
+          // 如果选择了章节，先按章节过滤
+          if (selectedChapters && selectedChapters.length > 0) {
+            bankQs = bankQs.filter(q => q.chapter && selectedChapters.includes(q.chapter));
+          }
+          
           if (orderedQuestionIds) {
             questionsToLoad = orderedQuestionIds.map((id: string) => bankQs.find(q => q.id === id)).filter(Boolean) as Question[];
           } else if (mockConfig.strategy === 'MANUAL' && mockConfig.selectedQuestionIds) {

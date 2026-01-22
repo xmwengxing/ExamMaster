@@ -5,6 +5,7 @@
  * 使用方法：
  * 1. 安装依赖：npm install xlsx mammoth
  * 2. 运行脚本：node scripts/convert-questions-auto.js
+ * 3. 指定章节：node scripts/convert-questions-auto.js --chapter "九上第一单元"
  */
 
 import XLSX from 'xlsx';
@@ -15,6 +16,13 @@ import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// 解析命令行参数
+let CUSTOM_CHAPTER = null;
+const chapterIndex = process.argv.indexOf('--chapter');
+if (chapterIndex !== -1 && chapterIndex + 1 < process.argv.length) {
+  CUSTOM_CHAPTER = process.argv[chapterIndex + 1];
+}
 
 // CSV 转义函数
 function escapeCsvField(field) {
@@ -363,6 +371,12 @@ async function main() {
   console.log('='.repeat(60));
   console.log('');
   
+  if (CUSTOM_CHAPTER) {
+    console.log(`📌 已设置章节信息: ${CUSTOM_CHAPTER}`);
+    console.log('   所有题目将统一使用此章节信息');
+    console.log('');
+  }
+  
   const allQuestions = [];
   
   // 扫描所有Excel和Word文件
@@ -389,6 +403,13 @@ async function main() {
       questions = await convertExcelFile(file);
     } else if (ext === '.docx') {
       questions = await convertWordFile(file);
+    }
+    
+    // 如果用户指定了章节，覆盖所有题目的章节信息
+    if (CUSTOM_CHAPTER) {
+      questions.forEach(q => {
+        q.chapter = CUSTOM_CHAPTER;
+      });
     }
     
     allQuestions.push(...questions);
@@ -423,6 +444,9 @@ async function main() {
   }
   
   console.log('\n✅ 转换完成！');
+  if (CUSTOM_CHAPTER) {
+    console.log(`\n📌 所有题目已设置章节: ${CUSTOM_CHAPTER}`);
+  }
   console.log('\n📝 提示：生成的CSV文件已更新为新格式（8个字段）');
   console.log('        包含：题型、题干、选项、答案、解析、单元/章节、填空配置、简答参考答案');
   console.log('        请检查生成的CSV文件，确认格式正确后再导入系统。');

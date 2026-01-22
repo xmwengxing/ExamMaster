@@ -146,10 +146,21 @@ const Exams: React.FC<ExamsProps> = ({ exams, history, banks, allQuestions, onSt
     judgeCount: 10,
     fillInBlankCount: 0,
     shortAnswerCount: 0,
+    selectedChapters: [] as string[], // 选中的章节
     strategy: 'RANDOM' as 'RANDOM' | 'MANUAL'
   });
 
   const selectedBank = useMemo(() => banks.find(b => b.id === mockConfig.bankId) || banks[0], [banks, mockConfig.bankId]);
+  
+  // 获取选中题库的所有章节（去重）
+  const availableChapters = useMemo(() => {
+    if (!mockConfig.bankId) return [];
+    const bankQs = allQuestions.filter(q => q.bankId === mockConfig.bankId);
+    const chapters = bankQs
+      .map(q => q.chapter)
+      .filter((c): c is string => !!c && c.trim() !== '');
+    return Array.from(new Set(chapters)).sort();
+  }, [allQuestions, mockConfig.bankId]);
   
   const visibleSystemExams = useMemo(() => {
     const now = new Date();
@@ -301,9 +312,53 @@ const Exams: React.FC<ExamsProps> = ({ exams, history, banks, allQuestions, onSt
           <div className="bg-white p-8 rounded-3xl border shadow-sm max-w-xl">
             <h3 className="text-xl font-bold mb-6 flex items-center gap-2"><i className="fa-solid fa-wand-magic-sparkles text-indigo-500"></i> 自定义模拟试卷</h3>
             <div className="space-y-5">
-              <select className="w-full bg-gray-50 border-none rounded-xl px-4 py-4 font-bold outline-none" value={mockConfig.bankId} onChange={e => setMockConfig({...mockConfig, bankId: e.target.value})}>
+              <select className="w-full bg-gray-50 border-none rounded-xl px-4 py-4 font-bold outline-none" value={mockConfig.bankId} onChange={e => setMockConfig({...mockConfig, bankId: e.target.value, selectedChapters: []})}>
                 {banks.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
               </select>
+              
+              {/* 章节选择器 */}
+              {availableChapters.length > 0 && (
+                <div>
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-3">
+                    单元/章节筛选 <span className="text-gray-300">(可选，不选则从全部章节抽题)</span>
+                  </label>
+                  <div className="bg-gray-50 rounded-2xl p-4 max-h-48 overflow-y-auto">
+                    <div className="flex flex-wrap gap-2">
+                      {availableChapters.map(chapter => (
+                        <button
+                          key={chapter}
+                          onClick={() => {
+                            const isSelected = mockConfig.selectedChapters.includes(chapter);
+                            setMockConfig({
+                              ...mockConfig,
+                              selectedChapters: isSelected
+                                ? mockConfig.selectedChapters.filter(c => c !== chapter)
+                                : [...mockConfig.selectedChapters, chapter]
+                            });
+                          }}
+                          className={`px-3 py-2 rounded-xl text-xs font-bold transition-all ${
+                            mockConfig.selectedChapters.includes(chapter)
+                              ? 'bg-indigo-600 text-white shadow-md'
+                              : 'bg-white text-gray-600 border-2 border-gray-200 hover:border-indigo-300'
+                          }`}
+                        >
+                          {mockConfig.selectedChapters.includes(chapter) && <i className="fa-solid fa-check mr-1"></i>}
+                          {chapter}
+                        </button>
+                      ))}
+                    </div>
+                    {mockConfig.selectedChapters.length > 0 && (
+                      <button
+                        onClick={() => setMockConfig({ ...mockConfig, selectedChapters: [] })}
+                        className="mt-3 text-xs text-gray-400 hover:text-rose-500 font-bold"
+                      >
+                        <i className="fa-solid fa-xmark mr-1"></i> 清空选择
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+              
               <div className="grid grid-cols-3 md:grid-cols-5 gap-3">
                 <div className="space-y-2"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block text-center">单选</label><input type="number" min="0" className="w-full bg-gray-50 border-none rounded-xl px-4 py-3 text-center font-bold" value={mockConfig.singleCount} onChange={e => setMockConfig({...mockConfig, singleCount: Number(e.target.value)})} /></div>
                 <div className="space-y-2"><label className="text-[10px] font-black text-gray-400 uppercase block text-center">多选</label><input type="number" min="0" className="w-full bg-gray-50 border-none rounded-xl px-4 py-3 text-center font-bold" value={mockConfig.multipleCount} onChange={e => setMockConfig({...mockConfig, multipleCount: Number(e.target.value)})} /></div>

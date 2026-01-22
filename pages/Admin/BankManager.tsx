@@ -535,7 +535,19 @@ const BankManager: React.FC<BankManagerProps> = ({
                       <i className="fa-solid fa-pen-to-square text-sm"></i>
                     </button>
                     <button onClick={() => { setEditingBankId(bank.id); setScoreForm(bank.scoreConfig); setIsScoreModalOpen(true); }} className="text-[10px] font-black px-3 py-1.5 rounded-xl bg-amber-50 text-amber-600 border border-amber-100 uppercase hover:bg-amber-100 transition-colors">分值配置</button>
-                    <button onClick={() => { if(confirm('确定删除该题库及内部所有题目吗？')) onDelete(bank.id); }} className="p-1.5 text-gray-300 hover:text-rose-500 transition-colors"><i className="fa-solid fa-trash-can text-sm"></i></button>
+                    <button 
+                      onClick={() => { 
+                        const questionCount = bank.questionCount || 0;
+                        const message = questionCount > 0 
+                          ? `确定要删除题库"${bank.name}"吗？\n\n⚠️ 警告：此操作将同时删除该题库内的 ${questionCount} 道题目，且无法恢复！` 
+                          : `确定要删除题库"${bank.name}"吗？`;
+                        if(confirm(message)) onDelete(bank.id); 
+                      }} 
+                      className="p-1.5 text-gray-300 hover:text-rose-500 transition-colors"
+                      title="删除题库"
+                    >
+                      <i className="fa-solid fa-trash-can text-sm"></i>
+                    </button>
                   </div>
                 </div>
                 <h3 className="font-black text-gray-800 text-lg mb-2">{bank.name}</h3>
