@@ -19,14 +19,7 @@ const RichTextDisplay: React.FC<RichTextDisplayProps> = ({ content, className = 
   // 使用 DOMPurify 清理 HTML，防止 XSS 攻击
   const sanitizedContent = DOMPurify.sanitize(content, {
     ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 's', 'span', 'div', 'img', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'],
-    ALLOWED_ATTR: ['style', 'src', 'alt', 'class'],
-    ALLOWED_STYLES: {
-      '*': {
-        'color': [/^#[0-9a-fA-F]{3,6}$/],
-        'font-size': [/^\d+px$/],
-        'text-align': [/^(left|center|right|justify)$/],
-      }
-    }
+    ALLOWED_ATTR: ['style', 'src', 'alt', 'class']
   });
 
   return (
@@ -38,10 +31,12 @@ const RichTextDisplay: React.FC<RichTextDisplayProps> = ({ content, className = 
       <style>{`
         .rich-text-content img {
           max-width: 100%;
+          max-height: 200px;
           height: auto;
           border-radius: 8px;
           margin: 8px 0;
-          display: block;
+          display: inline-block;
+          object-fit: contain;
         }
         .rich-text-content ul, .rich-text-content ol {
           padding-left: 24px;
@@ -52,6 +47,18 @@ const RichTextDisplay: React.FC<RichTextDisplayProps> = ({ content, className = 
         }
         .rich-text-content p {
           margin: 4px 0;
+          display: inline;
+        }
+        .rich-text-content.line-clamp-3 {
+          display: -webkit-box;
+          -webkit-line-clamp: 3;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+        .rich-text-content.line-clamp-3 img {
+          max-height: 80px;
+          margin: 4px 8px 4px 0;
+          vertical-align: middle;
         }
       `}</style>
     </>

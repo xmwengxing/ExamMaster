@@ -11,17 +11,35 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange, placeh
   const editorRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isFocused, setIsFocused] = useState(false);
+  const isComposingRef = useRef(false); // 用于跟踪是否正在输入中文
 
+  // 只在初始化或外部值变化且编辑器未聚焦时更新内容
   useEffect(() => {
-    if (editorRef.current && editorRef.current.innerHTML !== value) {
-      editorRef.current.innerHTML = value || '';
+    if (editorRef.current && !isFocused) {
+      const currentContent = editorRef.current.innerHTML;
+      const newContent = value || '';
+      
+      // 只有在内容真正不同时才更新（避免光标位置丢失）
+      if (currentContent !== newContent) {
+        editorRef.current.innerHTML = newContent;
+      }
     }
-  }, [value]);
+  }, [value, isFocused]);
 
   const handleInput = () => {
-    if (editorRef.current) {
+    if (editorRef.current && !isComposingRef.current) {
       onChange(editorRef.current.innerHTML);
     }
+  };
+
+  // 处理中文输入法
+  const handleCompositionStart = () => {
+    isComposingRef.current = true;
+  };
+
+  const handleCompositionEnd = () => {
+    isComposingRef.current = false;
+    handleInput();
   };
 
   const execCommand = (command: string, value?: string) => {
@@ -29,7 +47,64 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange, placeh
     editorRef.current?.focus();
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // 压缩图片
+  const compressImage = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          // 创建 canvas 进行压缩
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          
+          // 限制最大尺寸为 800px
+          const maxSize = 800;
+          if (width > maxSize || height > maxSize) {
+            if (width > height) {
+              height = (height / width) * maxSize;
+              width = maxSize;
+            } else {
+              width = (width / height) * maxSize;
+              height = maxSize;
+            }
+          }
+          
+          canvas.width = width;
+          canvas.height = height;
+          
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            reject(new Error('无法创建 canvas 上下文'));
+            return;
+          }
+          
+          // 绘制图片
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          // 转换为 base64，质量设置为 0.7
+          const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
+          
+          // 检查压缩后的大小
+          const sizeInKB = (compressedBase64.length * 3) / 4 / 1024;
+          if (sizeInKB > 300) {
+            // 如果还是太大，降低质量
+            const finalBase64 = canvas.toDataURL('image/jpeg', 0.5);
+            resolve(finalBase64);
+          } else {
+            resolve(compressedBase64);
+          }
+        };
+        img.onerror = () => reject(new Error('图片加载失败'));
+        img.src = e.target?.result as string;
+      };
+      reader.onerror = () => reject(new Error('文件读取失败'));
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -41,20 +116,55 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange, placeh
       return;
     }
 
-    // 验证文件大小（限制 500KB）
-    const maxSize = 500 * 1024; // 500KB
+    // 验证文件大小（限制 5MB）
+    const maxSize = 5 * 1024 * 1024; // 5MB
     if (file.size > maxSize) {
-      alert(`图片大小不能超过 500KB\n当前图片: ${(file.size / 1024).toFixed(0)}KB`);
+      alert(`图片大小不能超过 5MB\n当前图片: ${(file.size / 1024 / 1024).toFixed(2)}MB`);
       e.target.value = '';
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const base64 = event.target?.result as string;
-      execCommand('insertImage', base64);
-    };
-    reader.readAsDataURL(file);
+    try {
+      // 压缩图片
+      const base64 = await compressImage(file);
+      
+      // 创建图片元素并插入到光标位置
+      const img = document.createElement('img');
+      img.src = base64;
+      img.style.maxWidth = '100%';
+      img.style.height = 'auto';
+      img.style.borderRadius = '8px';
+      img.style.margin = '8px 0';
+      img.style.cursor = 'pointer';
+      img.setAttribute('contenteditable', 'false'); // 图片本身不可编辑
+      
+      // 插入图片
+      const selection = window.getSelection();
+      if (selection && selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
+        range.deleteContents();
+        range.insertNode(img);
+        
+        // 在图片后添加一个空格，方便继续输入
+        const space = document.createTextNode('\u00A0');
+        range.collapse(false);
+        range.insertNode(space);
+        range.setStartAfter(space);
+        range.setEndAfter(space);
+        selection.removeAllRanges();
+        selection.addRange(range);
+      } else {
+        // 如果没有选区，直接追加到末尾
+        editorRef.current?.appendChild(img);
+        editorRef.current?.appendChild(document.createTextNode('\u00A0'));
+      }
+      
+      // 触发更新
+      handleInput();
+    } catch (error) {
+      alert('图片处理失败：' + (error as Error).message);
+    }
+    
     e.target.value = '';
   };
 
@@ -243,6 +353,8 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange, placeh
         ref={editorRef}
         contentEditable
         onInput={handleInput}
+        onCompositionStart={handleCompositionStart}
+        onCompositionEnd={handleCompositionEnd}
         onFocus={() => setIsFocused(true)}
         onBlur={() => setIsFocused(false)}
         className="min-h-[200px] max-h-[400px] overflow-y-auto p-5 outline-none text-sm leading-relaxed"
@@ -261,6 +373,16 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange, placeh
           height: auto;
           border-radius: 8px;
           margin: 8px 0;
+          cursor: pointer;
+          display: inline-block;
+          vertical-align: middle;
+        }
+        [contenteditable] img:hover {
+          outline: 2px solid #6366f1;
+          outline-offset: 2px;
+        }
+        [contenteditable] img::selection {
+          background: rgba(99, 102, 241, 0.3);
         }
         [contenteditable] ul, [contenteditable] ol {
           padding-left: 24px;

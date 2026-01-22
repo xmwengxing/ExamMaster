@@ -3,6 +3,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { QuestionBank, QuestionType, Question, Tag } from '../../types';
 import TagSelector from '../../components/TagSelector';
 import RichTextEditor from '../../components/RichTextEditor';
+import RichTextDisplay from '../../components/RichTextDisplay';
 import { useAppStore } from '../../store';
 
 interface BankManagerProps {
@@ -633,24 +634,46 @@ const BankManager: React.FC<BankManagerProps> = ({
                  {availableChapters.length > 0 ? (
                    <>
                      <div className="bg-gray-50 rounded-xl p-3 max-h-64 overflow-y-auto space-y-2">
-                       {availableChapters.map(chapter => (
-                         <label key={chapter} className="flex items-center gap-2 cursor-pointer hover:bg-white p-2 rounded-lg transition-colors">
-                           <input 
-                             type="checkbox" 
-                             className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                             checked={qChapterFilter.includes(chapter)}
-                             onChange={e => {
-                               if (e.target.checked) {
-                                 setQChapterFilter([...qChapterFilter, chapter]);
-                               } else {
-                                 setQChapterFilter(qChapterFilter.filter(c => c !== chapter));
-                               }
-                               setCurrentPage(1);
-                             }}
-                           />
-                           <span className="text-xs font-bold text-gray-700">{chapter}</span>
-                         </label>
-                       ))}
+                       {availableChapters.map(chapter => {
+                         const chapterQuestionCount = bankQuestions.filter(q => q.chapter === chapter).length;
+                         return (
+                           <div key={chapter} className="flex items-center gap-2 hover:bg-white p-2 rounded-lg transition-colors group/chapter">
+                             <label className="flex items-center gap-2 cursor-pointer flex-1">
+                               <input 
+                                 type="checkbox" 
+                                 className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                 checked={qChapterFilter.includes(chapter)}
+                                 onChange={e => {
+                                   if (e.target.checked) {
+                                     setQChapterFilter([...qChapterFilter, chapter]);
+                                   } else {
+                                     setQChapterFilter(qChapterFilter.filter(c => c !== chapter));
+                                   }
+                                   setCurrentPage(1);
+                                 }}
+                               />
+                               <span className="text-xs font-bold text-gray-700 flex-1">{chapter}</span>
+                               <span className="text-[10px] text-gray-400 font-medium">({chapterQuestionCount})</span>
+                             </label>
+                             <button
+                               onClick={() => {
+                                 if (confirm(`确定要删除"${chapter}"章节下的所有 ${chapterQuestionCount} 道题目吗？\n\n⚠️ 此操作不可恢复！`)) {
+                                   const chapterQuestionIds = bankQuestions
+                                     .filter(q => q.chapter === chapter)
+                                     .map(q => q.id);
+                                   onDeleteQuestions(editingBankId!, chapterQuestionIds);
+                                   // 清除该章节的筛选
+                                   setQChapterFilter(qChapterFilter.filter(c => c !== chapter));
+                                 }
+                               }}
+                               className="opacity-0 group-hover/chapter:opacity-100 transition-opacity p-1.5 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded"
+                               title={`删除"${chapter}"章节的所有题目`}
+                             >
+                               <i className="fa-solid fa-trash-can text-xs"></i>
+                             </button>
+                           </div>
+                         );
+                       })}
                      </div>
                      {qChapterFilter.length > 0 && (
                        <button 
@@ -694,7 +717,9 @@ const BankManager: React.FC<BankManagerProps> = ({
                             <span className="text-[9px] font-black bg-emerald-100 text-emerald-600 px-2 py-0.5 rounded border border-emerald-200">AI评分</span>
                           )}
                         </div>
-                        <h4 className="font-bold text-gray-800 leading-relaxed">{q.content}</h4>
+                        <div className="font-bold text-gray-800 leading-relaxed">
+                          <RichTextDisplay content={q.content} className="line-clamp-3" />
+                        </div>
                         {q.type !== QuestionType.FILL_IN_BLANK && q.type !== QuestionType.SHORT_ANSWER && (
                           <div className="flex flex-wrap gap-2">
                             {q.options.map((opt, idx) => (

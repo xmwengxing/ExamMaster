@@ -235,6 +235,15 @@ db.serialize(() => {
           else console.log('[DB] Added chapter column to questions table');
         });
       }
+      
+      // 添加 sortOrder 字段（题目排序顺序）
+      const hasSortOrder = columns.some(col => col.name === 'sortOrder');
+      if (!hasSortOrder) {
+        db.run("ALTER TABLE questions ADD COLUMN sortOrder INTEGER DEFAULT 0", (err) => {
+          if (err) console.log('[DB] sortOrder column may already exist');
+          else console.log('[DB] Added sortOrder column to questions table');
+        });
+      }
     }
   });
 
@@ -655,7 +664,12 @@ app.get('/api/banks', auth, (req, res) => {
 app.get('/api/questions', auth, (req, res) => {
   const { bankId } = req.query;
   if (bankId) {
-    db.all("SELECT * FROM questions WHERE bankId = ?", [bankId], (err, rows) => {
+    // 按 sortOrder 排序，如果 sortOrder 相同则按 id 排序
+    db.all("SELECT * FROM questions WHERE bankId = ? ORDER BY sortOrder ASC, id ASC", [bankId], (err, rows) => {
+      if (err) {
+        console.error('[查询题目] 失败:', err);
+        return res.status(500).json({ error: '查询题目失败: ' + err.message });
+      }
       res.json((rows || []).map(r => ({
         ...r,
         options: parseOptionsField(r.options),
@@ -666,8 +680,12 @@ app.get('/api/questions', auth, (req, res) => {
       })));
     });
   } else {
-    // Return all questions when no bankId provided
-    db.all("SELECT * FROM questions", [], (err, rows) => {
+    // 返回所有题目，按 bankId 和 sortOrder 排序
+    db.all("SELECT * FROM questions ORDER BY bankId ASC, sortOrder ASC, id ASC", [], (err, rows) => {
+      if (err) {
+        console.error('[查询所有题目] 失败:', err);
+        return res.status(500).json({ error: '查询题目失败: ' + err.message });
+      }
       res.json((rows || []).map(r => ({
         ...r,
         options: parseOptionsField(r.options),
@@ -829,140 +847,152 @@ app.post('/api/banks/:id/import', auth, (req, res) => {
   let skipped = 0;
   const errors = [];
   
-  // 使用事务提高性能
-  db.run('BEGIN TRANSACTION', (err) => {
+  // 获取当前题库中最大的 sortOrder 值
+  db.get("SELECT MAX(sortOrder) as maxOrder FROM questions WHERE bankId = ?", [bankId], (err, row) => {
     if (err) {
-      console.error('[import] Error starting transaction:', err);
+      console.error('[import] Error getting max sortOrder:', err);
       return res.status(500).json({ error: err.message });
     }
     
-    let stmt;
-    try {
-      stmt = db.prepare(`
-        INSERT INTO questions (
-          id, bankId, type, content, options, answer, explanation,
-          blanks, referenceAnswer, aiGradingEnabled, tags, chapter
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
-      `);
-    } catch (prepareErr) {
-      console.error('[import] Error preparing statement:', prepareErr);
-      db.run('ROLLBACK', () => {
-        return res.status(500).json({ 
-          error: prepareErr.message,
-          inserted: 0,
-          skipped: questions.length,
-          errors: [`准备语句失败：${prepareErr.message}`]
-        });
-      });
-      return;
-    }
+    // 从最大值+1开始，如果没有题目则从1开始
+    let startOrder = (row && row.maxOrder !== null) ? row.maxOrder + 1 : 1;
     
-    // 同步处理每个题目
-    for (let i = 0; i < questions.length; i++) {
-      const q = questions[i];
-      const rowNum = i + 2; // CSV行号（+1标题行+1从1开始）
-      
-      try {
-        // 生成唯一ID：使用时间戳+随机数+索引，确保唯一性
-        const timestamp = Date.now();
-        const random = Math.floor(Math.random() * 1000000);
-        const id = q.id || `q-${timestamp}-${random}-${i}`;
-        
-        const type = q.type || 'SINGLE';
-        const content = q.content || '';
-        const options = JSON.stringify(q.options || []);
-        const answer = JSON.stringify(q.answer || '');
-        const explanation = q.explanation || '';
-        const blanks = q.blanks ? JSON.stringify(q.blanks) : null;
-        const referenceAnswer = q.referenceAnswer || null;
-        const aiGradingEnabled = q.aiGradingEnabled ? 1 : 0;
-        const tags = q.tags ? JSON.stringify(q.tags) : null;
-        const chapter = q.chapter || null;
-        
-        // 执行插入（注意：stmt.run在事务中是同步的，不返回result）
-        stmt.run(
-          id, bankId, type, content, options, answer, explanation,
-          blanks, referenceAnswer, aiGradingEnabled, tags, chapter
-        );
-        
-        // 如果没有抛出异常，说明插入成功
-        inserted++;
-      } catch (err) {
-        skipped++;
-        const errorMsg = err.message || String(err);
-        console.error(`[import] Error at row ${rowNum}:`, errorMsg);
-        
-        // 特殊处理ID重复错误
-        if (errorMsg.includes('UNIQUE constraint') && errorMsg.includes('questions.id')) {
-          errors.push(`第${rowNum}行：题目ID重复（请检查是否重复导入）`);
-        } else if (errorMsg.includes('NOT NULL constraint')) {
-          errors.push(`第${rowNum}行：必填字段为空`);
-        } else {
-          errors.push(`第${rowNum}行：${errorMsg}`);
-        }
+    // 使用事务提高性能
+    db.run('BEGIN TRANSACTION', (err) => {
+      if (err) {
+        console.error('[import] Error starting transaction:', err);
+        return res.status(500).json({ error: err.message });
       }
-    }
-    
-    stmt.finalize((finalizeErr) => {
-      if (finalizeErr) {
-        console.error('[import] Error finalizing statement:', finalizeErr);
+      
+      let stmt;
+      try {
+        stmt = db.prepare(`
+          INSERT INTO questions (
+            id, bankId, type, content, options, answer, explanation,
+            blanks, referenceAnswer, aiGradingEnabled, tags, chapter, sortOrder
+          ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+        `);
+      } catch (prepareErr) {
+        console.error('[import] Error preparing statement:', prepareErr);
         db.run('ROLLBACK', () => {
           return res.status(500).json({ 
-            error: finalizeErr.message,
+            error: prepareErr.message,
             inserted: 0,
             skipped: questions.length,
-            errors: [`数据库错误：${finalizeErr.message}`]
+            errors: [`准备语句失败：${prepareErr.message}`]
           });
         });
         return;
       }
       
-      // 提交事务
-      db.run('COMMIT', (commitErr) => {
-        if (commitErr) {
-          console.error('[import] Error committing transaction:', commitErr);
+      // 同步处理每个题目
+      for (let i = 0; i < questions.length; i++) {
+        const q = questions[i];
+        const rowNum = i + 2; // CSV行号（+1标题行+1从1开始）
+        
+        try {
+          // 生成唯一ID：使用时间戳+随机数+索引，确保唯一性
+          const timestamp = Date.now();
+          const random = Math.floor(Math.random() * 1000000);
+          const id = q.id || `q-${timestamp}-${random}-${i}`;
+          
+          const type = q.type || 'SINGLE';
+          const content = q.content || '';
+          const options = JSON.stringify(q.options || []);
+          const answer = JSON.stringify(q.answer || '');
+          const explanation = q.explanation || '';
+          const blanks = q.blanks ? JSON.stringify(q.blanks) : null;
+          const referenceAnswer = q.referenceAnswer || null;
+          const aiGradingEnabled = q.aiGradingEnabled ? 1 : 0;
+          const tags = q.tags ? JSON.stringify(q.tags) : null;
+          const chapter = q.chapter || null;
+          const sortOrder = startOrder + i; // 按导入顺序设置排序值
+          
+          // 执行插入（注意：stmt.run在事务中是同步的，不返回result）
+          stmt.run(
+            id, bankId, type, content, options, answer, explanation,
+            blanks, referenceAnswer, aiGradingEnabled, tags, chapter, sortOrder
+          );
+          
+          // 如果没有抛出异常，说明插入成功
+          inserted++;
+        } catch (err) {
+          skipped++;
+          const errorMsg = err.message || String(err);
+          console.error(`[import] Error at row ${rowNum}:`, errorMsg);
+          
+          // 特殊处理ID重复错误
+          if (errorMsg.includes('UNIQUE constraint') && errorMsg.includes('questions.id')) {
+            errors.push(`第${rowNum}行：题目ID重复（请检查是否重复导入）`);
+          } else if (errorMsg.includes('NOT NULL constraint')) {
+            errors.push(`第${rowNum}行：必填字段为空`);
+          } else {
+            errors.push(`第${rowNum}行：${errorMsg}`);
+          }
+        }
+      }
+      
+      stmt.finalize((finalizeErr) => {
+        if (finalizeErr) {
+          console.error('[import] Error finalizing statement:', finalizeErr);
           db.run('ROLLBACK', () => {
             return res.status(500).json({ 
-              error: commitErr.message,
+              error: finalizeErr.message,
               inserted: 0,
               skipped: questions.length,
-              errors: [`提交失败：${commitErr.message}`]
+              errors: [`数据库错误：${finalizeErr.message}`]
             });
           });
           return;
         }
         
-        console.log(`[import] Transaction committed: ${inserted} inserted, ${skipped} skipped`);
-        
-        // 更新题库题目数量
-        if (inserted > 0) {
-          db.run(
-            "UPDATE banks SET questionCount = COALESCE(questionCount, 0) + ? WHERE id = ?", 
-            [inserted, bankId], 
-            (updateErr) => {
-              if (updateErr) {
-                console.error('[import] Error updating bank count:', updateErr);
-              }
-              
-              // 返回结果
-              res.json({ 
-                success: true, 
-                inserted,
-                skipped,
-                total: questions.length,
-                errors: errors.length > 0 ? errors : undefined
+        // 提交事务
+        db.run('COMMIT', (commitErr) => {
+          if (commitErr) {
+            console.error('[import] Error committing transaction:', commitErr);
+            db.run('ROLLBACK', () => {
+              return res.status(500).json({ 
+                error: commitErr.message,
+                inserted: 0,
+                skipped: questions.length,
+                errors: [`提交失败：${commitErr.message}`]
               });
-            }
-          );
-        } else {
-          res.json({ 
-            success: true, 
-            inserted: 0,
-            skipped,
-            total: questions.length,
-            errors: errors.length > 0 ? errors : undefined
-          });
-        }
+            });
+            return;
+          }
+          
+          console.log(`[import] Transaction committed: ${inserted} inserted, ${skipped} skipped`);
+          
+          // 更新题库题目数量
+          if (inserted > 0) {
+            db.run(
+              "UPDATE banks SET questionCount = COALESCE(questionCount, 0) + ? WHERE id = ?", 
+              [inserted, bankId], 
+              (updateErr) => {
+                if (updateErr) {
+                  console.error('[import] Error updating bank count:', updateErr);
+                }
+                
+                // 返回结果
+                res.json({ 
+                  success: true, 
+                  inserted,
+                  skipped,
+                  total: questions.length,
+                  errors: errors.length > 0 ? errors : undefined
+                });
+              }
+            );
+          } else {
+            res.json({ 
+              success: true, 
+              inserted: 0,
+              skipped,
+              total: questions.length,
+              errors: errors.length > 0 ? errors : undefined
+            });
+          }
+        });
       });
     });
   });
@@ -971,6 +1001,12 @@ app.post('/api/banks/:id/import', auth, (req, res) => {
 app.put('/api/questions/:id', auth, (req, res) => {
   if (!req.user || req.user.role !== 'ADMIN') return res.status(403).send('Forbidden');
   const body = req.body;
+  
+  // 验证内容大小（防止过大的 base64 图片导致问题）
+  const contentSize = JSON.stringify(body).length;
+  if (contentSize > 10 * 1024 * 1024) { // 10MB 限制
+    return res.status(413).json({ error: '题目内容过大，请压缩图片后重试（单个题目不超过10MB）' });
+  }
   
   // Validate fill-in-blank questions
   if (body.type === 'FILL_IN_BLANK' && body.blanks) {
@@ -981,6 +1017,11 @@ app.put('/api/questions/:id', auth, (req, res) => {
   
   // Get old tags to update usage counts
   db.get("SELECT tags FROM questions WHERE id = ?", [req.params.id], (err, oldRow) => {
+    if (err) {
+      console.error('[更新题目] 查询旧标签失败:', err);
+      return res.status(500).json({ error: '查询题目失败: ' + err.message });
+    }
+    
     const oldTags = oldRow && oldRow.tags ? JSON.parse(oldRow.tags) : [];
     const newTags = body.tags || [];
     
@@ -1000,7 +1041,10 @@ app.put('/api/questions/:id', auth, (req, res) => {
     });
     
     db.run(`UPDATE questions SET ${fields} WHERE id = ?`, [...values, req.params.id], (err) => {
-      if (err) return res.status(500).send(err.message);
+      if (err) {
+        console.error('[更新题目] 数据库更新失败:', err);
+        return res.status(500).json({ error: '更新题目失败: ' + err.message });
+      }
       
       // Update tag associations
       for (const tagId of removedTags) {
@@ -1722,12 +1766,24 @@ app.delete('/api/exams/history/:id', auth, (req, res) => {
 // Admin: login logs & audit logs
 app.get('/api/admin/login-logs', auth, (req, res) => {
   if (!req.user || req.user.role !== 'ADMIN') return res.status(403).send('Forbidden');
-  db.all("SELECT * FROM login_logs", [], (err, rows) => res.json(rows || []));
+  db.all("SELECT * FROM login_logs ORDER BY time DESC", [], (err, rows) => {
+    if (err) {
+      console.error('[登录日志] 查询失败:', err);
+      return res.status(500).json({ error: '查询登录日志失败: ' + err.message });
+    }
+    res.json(rows || []);
+  });
 });
 
 app.get('/api/admin/audit-logs', auth, (req, res) => {
   if (!req.user || req.user.role !== 'ADMIN') return res.status(403).send('Forbidden');
-  db.all("SELECT * FROM audit_logs", [], (err, rows) => res.json(rows || []));
+  db.all("SELECT * FROM audit_logs ORDER BY timestamp DESC", [], (err, rows) => {
+    if (err) {
+      console.error('[审计日志] 查询失败:', err);
+      return res.status(500).json({ error: '查询审计日志失败: ' + err.message });
+    }
+    res.json(rows || []);
+  });
 });
 
 app.post('/api/admin/audit-logs', auth, (req, res) => {
