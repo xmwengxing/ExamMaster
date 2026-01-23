@@ -291,7 +291,41 @@ npm run preview
 
 ## 🚀 生产部署
 
-### 快速部署
+### PostgreSQL + Docker 部署（推荐）✨
+
+**新版本已支持 PostgreSQL 数据库和 Docker 容器化部署！**
+
+#### 部署步骤
+
+1. **检查服务器环境**
+   ```bash
+   # 双击运行
+   check-server.bat
+   ```
+
+2. **安装缺失的软件**（如果需要）
+   ```bash
+   # 上传安装脚本到服务器
+   scp scripts/install-server-dependencies.sh root@47.104.173.139:/tmp/
+   
+   # 在服务器上执行
+   ssh root@47.104.173.139
+   chmod +x /tmp/install-server-dependencies.sh
+   /tmp/install-server-dependencies.sh
+   ```
+
+3. **部署应用**
+   - 参考 [服务器部署记录.md](服务器部署记录.md) 逐步完成
+
+#### 部署文档
+
+- 📝 [服务器部署记录](服务器部署记录.md) - 部署检查清单和记录
+- 📖 [服务器准备指南](SERVER_PREPARATION_GUIDE.md) - 详细的操作步骤
+- 🐳 [Docker 部署指南](DOCKER_DEPLOYMENT_GUIDE.md) - Docker 容器化部署
+- 🌐 [Nginx 配置指南](NGINX_CONFIGURATION_GUIDE.md) - Web 服务器配置
+
+### SQLite 传统部署
+
 ```bash
 # 1. 构建前端
 npm run build
