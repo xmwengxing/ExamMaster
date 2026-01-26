@@ -10,6 +10,7 @@
 
 import pg from 'pg';
 import 'dotenv/config';
+import logger, { logDatabaseQuery, logDatabaseError } from './utils/logger.js';
 
 const { Pool } = pg;
 
@@ -31,9 +32,12 @@ const pool = new Pool({
 
 // 连接池错误处理
 pool.on('error', (err, client) => {
-  console.error('数据库连接池意外错误:', err);
-  console.error('错误时间:', new Date().toISOString());
-  console.error('客户端信息:', client ? '客户端存在' : '客户端不存在');
+  logger.error('数据库连接池意外错误', {
+    error: err.message,
+    code: err.code,
+    timestamp: new Date().toISOString(),
+    hasClient: !!client,
+  });
 });
 
 // 连接池连接事件（用于调试）- 迁移时禁用
@@ -64,22 +68,20 @@ export async function query(text, params) {
     const result = await pool.query(text, params);
     const duration = Date.now() - start;
     
-    // 记录查询日志（迁移时禁用，只记录慢查询）
-    if (duration > 5000) {
-      console.log('慢查询警告:', {
-        text: text.substring(0, 100) + (text.length > 100 ? '...' : ''),
+    // 记录慢查询
+    if (duration > 1000) {
+      logger.warn('慢查询警告', {
+        query: text.substring(0, 200),
         duration: `${duration}ms`,
         rows: result.rowCount
       });
+    } else if (process.env.LOG_LEVEL === 'debug') {
+      logDatabaseQuery(text, params, duration);
     }
     
     return result;
   } catch (error) {
-    console.error('查询执行失败:', {
-      error: error.message,
-      query: text.substring(0, 100) + (text.length > 100 ? '...' : ''),
-      params: params
-    });
+    logDatabaseError(error, text, params);
     throw error;
   }
 }
@@ -113,6 +115,8 @@ export async function getMany(text, params) {
  * @returns {Promise<Object>} 执行结果
  */
 export async function execute(text, params) {
+  // 不做任何转换，让 PostgreSQL 驱动自动处理
+  // pg 驱动会自动将 JavaScript 对象/数组转换为 JSONB
   const result = await query(text, params);
   return {
     rowCount: result.rowCount,
@@ -131,6 +135,10 @@ export async function getClient() {
   const originalQuery = client.query.bind(client);
   client.query = async (...args) => {
     const start = Date.now();
+    
+    // 不做任何参数转换，让 PostgreSQL 驱动自动处理
+    // pg 驱动会自动将 JavaScript 对象/数组转换为 JSONB
+    
     try {
       const result = await originalQuery(...args);
       const duration = Date.now() - start;
@@ -165,22 +173,248 @@ export async function transaction(callback) {
   
   try {
     await client.query('BEGIN');
-    console.log('事务开始');
+    logger.debug('事务开始');
     
     const result = await callback(client);
     
     await client.query('COMMIT');
-    console.log('事务提交成功');
+    logger.debug('事务提交成功');
     
     return result;
   } catch (error) {
     await client.query('ROLLBACK');
-    console.error('事务回滚:', error.message);
+    logger.error('事务回滚', { error: error.message });
     throw error;
   } finally {
     client.release();
-    console.log('事务连接已释放');
+    logger.debug('事务连接已释放');
   }
+}
+
+/**
+ * 批量插入数据（使用 COPY 命令优化性能）
+ * 适用于大批量数据插入（>1000 行）
+ * 
+ * @param {string} tableName - 表名
+ * @param {Array<string>} columns - 列名数组
+ * @param {Array<Array>} rows - 数据行数组，每行是一个值数组
+ * @returns {Promise<number>} 插入的行数
+ */
+export async function bulkInsert(tableName, columns, rows) {
+  if (!rows || rows.length === 0) {
+    return 0;
+  }
+  
+  const start = Date.now();
+  const client = await getClient();
+  
+  try {
+    // 使用 COPY 命令进行批量插入
+    // COPY 比 INSERT 快 10-100 倍
+    const copyQuery = `COPY ${tableName} (${columns.join(', ')}) FROM STDIN WITH (FORMAT csv, DELIMITER ',', NULL '\\N', QUOTE '"', ESCAPE '"')`;
+    
+    // 创建 CSV 格式的数据流
+    const stream = client.query(pg.from(copyQuery));
+    
+    // 写入数据
+    for (const row of rows) {
+      // 将每行数据转换为 CSV 格式
+      const csvRow = row.map(value => {
+        if (value === null || value === undefined) {
+          return '\\N'; // PostgreSQL NULL 表示
+        }
+        
+        // 处理 JSON 对象
+        if (typeof value === 'object') {
+          value = JSON.stringify(value);
+        }
+        
+        // 转换为字符串
+        value = String(value);
+        
+        // 转义引号和换行符
+        value = value.replace(/"/g, '""');
+        
+        // 如果包含逗号、引号或换行符，需要用引号包裹
+        if (value.includes(',') || value.includes('"') || value.includes('\n') || value.includes('\r')) {
+          return `"${value}"`;
+        }
+        
+        return value;
+      }).join(',');
+      
+      stream.write(csvRow + '\n');
+    }
+    
+    // 结束流
+    await new Promise((resolve, reject) => {
+      stream.on('finish', resolve);
+      stream.on('error', reject);
+      stream.end();
+    });
+    
+    const duration = Date.now() - start;
+    logger.info('批量插入完成', {
+      table: tableName,
+      rows: rows.length,
+      duration: `${duration}ms`,
+      throughput: `${Math.round(rows.length / (duration / 1000))} rows/s`
+    });
+    
+    return rows.length;
+  } catch (error) {
+    logger.error('批量插入失败', {
+      table: tableName,
+      error: error.message,
+      rowCount: rows.length
+    });
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * 批量插入数据（使用事务和批处理）
+ * 适用于中等批量数据插入（100-1000 行）
+ * 
+ * @param {string} tableName - 表名
+ * @param {Array<string>} columns - 列名数组
+ * @param {Array<Object>} rows - 数据对象数组
+ * @param {number} batchSize - 批处理大小，默认 100
+ * @returns {Promise<number>} 插入的行数
+ */
+export async function batchInsert(tableName, columns, rows, batchSize = 100) {
+  if (!rows || rows.length === 0) {
+    return 0;
+  }
+  
+  const start = Date.now();
+  let inserted = 0;
+  
+  await transaction(async (client) => {
+    // 分批处理
+    for (let i = 0; i < rows.length; i += batchSize) {
+      const batch = rows.slice(i, i + batchSize);
+      
+      // 构建批量插入语句
+      const placeholders = [];
+      const values = [];
+      let paramIndex = 1;
+      
+      for (const row of batch) {
+        const rowPlaceholders = columns.map(() => `$${paramIndex++}`);
+        placeholders.push(`(${rowPlaceholders.join(', ')})`);
+        
+        for (const col of columns) {
+          let value = row[col];
+          
+          // 处理 JSON 对象
+          if (typeof value === 'object' && value !== null) {
+            value = JSON.stringify(value);
+          }
+          
+          values.push(value);
+        }
+      }
+      
+      const sql = `INSERT INTO ${tableName} (${columns.join(', ')}) VALUES ${placeholders.join(', ')}`;
+      await client.query(sql, values);
+      
+      inserted += batch.length;
+    }
+  });
+  
+  const duration = Date.now() - start;
+  logger.info('批量插入完成', {
+    table: tableName,
+    rows: inserted,
+    duration: `${duration}ms`,
+    throughput: `${Math.round(inserted / (duration / 1000))} rows/s`
+  });
+  
+  return inserted;
+}
+
+/**
+ * 分页查询数据
+ * 
+ * @param {string} tableName - 表名
+ * @param {Object} options - 查询选项
+ * @param {number} options.page - 页码（从 1 开始）
+ * @param {number} options.pageSize - 每页大小
+ * @param {string} options.where - WHERE 条件（可选）
+ * @param {Array} options.params - WHERE 条件参数（可选）
+ * @param {string} options.orderBy - 排序字段（可选，默认 id ASC）
+ * @returns {Promise<Object>} 分页结果 { data, total, page, pageSize, totalPages }
+ */
+export async function paginate(tableName, options = {}) {
+  const {
+    page = 1,
+    pageSize = 20,
+    where = '',
+    params = [],
+    orderBy = 'id ASC'
+  } = options;
+  
+  // 验证参数
+  if (page < 1) {
+    throw new Error('页码必须大于等于 1');
+  }
+  
+  if (pageSize < 1 || pageSize > 1000) {
+    throw new Error('每页大小必须在 1-1000 之间');
+  }
+  
+  const start = Date.now();
+  
+  // 构建 WHERE 子句
+  const whereClause = where ? `WHERE ${where}` : '';
+  
+  // 查询总记录数
+  const countSql = `SELECT COUNT(*) as total FROM ${tableName} ${whereClause}`;
+  const countResult = await query(countSql, params);
+  const total = parseInt(countResult.rows[0].total);
+  
+  // 计算总页数
+  const totalPages = Math.ceil(total / pageSize);
+  
+  // 如果请求的页码超出范围，返回空结果
+  if (page > totalPages && totalPages > 0) {
+    return {
+      data: [],
+      total,
+      page,
+      pageSize,
+      totalPages
+    };
+  }
+  
+  // 计算偏移量
+  const offset = (page - 1) * pageSize;
+  
+  // 查询数据
+  const dataSql = `SELECT * FROM ${tableName} ${whereClause} ORDER BY ${orderBy} LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+  const dataResult = await query(dataSql, [...params, pageSize, offset]);
+  
+  const duration = Date.now() - start;
+  
+  logger.debug('分页查询完成', {
+    table: tableName,
+    page,
+    pageSize,
+    total,
+    totalPages,
+    duration: `${duration}ms`
+  });
+  
+  return {
+    data: dataResult.rows,
+    total,
+    page,
+    pageSize,
+    totalPages
+  };
 }
 
 /**
@@ -200,14 +434,13 @@ export function getPoolStatus() {
  * @returns {Promise<void>}
  */
 export async function closePool() {
-  console.log('正在关闭数据库连接池...');
-  console.log('当前连接池状态:', getPoolStatus());
+  logger.info('正在关闭数据库连接池', getPoolStatus());
   
   try {
     await pool.end();
-    console.log('数据库连接池已关闭');
+    logger.info('数据库连接池已关闭');
   } catch (error) {
-    console.error('关闭连接池时出错:', error);
+    logger.error('关闭连接池时出错', { error: error.message });
     throw error;
   }
 }
@@ -223,6 +456,9 @@ export default {
   execute,
   getClient,
   transaction,
+  bulkInsert,
+  batchInsert,
+  paginate,
   getPoolStatus,
   closePool,
   pool
@@ -230,13 +466,13 @@ export default {
 
 // 进程退出时优雅关闭连接池
 process.on('SIGINT', async () => {
-  console.log('\n收到 SIGINT 信号，正在关闭...');
+  logger.info('收到 SIGINT 信号，正在关闭...');
   await closePool();
   process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
-  console.log('\n收到 SIGTERM 信号，正在关闭...');
+  logger.info('收到 SIGTERM 信号，正在关闭...');
   await closePool();
   process.exit(0);
 });

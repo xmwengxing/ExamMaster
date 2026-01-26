@@ -37,14 +37,3 @@ body { margin: 0; }
     transform: translateX(-100%);
   }
 }
-
-.animate-marquee {
-  display: inline-block;
-  white-space: nowrap;
-  animation: marquee 20s linear infinite;
-  padding-right: 100%;
-}
-
-.animate-marquee:hover {
-  animation-play-state: paused;
-}

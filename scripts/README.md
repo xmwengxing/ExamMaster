@@ -381,3 +381,312 @@ psql -U edumaster_user -d edumaster -c "SELECT COUNT(*) FROM users;"
 **最后更新**: 2024-01-22
 **版本**: 1.0.0
 **状态**: ✓ 已完成并测试
+
+
+## 🔧 运维和管理脚本
+
+### 新增脚本（v3.0.0）
+
+| 文件 | 说明 | 用途 |
+|------|------|------|
+| `check-and-fix-admin.js` | 管理员账号检查修复 | 验证和创建超级管理员账号 |
+| `sync-to-server.js` | 服务器同步工具 | 生成服务器环境变量配置 |
+| `final-verification.js` | 最终系统验证 | 全面检查系统状态 |
+| `analyze-query-performance.js` | 查询性能分析 | 分析数据库查询性能 |
+| `verify-security-config.js` | 安全配置验证 | 检查安全配置 |
+| `generate-secure-passwords.js` | 密码生成工具 | 生成强密码和密钥 |
+| `clear-postgres.js` | 数据库清空 | 清空 PostgreSQL 数据库 |
+| `verify-postgres-schema.js` | 架构验证 | 验证数据库架构 |
+
+### 管理员账号管理
+
+#### 检查和修复管理员账号
+
+```bash
+# 本地环境
+node scripts/check-and-fix-admin.js
+
+# Docker 环境
+docker-compose exec api node scripts/check-and-fix-admin.js
+```
+
+**功能**:
+- ✓ 检查数据库连接
+- ✓ 检查所有数据表是否存在
+- ✓ 检查超级管理员账号是否存在
+- ✓ 如果不存在，创建默认管理员账号（admin/admin）
+- ✓ 测试管理员账号登录
+- ✓ 统计用户数量
+
+**输出示例**:
+```
+✓ 数据库连接成功
+✓ 所有 23 个数据表都存在
+✓ 当前用户总数: 1
+✓ 管理员数量: 1
+✓ 学员数量: 0
+✓ 超级管理员账号已存在
+✓ 管理员账号密码验证成功
+```
+
+或者（如果账号不存在）:
+```
+⚠ 超级管理员账号不存在
+✓ 超级管理员账号创建成功！
+═══════════════════════════════════════
+  账号: admin
+  密码: admin
+  ⚠️  请立即登录并修改密码！
+═══════════════════════════════════════
+```
+
+### 服务器同步
+
+#### 生成服务器环境变量
+
+```bash
+node scripts/sync-to-server.js
+```
+
+**功能**:
+- ✓ 读取本地 .env 配置
+- ✓ 生成适用于服务器的环境变量
+- ✓ 自动调整 Docker 相关配置
+- ✓ 保存到 .env.server 文件
+- ✓ 显示部署步骤指南
+
+**生成的配置**:
+- `NODE_ENV=production`
+- `DB_HOST=postgres` (Docker 容器名称)
+- `DB_PORT=5432` (Docker 内部端口)
+- 保留本地的强密码和密钥
+
+### 系统验证
+
+#### 最终系统验证
+
+```bash
+# 本地环境
+node scripts/final-verification.js
+
+# Docker 环境
+docker-compose exec api node scripts/final-verification.js
+```
+
+**验证项目**:
+- ✓ 数据库功能（8项）
+  - 数据库连接
+  - 表结构完整性
+  - 索引创建
+  - 数据完整性
+  - JSONB 字段
+  - 连接池配置
+- ✓ API 功能（3项）
+  - 健康检查
+  - 题库列表
+  - 系统配置
+- ✓ 安全措施（7项）
+  - 环境变量配置
+  - 密码强度
+  - SSL 配置
+  - CORS 配置
+- ✓ 备份机制（3项）
+  - 备份脚本
+  - 备份目录
+  - 恢复脚本
+- ✓ 监控日志（4项）
+  - 日志文件
+  - 日志配置
+  - 监控脚本
+- ✓ 性能指标（3项）
+  - 查询性能
+  - 并发性能
+  - 索引使用
+
+**输出报告**: `FINAL_SYSTEM_VERIFICATION.md`
+
+### 性能分析
+
+#### 查询性能分析
+
+```bash
+node scripts/analyze-query-performance.js
+```
+
+**功能**:
+- ✓ 分析慢查询
+- ✓ 检查索引使用情况
+- ✓ 统计查询次数
+- ✓ 计算平均执行时间
+- ✓ 提供优化建议
+
+### 安全管理
+
+#### 生成强密码
+
+```bash
+node scripts/generate-secure-passwords.js
+```
+
+**生成内容**:
+- 数据库密码（32位）
+- JWT Secret（64位）
+- 随机密钥（可自定义长度）
+
+**特点**:
+- 包含大小写字母、数字、特殊字符
+- 符合安全要求
+- 可直接用于 .env 配置
+
+#### 验证安全配置
+
+```bash
+node scripts/verify-security-config.js
+```
+
+**检查项目**:
+- ✓ 环境变量强度
+- ✓ 密码复杂度
+- ✓ CORS 配置
+- ✓ SSL 证书
+- ✓ 文件权限
+
+### 数据库管理
+
+#### 清空数据库
+
+```bash
+node scripts/clear-postgres.js
+```
+
+**警告**: 此操作会删除所有数据，请谨慎使用！
+
+**功能**:
+- 删除所有表数据
+- 保留表结构
+- 重置序列
+- 需要确认操作
+
+#### 验证数据库架构
+
+```bash
+node scripts/verify-postgres-schema.js
+```
+
+**验证项目**:
+- ✓ 所有表是否存在
+- ✓ 字段类型是否正确
+- ✓ 索引是否创建
+- ✓ 外键约束是否设置
+- ✓ JSONB 字段是否正确
+
+## 🚀 部署流程
+
+### 完整部署步骤
+
+1. **准备本地环境**
+   ```bash
+   # 生成服务器配置
+   node scripts/sync-to-server.js
+   ```
+
+2. **推送代码**
+   ```bash
+   git add .
+   git commit -m "更新配置"
+   git push origin main
+   ```
+
+3. **服务器部署**
+   ```bash
+   # SSH 到服务器
+   ssh root@47.104.173.139
+   
+   # 拉取代码
+   cd /www/wwwroot/exammaster.zzzjl.com
+   git pull origin main
+   
+   # 上传环境变量（从本地）
+   # scp .env.server root@47.104.173.139:/www/wwwroot/exammaster.zzzjl.com/.env
+   
+   # 重启服务
+   docker-compose down
+   docker-compose up -d --build
+   ```
+
+4. **验证部署**
+   ```bash
+   # 检查管理员账号
+   docker-compose exec api node scripts/check-and-fix-admin.js
+   
+   # 最终验证
+   docker-compose exec api node scripts/final-verification.js
+   ```
+
+### 快速命令参考
+
+```bash
+# 本地开发
+npm run dev                    # 启动开发服务器
+npm run build                  # 构建前端
+npm test                       # 运行测试
+
+# Docker 管理
+docker-compose up -d           # 启动所有服务
+docker-compose down            # 停止所有服务
+docker-compose ps              # 查看服务状态
+docker-compose logs -f         # 查看日志
+
+# 数据库管理
+docker-compose exec postgres psql -U edumaster_user -d edumaster
+docker-compose exec api node scripts/check-and-fix-admin.js
+
+# 系统验证
+docker-compose exec api node scripts/final-verification.js
+```
+
+## 📚 相关文档
+
+### 核心文档
+- [技术文档](../技术文档.md) - 完整的技术文档
+- [部署指南](../DEPLOYMENT_GUIDE.md) - 部署指南
+- [快速参考](../QUICK_REFERENCE.md) - 快速参考
+- [服务器部署同步指南](../服务器部署同步指南.md) - 服务器同步指南
+
+### 规范文档
+- [需求文档](../.kiro/specs/postgresql-migration-deployment/requirements.md)
+- [设计文档](../.kiro/specs/postgresql-migration-deployment/design.md)
+- [任务清单](../.kiro/specs/postgresql-migration-deployment/tasks.md)
+
+### 配置文档
+- [PostgreSQL 配置](../postgres/README.md)
+- [安全加固](../postgres/SECURITY_HARDENING.md)
+- [Nginx 配置](../nginx/README.md)
+
+## 📝 更新日志
+
+### v3.0.0 (2026-01-23) - PostgreSQL 版本
+
+- ✨ 新增管理员账号检查修复脚本
+- ✨ 新增服务器同步工具
+- ✨ 新增最终系统验证脚本
+- ✨ 新增查询性能分析工具
+- ✨ 新增安全配置验证工具
+- ✨ 新增密码生成工具
+- ✨ 新增数据库清空工具
+- ✨ 新增架构验证工具
+- 📚 更新文档和使用指南
+
+### v1.0.0 (2024-01-22) - 初始版本
+
+- ✓ 实现完整的迁移脚本
+- ✓ 支持 23 个表的迁移
+- ✓ 实现数据清洗功能
+- ✓ 实现批量导入
+- ✓ 实现数据验证
+
+---
+
+**最后更新**: 2026-01-23  
+**版本**: 3.0.0  
+**状态**: ✓ 生产就绪

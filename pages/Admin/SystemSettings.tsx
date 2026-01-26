@@ -423,12 +423,131 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({ config, onUpdate, onCha
             <h3 className="font-black text-lg text-gray-800 flex items-center gap-2">
               <i className="fa-solid fa-bullhorn text-amber-500"></i> 首页滚动公告
             </h3>
-            <textarea 
-              className="w-full bg-amber-50 rounded-2xl p-5 font-bold text-amber-700 h-24 outline-none border-2 border-transparent focus:border-amber-200 transition-all" 
-              value={form?.announcement || ''} 
-              placeholder="请输入将在学员端首页展示的通知公告内容..."
-              onChange={e => setForm(prev => ({ ...(prev || defaultForm), announcement: e.target.value }))} 
-            />
+            
+            {/* 公告内容 */}
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">公告内容</label>
+              <textarea 
+                className="w-full bg-amber-50 rounded-2xl p-5 font-bold text-amber-700 h-24 outline-none border-2 border-transparent focus:border-amber-200 transition-all" 
+                value={form?.announcement || ''} 
+                placeholder="请输入将在学员端首页展示的通知公告内容..."
+                onChange={e => setForm(prev => ({ ...(prev || defaultForm), announcement: e.target.value }))} 
+              />
+            </div>
+
+            {/* 滚动速度设置 */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-3">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">滚动时间（秒）</label>
+                <div className="flex items-center gap-3">
+                  <input 
+                    type="number"
+                    min="0"
+                    max="120"
+                    className="flex-1 bg-amber-50 rounded-xl px-4 py-3 font-bold text-amber-700 outline-none border-2 border-transparent focus:border-amber-200 transition-all" 
+                    value={form?.announcementDuration ?? 20} 
+                    onChange={e => {
+                      const val = parseInt(e.target.value);
+                      setForm(prev => ({ 
+                        ...(prev || defaultForm), 
+                        announcementDuration: isNaN(val) ? 20 : Math.max(0, Math.min(120, val))
+                      }));
+                    }} 
+                  />
+                  <span className="text-sm font-bold text-gray-400">秒</span>
+                </div>
+                <p className="text-[10px] text-gray-400 font-medium italic ml-1">
+                  公告滚动一次所需的时间，范围：0-120秒<br/>
+                  <span className="text-rose-600 font-bold">设置为 0 秒将禁止滚动（静态显示）</span>
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">滚动速度预设</label>
+                <div className="grid grid-cols-4 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setForm(prev => ({ ...(prev || defaultForm), announcementDuration: 0 }))}
+                    className={`py-2 px-3 rounded-lg text-xs font-black transition-all ${
+                      (form?.announcementDuration ?? 20) === 0
+                        ? 'bg-gray-500 text-white shadow-lg'
+                        : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                    }`}
+                  >
+                    禁用
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setForm(prev => ({ ...(prev || defaultForm), announcementDuration: 10 }))}
+                    className={`py-2 px-3 rounded-lg text-xs font-black transition-all ${
+                      (form?.announcementDuration ?? 20) === 10
+                        ? 'bg-amber-500 text-white shadow-lg'
+                        : 'bg-amber-50 text-amber-600 hover:bg-amber-100'
+                    }`}
+                  >
+                    快速
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setForm(prev => ({ ...(prev || defaultForm), announcementDuration: 20 }))}
+                    className={`py-2 px-3 rounded-lg text-xs font-black transition-all ${
+                      (form?.announcementDuration ?? 20) === 20
+                        ? 'bg-amber-500 text-white shadow-lg'
+                        : 'bg-amber-50 text-amber-600 hover:bg-amber-100'
+                    }`}
+                  >
+                    标准
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setForm(prev => ({ ...(prev || defaultForm), announcementDuration: 40 }))}
+                    className={`py-2 px-3 rounded-lg text-xs font-black transition-all ${
+                      (form?.announcementDuration ?? 20) === 40
+                        ? 'bg-amber-500 text-white shadow-lg'
+                        : 'bg-amber-50 text-amber-600 hover:bg-amber-100'
+                    }`}
+                  >
+                    缓慢
+                  </button>
+                </div>
+                <p className="text-[10px] text-gray-400 font-medium italic ml-1">
+                  禁用0秒 / 快速10秒 / 标准20秒 / 缓慢40秒
+                </p>
+              </div>
+            </div>
+
+            {/* 预览效果 */}
+            <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100">
+              <p className="text-xs font-bold text-amber-700 mb-3 flex items-center gap-2">
+                <i className="fa-solid fa-eye"></i> 预览效果
+                {(form?.announcementDuration ?? 20) === 0 && (
+                  <span className="text-[10px] bg-gray-500 text-white px-2 py-0.5 rounded-full">静态显示</span>
+                )}
+              </p>
+              <div className="bg-white rounded-xl p-3 overflow-hidden relative">
+                <div className="flex items-center gap-3">
+                  <i className="fa-solid fa-bullhorn shrink-0 text-amber-500"></i>
+                  {(form?.announcementDuration ?? 20) === 0 ? (
+                    // 禁用滚动时，静态显示
+                    <div className="flex-1 font-black text-xs text-amber-600 truncate">
+                      {form?.announcement || '请输入公告内容...'}
+                    </div>
+                  ) : (
+                    // 启用滚动时，动画显示
+                    <div 
+                      className="flex-1 overflow-hidden font-black text-xs text-amber-600"
+                      style={{
+                        animation: `marquee ${form?.announcementDuration || 20}s linear infinite`
+                      }}
+                    >
+                      <span className="inline-block whitespace-nowrap pr-[100%]">
+                        {form?.announcement || '请输入公告内容...'}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
 
               {/* 横幅管理 */}

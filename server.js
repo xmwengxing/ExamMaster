@@ -7,45 +7,126 @@ import jwt from 'jsonwebtoken';
 import cors from 'cors';
 // 导入 PostgreSQL 数据库连接池
 import db from './db.js';
+// 导入日志模块
+import logger, { requestLogger, errorLogger, logAuth, logOperation } from './utils/logger.js';
 
 const app = express();
 const port = process.env.PORT || 3001;
 const JWT_SECRET = process.env.JWT_SECRET || 'edumaster-secure-2025';
 
-app.use(cors());
+// CORS 安全配置
+// 根据环境配置允许的来源域名
+const allowedOrigins = process.env.ALLOWED_ORIGINS 
+  ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
+  : [
+      'https://exammaster.zzzjl.com',  // 生产域名
+      'http://localhost:5173',          // 本地开发（Vite）
+      'http://localhost:3000',          // 本地开发（备用）
+    ];
+
+// CORS 配置选项
+const corsOptions = {
+  origin: function (origin, callback) {
+    // 允许没有 origin 的请求（如移动应用、Postman）
+    if (!origin) {
+      return callback(null, true);
+    }
+    
+    // 检查来源是否在允许列表中
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      logger.warn('CORS 请求被拒绝', {
+        origin,
+        allowedOrigins,
+        ip: origin,
+      });
+      callback(new Error('不允许的 CORS 来源'));
+    }
+  },
+  // 允许的 HTTP 方法
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  // 允许的请求头
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-Requested-With',
+    'Accept',
+  ],
+  // 允许发送凭证（cookies）
+  credentials: true,
+  // 预检请求的缓存时间（秒）
+  maxAge: 86400, // 24 小时
+  // 暴露给客户端的响应头
+  exposedHeaders: ['Content-Range', 'X-Content-Range'],
+};
+
+// 应用 CORS 中间件
+app.use(cors(corsOptions));
+
 app.use(express.json({ limit: '50mb' }));
+
+// 添加请求日志中间件
+app.use(requestLogger);
 
 // Safe parsers for question fields to handle legacy non-JSON values
 const parseOptionsField = (val) => {
   if (!val) return [];
-  try { const parsed = JSON.parse(val); return Array.isArray(parsed) ? parsed : []; } catch (e) {
-    // support legacy pipe-separated options or single option string
-    return typeof val === 'string' ? (val.includes('|') ? val.split('|') : [val]) : [];
+  // PostgreSQL JSONB 字段会被自动解析为 JavaScript 对象
+  if (Array.isArray(val)) return val;
+  // 如果是字符串，尝试解析 JSON
+  if (typeof val === 'string') {
+    try { 
+      const parsed = JSON.parse(val); 
+      return Array.isArray(parsed) ? parsed : []; 
+    } catch (e) {
+      // 支持旧格式：管道符分隔的选项
+      return val.includes('|') ? val.split('|') : [val];
+    }
   }
+  return [];
 };
 
 const parseAnswerField = (val) => {
   if (val === undefined || val === null) return '';
-  try { return JSON.parse(val); } catch (e) { return val; }
+  // PostgreSQL JSONB 字段会被自动解析为 JavaScript 对象
+  if (typeof val === 'object') return val;
+  // 如果是字符串，尝试解析 JSON
+  if (typeof val === 'string') {
+    try { return JSON.parse(val); } catch (e) { return val; }
+  }
+  return val;
 };
 
 // PostgreSQL 数据库已通过 db.js 模块初始化
 // 数据库架构通过 postgres/init.sql 脚本创建
-console.log('[Server] 使用 PostgreSQL 数据库连接池');
-console.log('[Server] 连接池状态:', db.getPoolStatus());
+logger.info('服务器启动', {
+  database: 'PostgreSQL',
+  poolStatus: db.getPoolStatus(),
+});
 
-// 鉴权中间件（带详细调试日志）
+// 鉴权中间件
 const auth = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader?.split(' ')[1];
-  console.log(`[auth] ${req.method} ${req.originalUrl} - authorization header ${authHeader ? 'present' : 'missing'}`);
+  
   if (!token) {
-    console.warn('[auth] missing token - responding 401 Unauthorized');
+    logger.warn('认证失败：缺少 token', {
+      method: req.method,
+      url: req.originalUrl,
+      ip: req.ip,
+    });
     return res.status(401).send('Unauthorized');
   }
+  
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    console.log('[auth] token verified', { id: decoded.id, role: decoded.role });
+    logger.debug('认证成功', {
+      userId: decoded.id,
+      role: decoded.role,
+      method: req.method,
+      url: req.originalUrl,
+    });
     req.user = decoded;
     next();
   } catch (err) {
@@ -69,13 +150,98 @@ app.get('/api/health', async (req, res) => {
       database: 'connected'
     });
   } catch (error) {
-    console.error('[Health Check] 数据库连接失败:', error);
+    logger.error('健康检查失败', { error: error.message });
     res.status(503).json({ 
       status: 'unhealthy', 
       timestamp: new Date().toISOString(),
       database: 'disconnected',
       error: error.message
     });
+  }
+});
+
+// 数据库监控端点（需要管理员权限）
+app.get('/api/monitor/database', auth, async (req, res) => {
+  try {
+    // 只允许管理员访问
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: '权限不足' });
+    }
+    
+    // 获取连接池状态
+    const poolStatus = db.getPoolStatus();
+    
+    // 获取数据库大小
+    const dbSizeResult = await db.getOne(
+      "SELECT pg_size_pretty(pg_database_size($1)) as size",
+      [process.env.DB_NAME || 'edumaster']
+    );
+    
+    // 获取连接数
+    const connectionResult = await db.getOne(`
+      SELECT 
+        count(*) as total,
+        count(*) FILTER (WHERE state = 'active') as active,
+        count(*) FILTER (WHERE state = 'idle') as idle
+      FROM pg_stat_activity
+    `);
+    
+    // 获取慢查询数量
+    const slowQueryResult = await db.getOne(`
+      SELECT count(*) as count
+      FROM pg_stat_activity
+      WHERE (now() - pg_stat_activity.query_start) > interval '1 seconds'
+      AND state != 'idle'
+    `);
+    
+    // 获取锁数量
+    const lockResult = await db.getOne(`
+      SELECT count(*) as count FROM pg_locks
+    `);
+    
+    // 获取缓存命中率
+    const cacheHitResult = await db.getOne(`
+      SELECT 
+        COALESCE(
+          sum(heap_blks_hit) / NULLIF(sum(heap_blks_hit) + sum(heap_blks_read), 0) * 100,
+          0
+        ) AS cache_hit_ratio
+      FROM pg_statio_user_tables
+    `);
+    
+    // 获取表数量和总行数
+    const tableStatsResult = await db.getOne(`
+      SELECT 
+        count(*) as table_count,
+        sum(n_live_tup) as total_rows
+      FROM pg_stat_user_tables
+      WHERE schemaname = 'public'
+    `);
+    
+    res.json({
+      timestamp: new Date().toISOString(),
+      pool: poolStatus,
+      database: {
+        size: dbSizeResult.size,
+        tableCount: parseInt(tableStatsResult.table_count),
+        totalRows: parseInt(tableStatsResult.total_rows),
+      },
+      connections: {
+        total: parseInt(connectionResult.total),
+        active: parseInt(connectionResult.active),
+        idle: parseInt(connectionResult.idle),
+      },
+      performance: {
+        slowQueries: parseInt(slowQueryResult.count),
+        locks: parseInt(lockResult.count),
+        cacheHitRatio: parseFloat(cacheHitResult.cache_hit_ratio).toFixed(2) + '%',
+      },
+    });
+    
+    logger.info('数据库监控查询', { userId: req.user.id });
+  } catch (error) {
+    logger.error('数据库监控失败', { error: error.message });
+    res.status(500).json({ error: '获取监控数据失败' });
   }
 });
 
@@ -135,14 +301,22 @@ app.post('/api/auth/login', async (req, res) => {
       const token = jwt.sign({ id: user.id, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
       const { password: _, ...safeUser } = user;
       
+      // 转换字段名为 camelCase（前端兼容）
+      const userResponse = {
+        ...safeUser,
+        lastLogin: now,
+        loginHistory: loginHistory,
+        studentPerms: safeUser.student_perms || [],
+        allowedBankIds: safeUser.allowed_bank_ids || [],
+        realName: safeUser.real_name,
+        lastActivity: safeUser.last_activity,
+        deepseekApiKey: safeUser.deepseek_api_key
+      };
+      
       // 返回更新后的用户信息
       res.json({ 
         token, 
-        user: { 
-          ...safeUser, 
-          lastLogin: now,
-          loginHistory: loginHistory 
-        } 
+        user: userResponse
       });
     } else {
       res.status(401).send('账号或密码错误');
@@ -158,7 +332,38 @@ app.get('/api/user/profile', auth, async (req, res) => {
   try {
     const user = await db.getOne('SELECT * FROM users WHERE id = $1', [req.user.id]);
     if (user) {
-      res.json(user);
+      // 只返回 camelCase 字段，不包含 snake_case 原始字段
+      // 不返回 password 字段
+      const userResponse = {
+        id: user.id,
+        phone: user.phone,
+        role: user.role,
+        nickname: user.nickname,
+        avatar: user.avatar,
+        gender: user.gender,
+        school: user.school,
+        major: user.major,
+        company: user.company,
+        accuracy: user.accuracy,
+        // camelCase 字段
+        realName: user.real_name,
+        idCard: user.id_card,
+        educationType: user.education_type,
+        educationLevel: user.education_level,
+        className: user.class_name,
+        studentPerms: user.student_perms || [],
+        allowedBankIds: user.allowed_bank_ids || [],
+        lastLogin: user.last_login,
+        lastActivity: user.last_activity,
+        loginHistory: user.login_history || [],
+        deepseekApiKey: user.deepseek_api_key,
+        totalOnlineTime: user.total_online_time || 0,
+        customFields: user.custom_fields || {},
+        mistakeCount: user.mistake_count || 0,
+        dailyGoal: user.daily_goal || 20
+      };
+      
+      res.json(userResponse);
     } else {
       res.status(404).send('Not found');
     }
@@ -299,8 +504,14 @@ app.get('/api/banks', auth, async (req, res) => {
   try {
     const rows = await db.getMany('SELECT * FROM banks');
     const banks = (rows || []).map(bank => ({
-      ...bank,
-      score_config: bank.score_config ? bank.score_config : { SINGLE: 1, MULTIPLE: 2, JUDGE: 1 }
+      id: bank.id,
+      name: bank.name,
+      category: bank.category,
+      level: bank.level,
+      description: bank.description,
+      questionCount: bank.question_count || 0,  // 转换为 camelCase
+      scoreConfig: bank.score_config ? bank.score_config : { SINGLE: 1, MULTIPLE: 2, JUDGE: 1 },  // 转换为 camelCase
+      usageCount: bank.usage_count || 0  // 转换为 camelCase
     }));
     res.json(banks);
   } catch (error) {
@@ -310,31 +521,100 @@ app.get('/api/banks', auth, async (req, res) => {
 });
 
 app.get('/api/questions', auth, async (req, res) => {
+  // 禁用缓存，确保返回最新数据
+  res.set({
+    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0'
+  });
+  
   try {
-    const { bankId } = req.query;
-    let rows;
+    const { bankId, page, pageSize } = req.query;
     
-    if (bankId) {
-      // 按 sortOrder 排序，如果 sortOrder 相同则按 id 排序
-      rows = await db.getMany(
-        'SELECT * FROM questions WHERE bank_id = $1 ORDER BY sort_order ASC, id ASC',
-        [bankId]
-      );
+    // 如果提供了分页参数，使用分页查询
+    if (page && pageSize) {
+      const pageNum = parseInt(page) || 1;
+      const pageSizeNum = parseInt(pageSize) || 20;
+      
+      let where = '';
+      let params = [];
+      
+      if (bankId) {
+        where = 'bank_id = $1';
+        params = [bankId];
+      }
+      
+      const result = await db.paginate('questions', {
+        page: pageNum,
+        pageSize: pageSizeNum,
+        where,
+        params,
+        orderBy: bankId ? 'sort_order ASC, id ASC' : 'bank_id ASC, sort_order ASC, id ASC'
+      });
+      
+      // 处理返回数据（只返回转换后的字段，避免字段名冲突）
+      const processedData = result.data.map(r => ({
+        id: r.id,
+        bankId: r.bank_id,
+        type: r.type,
+        content: r.content,
+        options: parseOptionsField(r.options),
+        answer: parseAnswerField(r.answer),
+        explanation: r.explanation,
+        chapter: r.chapter,
+        blanks: r.blanks || null,
+        referenceAnswer: r.reference_answer,
+        aiGradingEnabled: r.ai_grading_enabled || false,
+        tags: r.tags || null,
+        sortOrder: r.sort_order,
+        createdAt: r.created_at,
+        updatedAt: r.updated_at
+      }));
+      
+      res.json({
+        data: processedData,
+        pagination: {
+          total: result.total,
+          page: result.page,
+          pageSize: result.pageSize,
+          totalPages: result.totalPages
+        }
+      });
     } else {
-      // 返回所有题目，按 bankId 和 sortOrder 排序
-      rows = await db.getMany(
-        'SELECT * FROM questions ORDER BY bank_id ASC, sort_order ASC, id ASC'
-      );
+      // 不使用分页，返回所有数据（保持向后兼容）
+      let rows;
+      
+      if (bankId) {
+        // 按 sortOrder 排序，如果 sortOrder 相同则按 id 排序
+        rows = await db.getMany(
+          'SELECT * FROM questions WHERE bank_id = $1 ORDER BY sort_order ASC, id ASC',
+          [bankId]
+        );
+      } else {
+        // 返回所有题目，按 bankId 和 sortOrder 排序
+        rows = await db.getMany(
+          'SELECT * FROM questions ORDER BY bank_id ASC, sort_order ASC, id ASC'
+        );
+      }
+      
+      res.json((rows || []).map(r => ({
+        id: r.id,
+        bankId: r.bank_id,
+        type: r.type,
+        content: r.content,
+        options: parseOptionsField(r.options),
+        answer: parseAnswerField(r.answer),
+        explanation: r.explanation,
+        chapter: r.chapter,
+        blanks: r.blanks || null,
+        referenceAnswer: r.reference_answer,
+        aiGradingEnabled: r.ai_grading_enabled || false,
+        tags: r.tags || null,
+        sortOrder: r.sort_order,
+        createdAt: r.created_at,
+        updatedAt: r.updated_at
+      })));
     }
-    
-    res.json((rows || []).map(r => ({
-      ...r,
-      options: parseOptionsField(r.options),
-      answer: parseAnswerField(r.answer),
-      blanks: r.blanks || null,
-      tags: r.tags || null,
-      aiGradingEnabled: r.ai_grading_enabled || false
-    })));
   } catch (error) {
     console.error('[Questions] Error:', error);
     res.status(500).json({ error: '查询题目失败: ' + error.message });
@@ -351,7 +631,7 @@ app.post('/api/banks', auth, async (req, res) => {
     
     await db.execute(
       `INSERT INTO banks (id, name, category, level, description, question_count, score_config, usage_count) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8)`,
       [
         id,
         b.name || '',
@@ -359,7 +639,7 @@ app.post('/api/banks', auth, async (req, res) => {
         b.level || '',
         b.description || '',
         b.questionCount || 0,
-        JSON.stringify(b.scoreConfig || {}),
+        JSON.stringify(b.scoreConfig || {}),  // JSONB字段需要JSON.stringify()
         b.usageCount || 0
       ]
     );
@@ -546,55 +826,121 @@ app.post('/api/banks/:id/import', auth, async (req, res) => {
         ? maxOrderResult.rows[0].max_order + 1 
         : 1;
       
-      // 批量插入题目
-      for (let i = 0; i < questions.length; i++) {
-        const q = questions[i];
-        const rowNum = i + 2; // CSV行号（+1标题行+1从1开始）
+      // 根据数据量选择不同的插入策略
+      const BATCH_SIZE = 100; // 每批处理 100 条
+      
+      // 分批处理题目
+      for (let batchStart = 0; batchStart < questions.length; batchStart += BATCH_SIZE) {
+        const batchEnd = Math.min(batchStart + BATCH_SIZE, questions.length);
+        const batch = questions.slice(batchStart, batchEnd);
         
-        try {
-          // 生成唯一ID：使用时间戳+随机数+索引，确保唯一性
-          const timestamp = Date.now();
-          const random = Math.floor(Math.random() * 1000000);
-          const id = q.id || `q-${timestamp}-${random}-${i}`;
+        // 构建批量插入语句
+        const placeholders = [];
+        const values = [];
+        let paramIndex = 1;
+        
+        for (let i = 0; i < batch.length; i++) {
+          const q = batch[i];
+          const rowNum = batchStart + i + 2; // CSV行号（+1标题行+1从1开始）
           
-          const sortOrder = startOrder + i; // 按导入顺序设置排序值
-          
-          // 插入题目（使用 PostgreSQL 字段名）
-          await client.query(
-            `INSERT INTO questions (
-              id, bank_id, type, content, options, answer, explanation,
-              blanks, reference_answer, ai_grading_enabled, tags, chapter, sort_order
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
-            [
+          try {
+            // 生成唯一ID：使用时间戳+随机数+索引，确保唯一性
+            const timestamp = Date.now();
+            const random = Math.floor(Math.random() * 1000000);
+            const id = q.id || `q-${timestamp}-${random}-${batchStart + i}`;
+            
+            const sortOrder = startOrder + batchStart + i; // 按导入顺序设置排序值
+            
+            // 添加占位符
+            placeholders.push(`($${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++})`);
+            
+            // 添加值
+            values.push(
               id,
               bankId,
               q.type || 'SINGLE',
               q.content || '',
-              q.options || [],
-              q.answer || '',
+              JSON.stringify(q.options || []),
+              JSON.stringify(q.answer || ''),
               q.explanation || '',
-              q.blanks || null,
+              q.blanks ? JSON.stringify(q.blanks) : null,
               q.referenceAnswer || null,
               q.aiGradingEnabled || false,
-              q.tags || null,
+              q.tags ? JSON.stringify(q.tags) : null,
               q.chapter || null,
               sortOrder
-            ]
-          );
-          
-          inserted++;
-        } catch (err) {
-          skipped++;
-          const errorMsg = err.message || String(err);
-          console.error(`[import] Error at row ${rowNum}:`, errorMsg);
-          
-          // 特殊处理错误类型
-          if (errorMsg.includes('duplicate key') || errorMsg.includes('unique constraint')) {
-            errors.push(`第${rowNum}行：题目ID重复（请检查是否重复导入）`);
-          } else if (errorMsg.includes('null value') || errorMsg.includes('NOT NULL')) {
-            errors.push(`第${rowNum}行：必填字段为空`);
-          } else {
+            );
+            
+            inserted++;
+          } catch (err) {
+            skipped++;
+            const errorMsg = err.message || String(err);
+            console.error(`[import] Error preparing row ${rowNum}:`, errorMsg);
             errors.push(`第${rowNum}行：${errorMsg}`);
+          }
+        }
+        
+        // 执行批量插入
+        if (placeholders.length > 0) {
+          try {
+            const sql = `INSERT INTO questions (
+              id, bank_id, type, content, options, answer, explanation,
+              blanks, reference_answer, ai_grading_enabled, tags, chapter, sort_order
+            ) VALUES ${placeholders.join(', ')}`;
+            
+            await client.query(sql, values);
+            console.log(`[import] Batch ${Math.floor(batchStart / BATCH_SIZE) + 1} inserted: ${placeholders.length} rows`);
+          } catch (err) {
+            // 如果批量插入失败，回退到逐条插入
+            console.warn(`[import] Batch insert failed, falling back to row-by-row insert:`, err.message);
+            
+            for (let i = 0; i < batch.length; i++) {
+              const q = batch[i];
+              const rowNum = batchStart + i + 2;
+              
+              try {
+                const timestamp = Date.now();
+                const random = Math.floor(Math.random() * 1000000);
+                const id = q.id || `q-${timestamp}-${random}-${batchStart + i}`;
+                const sortOrder = startOrder + batchStart + i;
+                
+                await client.query(
+                  `INSERT INTO questions (
+                    id, bank_id, type, content, options, answer, explanation,
+                    blanks, reference_answer, ai_grading_enabled, tags, chapter, sort_order
+                  ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+                  [
+                    id,
+                    bankId,
+                    q.type || 'SINGLE',
+                    q.content || '',
+                    JSON.stringify(q.options || []),
+                    JSON.stringify(q.answer || ''),
+                    q.explanation || '',
+                    q.blanks ? JSON.stringify(q.blanks) : null,
+                    q.referenceAnswer || null,
+                    q.aiGradingEnabled || false,
+                    q.tags ? JSON.stringify(q.tags) : null,
+                    q.chapter || null,
+                    sortOrder
+                  ]
+                );
+              } catch (rowErr) {
+                inserted--;
+                skipped++;
+                const errorMsg = rowErr.message || String(rowErr);
+                console.error(`[import] Error at row ${rowNum}:`, errorMsg);
+                
+                // 特殊处理错误类型
+                if (errorMsg.includes('duplicate key') || errorMsg.includes('unique constraint')) {
+                  errors.push(`第${rowNum}行：题目ID重复（请检查是否重复导入）`);
+                } else if (errorMsg.includes('null value') || errorMsg.includes('NOT NULL')) {
+                  errors.push(`第${rowNum}行：必填字段为空`);
+                } else {
+                  errors.push(`第${rowNum}行：${errorMsg}`);
+                }
+              }
+            }
           }
         }
       }
@@ -666,17 +1012,46 @@ app.put('/api/questions/:id', auth, async (req, res) => {
         'bankId': 'bank_id',
         'aiGradingEnabled': 'ai_grading_enabled',
         'referenceAnswer': 'reference_answer',
-        'sortOrder': 'sort_order'
+        'sortOrder': 'sort_order',
+        'createdAt': 'created_at',
+        'updatedAt': 'updated_at',
+        'createdat': 'created_at',  // 处理小写情况
+        'updatedat': 'updated_at'   // 处理小写情况
       };
+      
+      // 排除不应该更新的字段
+      const excludeFields = ['id', 'created_at', 'createdAt', 'createdat', 'updated_at', 'updatedAt', 'updatedat'];
       
       const fields = [];
       const values = [];
       let paramIndex = 1;
       
+      // JSONB 字段列表
+      const jsonbFields = ['options', 'answer', 'blanks', 'tags'];
+      
       for (const key of Object.keys(body)) {
+        // 跳过排除的字段
+        if (excludeFields.includes(key)) continue;
+        
         const dbKey = fieldMap[key] || key;
         fields.push(`${dbKey} = $${paramIndex++}`);
-        values.push(body[key]);
+        
+        // 对 JSONB 字段进行 JSON 转换
+        let value = body[key];
+        if (jsonbFields.includes(key) && value !== null && value !== undefined) {
+          // 所有 JSONB 字段都需要转换为 JSON 字符串
+          value = JSON.stringify(value);
+        }
+        
+        // 调试：记录字段和值的类型
+        const valueType = typeof body[key];
+        const valuePreview = body[key] === null ? 'null' : 
+                            body[key] === undefined ? 'undefined' :
+                            valueType === 'string' ? body[key].substring(0, 100) :
+                            JSON.stringify(body[key]).substring(0, 100);
+        console.log(`[更新题目] 字段: ${key} -> ${dbKey}, 原始类型: ${valueType}, 转换后类型: ${typeof value}, 值预览: ${valuePreview}`);
+        
+        values.push(value);
       }
       
       if (fields.length > 0) {
@@ -820,7 +1195,7 @@ app.get('/api/admin/students', auth, async (req, res) => {
   if (!req.user || req.user.role !== 'ADMIN') return res.status(403).send('Forbidden');
   
   try {
-    const rows = await db.getMany("SELECT * FROM users WHERE role = 'STUDENT'");
+    const { page, pageSize } = req.query;
     
     const normalizeArrayField = (v) => {
       if (!v) return [];
@@ -846,26 +1221,74 @@ app.get('/api/admin/students', auth, async (req, res) => {
     // Calculate isOnline based on lastActivity (online if active within last 5 minutes)
     const now = Date.now();
     const ONLINE_THRESHOLD = 5 * 60 * 1000; // 5 minutes in milliseconds
-
-    const out = (rows || []).map(r => {
+    
+    const processRow = (r) => {
       const lastActivity = r.last_activity ? new Date(r.last_activity).getTime() : 0;
       const isOnline = (now - lastActivity) < ONLINE_THRESHOLD;
       
+      // 只返回 camelCase 字段，不包含 snake_case 原始字段
+      // 注意：不返回 password 字段，避免前端回传导致重复 hash
       return {
-        ...r,
+        id: r.id,
+        phone: r.phone,
+        role: r.role,
+        nickname: r.nickname,
+        avatar: r.avatar,
+        gender: r.gender,
+        school: r.school,
+        major: r.major,
+        company: r.company,
+        accuracy: r.accuracy,
+        // camelCase 字段
+        realName: r.real_name,
+        idCard: r.id_card,
+        educationType: r.education_type,
+        educationLevel: r.education_level,
+        className: r.class_name,
         studentPerms: normalizeArrayField(r.student_perms),
         allowedBankIds: normalizeArrayField(r.allowed_bank_ids),
         loginHistory: normalizeArrayField(r.login_history),
         totalOnlineTime: r.total_online_time || 0,
-        isOnline: isOnline,
-        // 字段名转换以保持前端兼容
-        realName: r.real_name,
         lastActivity: r.last_activity,
-        lastLogin: r.last_login
+        lastLogin: r.last_login,
+        deepseekApiKey: r.deepseek_api_key,
+        customFields: r.custom_fields || {},
+        mistakeCount: r.mistake_count || 0,
+        dailyGoal: r.daily_goal || 20,
+        isOnline: isOnline
       };
-    });
+    };
     
-    res.json(out);
+    // 如果提供了分页参数，使用分页查询
+    if (page && pageSize) {
+      const pageNum = parseInt(page) || 1;
+      const pageSizeNum = parseInt(pageSize) || 20;
+      
+      const result = await db.paginate('users', {
+        page: pageNum,
+        pageSize: pageSizeNum,
+        where: "role = 'STUDENT'",
+        params: [],
+        orderBy: 'created_at DESC'
+      });
+      
+      const processedData = result.data.map(processRow);
+      
+      res.json({
+        data: processedData,
+        pagination: {
+          total: result.total,
+          page: result.page,
+          pageSize: result.pageSize,
+          totalPages: result.totalPages
+        }
+      });
+    } else {
+      // 不使用分页，返回所有数据（保持向后兼容）
+      const rows = await db.getMany("SELECT * FROM users WHERE role = 'STUDENT'");
+      const out = (rows || []).map(processRow);
+      res.json(out);
+    }
   } catch (error) {
     console.error('[Students] Get error:', error);
     res.status(500).json({ error: error.message });
@@ -1105,20 +1528,35 @@ app.put('/api/admin/students/:id', auth, async (req, res) => {
   try {
     const body = req.body;
     
+    console.log('[Update Student] 开始更新学员:', req.params.id);
+    console.log('[Update Student] 接收到的数据:', JSON.stringify(body, null, 2));
+    
     // Filter out computed/virtual fields that don't exist in database
     const { isOnline, ...updateData } = body;
     
-    if (updateData.password) {
+    // 关键修复: 只有当密码字段存在且不为空时才hash
+    // 如果前端没有发送password字段,则不更新密码
+    if (updateData.password && updateData.password.trim() !== '') {
+      console.log('[Update Student] 密码字段存在,进行hash');
       updateData.password = bcrypt.hashSync(updateData.password, 10);
+    } else {
+      // 如果密码为空或未提供,删除该字段,避免更新密码
+      console.log('[Update Student] 密码字段为空或未提供,跳过密码更新');
+      delete updateData.password;
     }
     
     const fields = [];
     const values = [];
     let paramIndex = 1;
     
+    // 用于跟踪已处理的数据库字段，避免重复赋值
+    const processedDbFields = new Set();
+    
     // 构建动态更新语句，转换字段名为 snake_case
     for (const key of Object.keys(updateData)) {
       let dbKey = key;
+      
+      // 字段名映射：camelCase -> snake_case
       if (key === 'realName') dbKey = 'real_name';
       else if (key === 'studentPerms') dbKey = 'student_perms';
       else if (key === 'allowedBankIds') dbKey = 'allowed_bank_ids';
@@ -1126,9 +1564,31 @@ app.put('/api/admin/students/:id', auth, async (req, res) => {
       else if (key === 'totalOnlineTime') dbKey = 'total_online_time';
       else if (key === 'lastActivity') dbKey = 'last_activity';
       else if (key === 'lastLogin') dbKey = 'last_login';
+      else if (key === 'deepseekApiKey') dbKey = 'deepseek_api_key';
+      else if (key === 'idCard') dbKey = 'id_card';
+      else if (key === 'educationType') dbKey = 'education_type';
+      else if (key === 'educationLevel') dbKey = 'education_level';
+      else if (key === 'customFields') dbKey = 'custom_fields';
+      else if (key === 'mistakeCount') dbKey = 'mistake_count';
+      else if (key === 'dailyGoal') dbKey = 'daily_goal';
+      else if (key === 'className') dbKey = 'class_name';
+      
+      // 检查是否已经处理过这个数据库字段（避免重复赋值）
+      if (processedDbFields.has(dbKey)) {
+        console.warn(`[Update Student] 跳过重复字段: ${key} -> ${dbKey}`);
+        continue;
+      }
+      
+      processedDbFields.add(dbKey);
+      
+      // 处理 JSONB 字段
+      let value = updateData[key];
+      if (['student_perms', 'allowed_bank_ids', 'login_history', 'custom_fields'].includes(dbKey)) {
+        value = JSON.stringify(value || (dbKey === 'custom_fields' ? {} : []));
+      }
       
       fields.push(`${dbKey} = $${paramIndex++}`);
-      values.push(updateData[key]);
+      values.push(value);
     }
     
     if (fields.length === 0) {
@@ -1183,9 +1643,13 @@ app.post('/api/admin/students/batch-perms', auth, async (req, res) => {
         const payload = v;
         console.log('[batch-perms] Updating student:', id, 'perms:', payload.studentPerms, 'bankIds:', payload.allowedBankIds);
         
+        // 将数组转换为 JSON 字符串（JSONB 字段需要）
+        const studentPerms = JSON.stringify(payload.studentPerms || []);
+        const allowedBankIds = JSON.stringify(payload.allowedBankIds || []);
+        
         await client.query(
           'UPDATE users SET student_perms = $1, allowed_bank_ids = $2 WHERE id = $3',
-          [payload.studentPerms || [], payload.allowedBankIds || [], id]
+          [studentPerms, allowedBankIds, id]
         );
       }
     });
@@ -1211,9 +1675,10 @@ app.put('/api/admin/students/:id/perms', auth, async (req, res) => {
     const id = req.params.id;
     const { studentPerms, allowedBankIds } = req.body || {};
     
+    // 将数组转换为 JSON 字符串（JSONB 字段需要）
     await db.execute(
       'UPDATE users SET student_perms = $1, allowed_bank_ids = $2 WHERE id = $3',
-      [studentPerms || [], allowedBankIds || [], id]
+      [JSON.stringify(studentPerms || []), JSON.stringify(allowedBankIds || []), id]
     );
     
     res.json({ success: true });
@@ -1227,8 +1692,24 @@ app.put('/api/admin/students/:id/perms', auth, async (req, res) => {
 app.get('/api/practice', auth, async (req, res) => {
   try {
     const rows = await db.getMany('SELECT * FROM practice_records WHERE user_id = $1', [req.user.id]);
-    // PostgreSQL JSONB 字段自动解析，无需手动 JSON.parse
-    res.json(rows || []);
+    
+    // 转换字段名为 camelCase，确保前端能正确匹配
+    const records = (rows || []).map(r => ({
+      id: r.id,
+      userId: r.user_id,
+      bankId: r.bank_id,
+      bankName: r.bank_name,
+      type: r.type,
+      questionTypeFilter: r.question_type_filter,
+      mode: r.mode,
+      count: r.count,
+      date: r.date,
+      currentIndex: r.current_index,
+      userAnswers: r.user_answers || {},
+      isCustom: r.is_custom || false
+    }));
+    
+    res.json(records);
   } catch (error) {
     console.error('[Practice] Get error:', error);
     res.status(500).json({ error: error.message });
@@ -1238,10 +1719,19 @@ app.get('/api/practice', auth, async (req, res) => {
 app.post('/api/practice', auth, async (req, res) => {
   try {
     const data = req.body;
+    
+    console.log('[Practice] 创建练习记录:', {
+      id: data.id,
+      userId: req.user.id,
+      bankId: data.bankId,
+      type: data.type,
+      mode: data.mode
+    });
+    
     const sql = `INSERT INTO practice_records (
       id, user_id, bank_id, bank_name, type, question_type_filter, 
       mode, count, date, current_index, user_answers, is_custom
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`;
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12)`;
     
     await db.execute(sql, [
       data.id, 
@@ -1254,10 +1744,11 @@ app.post('/api/practice', auth, async (req, res) => {
       data.count, 
       data.date, 
       data.currentIndex, 
-      data.userAnswers, // PostgreSQL JSONB 自动处理
+      JSON.stringify(data.userAnswers || {}), // 显式转换为 JSON 字符串
       data.isCustom || false
     ]);
     
+    console.log('[Practice] 创建成功:', data.id);
     res.json({ success: true });
   } catch (error) {
     console.error('[Practice] Create error:', error);
@@ -1278,11 +1769,12 @@ app.put('/api/practice/:id', auth, async (req, res) => {
       date: updateDate
     });
     
+    // JSONB 字段需要显式转换
     const result = await db.execute(
       `UPDATE practice_records 
-       SET current_index = $1, user_answers = $2, date = $3 
+       SET current_index = $1, user_answers = $2::jsonb, date = $3 
        WHERE id = $4 AND user_id = $5`, 
-      [currentIndex, userAnswers, updateDate, req.params.id, req.user.id]
+      [currentIndex, JSON.stringify(userAnswers || {}), updateDate, req.params.id, req.user.id]
     );
     
     console.log('[PUT /api/practice/:id] 更新成功, 影响行数:', result.rowCount);
@@ -1331,10 +1823,9 @@ app.delete('/api/practice/:id', auth, async (req, res) => {
 // Get all exams
 app.get('/api/exams', auth, async (req, res) => {
   try {
-    const rows = await db.getMany('SELECT * FROM exams');
+    const { page, pageSize } = req.query;
     
-    // PostgreSQL JSONB 字段自动解析，但需要处理布尔值
-    const exams = (rows || []).map(exam => ({
+    const processExam = (exam) => ({
       ...exam,
       selectedQuestionIds: exam.selected_question_ids || [],
       isVisible: exam.is_visible,
@@ -1350,9 +1841,36 @@ app.get('/api/exams', auth, async (req, res) => {
       passScorePercent: exam.pass_score_percent,
       startTime: exam.start_time,
       endTime: exam.end_time
-    }));
+    });
     
-    res.json(exams);
+    // 如果提供了分页参数，使用分页查询
+    if (page && pageSize) {
+      const pageNum = parseInt(page) || 1;
+      const pageSizeNum = parseInt(pageSize) || 20;
+      
+      const result = await db.paginate('exams', {
+        page: pageNum,
+        pageSize: pageSizeNum,
+        orderBy: 'created_at DESC'
+      });
+      
+      const processedData = result.data.map(processExam);
+      
+      res.json({
+        data: processedData,
+        pagination: {
+          total: result.total,
+          page: result.page,
+          pageSize: result.pageSize,
+          totalPages: result.totalPages
+        }
+      });
+    } else {
+      // 不使用分页，返回所有数据（保持向后兼容）
+      const rows = await db.getMany('SELECT * FROM exams');
+      const exams = (rows || []).map(processExam);
+      res.json(exams);
+    }
   } catch (error) {
     console.error('[Exams] Get error:', error);
     res.status(500).json({ error: error.message });
@@ -1570,13 +2088,22 @@ app.post('/api/exams/history', auth, async (req, res) => {
     const record = req.body;
     const id = record.id || `exam-${Date.now()}`;
     
+    console.log('[Exam History] 保存考试记录:', {
+      id,
+      userId: req.user.id,
+      examId: record.examId,
+      isFinished: record.isFinished
+    });
+    
     // PostgreSQL 使用 ON CONFLICT 来处理"保存并退出"后"提交试卷"的场景
+    // JSONB 字段：wrong_question_ids, user_answers, exam_config, ordered_question_ids
+    // pg 驱动会自动将 JavaScript 对象/数组转换为 JSONB
     await db.execute(
       `INSERT INTO exam_history (
         id, user_id, exam_id, exam_title, score, total_score, pass_score, 
         time_used, submit_time, bank_id, wrong_question_ids, user_answers, 
         passed, current_index, is_finished, exam_config, ordered_question_ids
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12::jsonb, $13, $14, $15, $16::jsonb, $17::jsonb)
       ON CONFLICT (id) DO UPDATE SET
         score = EXCLUDED.score,
         total_score = EXCLUDED.total_score,
@@ -1593,7 +2120,7 @@ app.post('/api/exams/history', auth, async (req, res) => {
       [
         id,
         req.user.id,
-        record.examId || '',
+        record.examId || null,  // 随机模拟试卷没有examId,使用NULL而不是空字符串
         record.examTitle || '',
         record.score || 0,
         record.totalScore || 0,
@@ -1601,16 +2128,17 @@ app.post('/api/exams/history', auth, async (req, res) => {
         record.timeUsed || 0,
         record.submitTime || new Date().toLocaleString(),
         record.bankId || '',
-        record.wrongQuestionIds || [],
-        record.userAnswers || {},
+        JSON.stringify(record.wrongQuestionIds || []),
+        JSON.stringify(record.userAnswers || {}),
         record.passed || false,
         record.currentIndex || 0,
         record.isFinished || false,
-        record.examConfig || null,
-        record.orderedQuestionIds || []
+        record.examConfig ? JSON.stringify(record.examConfig) : null,
+        JSON.stringify(record.orderedQuestionIds || [])
       ]
     );
     
+    console.log('[Exam History] 保存成功:', id);
     res.json({ success: true, id });
   } catch (error) {
     console.error('[Exam History] Create error:', error);
@@ -1623,12 +2151,20 @@ app.put('/api/exams/history/:id', auth, async (req, res) => {
   try {
     const record = req.body;
     
+    console.log('[Exam History] 更新考试记录:', {
+      id: req.params.id,
+      userId: req.user.id,
+      currentIndex: record.currentIndex,
+      isFinished: record.isFinished
+    });
+    
+    // JSONB 字段需要显式转换
     await db.execute(
       `UPDATE exam_history SET 
         score = $1, total_score = $2, pass_score = $3, time_used = $4, 
-        submit_time = $5, wrong_question_ids = $6, user_answers = $7, 
-        passed = $8, current_index = $9, is_finished = $10, exam_config = $11, 
-        ordered_question_ids = $12
+        submit_time = $5, wrong_question_ids = $6::jsonb, user_answers = $7::jsonb, 
+        passed = $8, current_index = $9, is_finished = $10, exam_config = $11::jsonb, 
+        ordered_question_ids = $12::jsonb
       WHERE id = $13 AND user_id = $14`,
       [
         record.score || 0,
@@ -1636,18 +2172,19 @@ app.put('/api/exams/history/:id', auth, async (req, res) => {
         record.passScore || 0,
         record.timeUsed || 0,
         record.submitTime || new Date().toLocaleString(),
-        record.wrongQuestionIds || [],
-        record.userAnswers || {},
+        JSON.stringify(record.wrongQuestionIds || []),
+        JSON.stringify(record.userAnswers || {}),
         record.passed || false,
         record.currentIndex || 0,
         record.isFinished || false,
-        record.examConfig || null,
-        record.orderedQuestionIds || [],
+        record.examConfig ? JSON.stringify(record.examConfig) : null,
+        JSON.stringify(record.orderedQuestionIds || []),
         req.params.id,
         req.user.id
       ]
     );
     
+    console.log('[Exam History] 更新成功');
     res.json({ success: true });
   } catch (error) {
     console.error('[Exam History] Update error:', error);
@@ -1734,7 +2271,8 @@ app.put('/api/banks/:id/score', auth, async (req, res) => {
       return res.status(400).json({ error: '无效的分值配置' });
     }
     
-    await db.execute('UPDATE banks SET score_config = $1 WHERE id = $2', [scoreConfig, bankId]);
+    // JSONB字段需要显式转换为JSON字符串
+    await db.execute('UPDATE banks SET score_config = $1::jsonb WHERE id = $2', [JSON.stringify(scoreConfig), bankId]);
     
     res.json({ success: true });
   } catch (error) {
@@ -1760,9 +2298,10 @@ app.post('/api/admin/config/custom-fields', auth, async (req, res) => {
     }
     
     // PostgreSQL 使用 ON CONFLICT 实现 UPSERT
+    // data是JSONB字段,需要显式转换
     await db.execute(
-      "INSERT INTO system_config (id, data) VALUES ('main', $1) ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data",
-      [data]
+      "INSERT INTO system_config (id, data) VALUES ('main', $1::jsonb) ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data",
+      [JSON.stringify(data)]
     );
     
     res.json({ success: true });
@@ -1784,9 +2323,10 @@ app.delete('/api/admin/config/custom-fields/:name', auth, async (req, res) => {
     data.customFieldSchema = (data.customFieldSchema || []).filter((n) => n !== name);
     
     // PostgreSQL 使用 ON CONFLICT 实现 UPSERT
+    // data是JSONB字段,需要显式转换
     await db.execute(
-      "INSERT INTO system_config (id, data) VALUES ('main', $1) ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data",
-      [data]
+      "INSERT INTO system_config (id, data) VALUES ('main', $1::jsonb) ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data",
+      [JSON.stringify(data)]
     );
     
     res.json({ success: true });
@@ -1823,11 +2363,19 @@ app.post('/api/practical/tasks', auth, async (req, res) => {
     const task = req.body;
     const id = task.id || `pt-${Date.now()}`;
     
+    console.log('[Practical Tasks] 创建实操任务:', {
+      id,
+      title: task.title,
+      partsCount: Array.isArray(task.parts) ? task.parts.length : 0
+    });
+    
+    // parts 是 JSONB 字段，需要显式转换
     await db.execute(
-      'INSERT INTO practical_tasks (id, title, parts, created_at) VALUES ($1, $2, $3, $4)',
-      [id, task.title || '', task.parts || [], task.createdAt || new Date().toLocaleString()]
+      'INSERT INTO practical_tasks (id, title, parts, created_at) VALUES ($1, $2, $3::jsonb, $4)',
+      [id, task.title || '', JSON.stringify(task.parts || []), task.createdAt || new Date().toLocaleString()]
     );
     
+    console.log('[Practical Tasks] 创建成功:', id);
     res.json({ success: true, id });
   } catch (error) {
     console.error('[Practical Tasks] Create error:', error);
@@ -1841,11 +2389,19 @@ app.put('/api/practical/tasks/:id', auth, async (req, res) => {
   try {
     const task = req.body;
     
+    console.log('[Practical Tasks] 更新实操任务:', {
+      id: req.params.id,
+      title: task.title,
+      partsCount: Array.isArray(task.parts) ? task.parts.length : 0
+    });
+    
+    // parts 是 JSONB 字段，需要显式转换
     await db.execute(
-      'UPDATE practical_tasks SET title = $1, parts = $2 WHERE id = $3',
-      [task.title || '', task.parts || [], req.params.id]
+      'UPDATE practical_tasks SET title = $1, parts = $2::jsonb WHERE id = $3',
+      [task.title || '', JSON.stringify(task.parts || []), req.params.id]
     );
     
+    console.log('[Practical Tasks] 更新成功');
     res.json({ success: true });
   } catch (error) {
     console.error('[Practical Tasks] Update error:', error);
@@ -1901,17 +2457,25 @@ app.post('/api/practical/records', auth, async (req, res) => {
     const record = req.body;
     const id = record.id || `ptr-${Date.now()}`;
     
+    console.log('[Practical Records] 创建实操记录:', {
+      id,
+      userId: record.userId || req.user.id,
+      taskId: record.taskId
+    });
+    
+    // answers 是 JSONB 字段，需要显式转换
     await db.execute(
-      'INSERT INTO practical_records (id, user_id, task_id, answers, submitted_at) VALUES ($1, $2, $3, $4, $5)',
+      'INSERT INTO practical_records (id, user_id, task_id, answers, submitted_at) VALUES ($1, $2, $3, $4::jsonb, $5)',
       [
         id, 
         record.userId || req.user.id, 
         record.taskId || '', 
-        record.answers || {}, 
+        JSON.stringify(record.answers || {}), 
         record.submittedAt || new Date().toLocaleString()
       ]
     );
     
+    console.log('[Practical Records] 创建成功:', id);
     res.json({ success: true, id });
   } catch (error) {
     console.error('[Practical Records] Create error:', error);
@@ -1994,13 +2558,28 @@ app.post('/api/srs/update', auth, async (req, res) => {
         intervalDays = Math.round((existing?.interval || 6) * easeFactor);
       }
     } else if (level === 'EASY') {
+      easeFactor = Math.max(1.3, easeFactor + 0.15);
       repetitions += 1;
-      easeFactor = Math.min(2.5, easeFactor + 0.15);
-      intervalDays = Math.round((existing?.interval || 1) * easeFactor * 1.3);
+      // 修复: 确保 interval 有默认值
+      const baseInterval = existing?.interval_days || 1;
+      intervalDays = repetitions === 1 ? 1 : repetitions === 2 ? 6 : Math.round(baseInterval * easeFactor);
+    }
+    
+    // 验证计算结果
+    if (!intervalDays || isNaN(intervalDays) || !isFinite(intervalDays)) {
+      console.error('[SRS Update] 无效的 intervalDays:', intervalDays);
+      console.error('[SRS Update] 参数:', { level, easeFactor, repetitions, existing });
+      intervalDays = 1; // 使用默认值
     }
     
     // 计算下次复习日期
     const nextReviewDate = new Date(now.getTime() + intervalDays * 24 * 60 * 60 * 1000);
+    
+    // 验证日期有效性
+    if (isNaN(nextReviewDate.getTime())) {
+      console.error('[SRS Update] 无效的日期:', { now, intervalDays });
+      return res.status(500).json({ error: '日期计算错误' });
+    }
     const nextReviewDateStr = nextReviewDate.toISOString().split('T')[0];
     
     const id = existing?.id || `srs-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -3527,4 +4106,14 @@ app.use((err, req, res, next) => {
   });
 });
 
-app.listen(port, () => console.log(`Server running on port ${port}`));
+// 添加错误日志中间件
+app.use(errorLogger);
+
+// 启动服务器
+app.listen(port, () => {
+  logger.info('服务器启动成功', {
+    port,
+    environment: process.env.NODE_ENV || 'development',
+    logLevel: process.env.LOG_LEVEL || 'info',
+  });
+});

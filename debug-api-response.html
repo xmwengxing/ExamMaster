@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>调试 API 响应</title>
+</head>
+<body>
+    <h1>调试 API 响应</h1>
+    <p>打开浏览器控制台查看结果</p>
+    
+    <script>
+        // 获取题目数据
+        fetch('http://localhost:3001/api/questions')
+            .then(r => r.json())
+            .then(data => {
+                console.log('=== API 响应调试 ===');
+                console.log('题目总数:', data.length);
+                
+                if (data.length > 0) {
+                    const firstQuestion = data[0];
+                    console.log('\n第一个题目完整数据:', firstQuestion);
+                    console.log('\n字段检查:');
+                    console.log('  - id:', firstQuestion.id);
+                    console.log('  - bankId:', firstQuestion.bankId);
+                    console.log('  - bank_id:', firstQuestion.bank_id);
+                    console.log('  - content:', firstQuestion.content);
+                    console.log('  - options:', firstQuestion.options);
+                    console.log('  - options 类型:', typeof firstQuestion.options);
+                    console.log('  - options 是数组:', Array.isArray(firstQuestion.options));
+                    console.log('  - options 长度:', firstQuestion.options?.length);
+                    console.log('  - answer:', firstQuestion.answer);
+                    
+                    // 查找包含"数据清洗工具"的题目
+                    const testQuestion = data.find(q => q.content.includes('数据清洗工具'));
+                    if (testQuestion) {
+                        console.log('\n测试题目（数据清洗工具）:');
+                        console.log('  - content:', testQuestion.content);
+                        console.log('  - options:', testQuestion.options);
+                        console.log('  - options 长度:', testQuestion.options?.length);
+                        console.log('  - answer:', testQuestion.answer);
+                    }
+                }
+            })
+            .catch(err => {
+                console.error('API 请求失败:', err);
+            });
+    </script>
+</body>
+</html>

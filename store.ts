@@ -313,14 +313,20 @@ export const useAppStore = () => {
     }
   }, []);
 
-  // 创建防抖版本的 updatePracticeRecord
-  const debouncedUpdatePracticeRecord = useCallback(
-    debounce(async (id: string, data: any) => {
-      await fetchApi(`/practice/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+  // 练习记录更新: 移除防抖,直接保存
+  // 原因: 练习进度数据重要,不能因为防抖延迟而丢失
+  // 每次切题时才保存,频率不高,不需要防抖
+  const updatePracticeRecordDirect = useCallback(async (id: string, data: any) => {
+    console.log('[保存进度] 开始保存:', { id, data });
+    try {
+      const response = await fetchApi(`/practice/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+      console.log('[保存进度] 保存成功:', response);
       await refreshPracticeRecords();
-    }, 500),
-    []
-  );
+    } catch (error) {
+      console.error('[保存进度] 保存失败:', error);
+      throw error;
+    }
+  }, [refreshPracticeRecords]);
 
   const storeValue = useMemo(() => ({
     isLoading, currentUser, banks, questions, exams, practiceRecords, examHistory, systemConfig, mistakes, favorites, srsRecords,
@@ -391,7 +397,10 @@ export const useAppStore = () => {
       // 总是从 API 获取最新数据，确保进度是最新的
       try {
         const allRecords = await fetchApi('/practice');
-        const found = allRecords.find((r: PracticeRecord) => r.bankId === bankId && r.mode === mode && (isCustom ? r.isCustom : !r.isCustom));
+        const found = allRecords.find((r: PracticeRecord) => 
+          r.bankId === bankId && r.mode === mode && (isCustom ? r.isCustom : !r.isCustom)
+        );
+        
         if (found) {
           // 解析 userAnswers（如果是字符串）
           if (typeof found.userAnswers === 'string') {
@@ -404,7 +413,7 @@ export const useAppStore = () => {
           return found;
         }
       } catch (e) {
-        console.warn('[getPracticeRecord] Failed to fetch from API, falling back to cache', e);
+        console.warn('[getPracticeRecord] API调用失败，使用缓存', e);
         // 如果 API 失败，才使用内存缓存
         let record = practiceRecords.find(r => r.bankId === bankId && r.mode === mode && (isCustom ? r.isCustom : !r.isCustom)) || null;
         if (record && typeof record.userAnswers === 'string') {
@@ -425,7 +434,7 @@ export const useAppStore = () => {
     },
 
     updatePracticeRecord: async (id: string, data: any) => {
-      debouncedUpdatePracticeRecord(id, data);
+      return await updatePracticeRecordDirect(id, data);
     },
 
     // Added: deletePracticeRecord required by PracticeList

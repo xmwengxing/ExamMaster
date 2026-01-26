@@ -15,8 +15,14 @@ services:
       - postgres_data:/var/lib/postgresql/data
       # 数据库初始化脚本
       - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      # PostgreSQL 安全配置文件（初始化后挂载）
+      # - ./postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+      # - ./postgres/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+    # 安全加固：不暴露端口到主机，仅在 Docker 内部网络访问
+    # 如果需要本地开发访问，取消下面的注释
     ports:
-      - "${DB_PORT:-5432}:5432"
+      - "127.0.0.1:5434:5432"  # 仅绑定到 localhost，避免与本地 PostgreSQL 冲突
+    # command: postgres -c config_file=/etc/postgresql/postgresql.conf -c hba_file=/etc/postgresql/pg_hba.conf
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-edumaster_user} -d ${DB_NAME:-edumaster}"]
@@ -43,10 +49,13 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
+    # 开发模式：挂载本地代码，修改后无需重新构建
+    # 生产环境请注释掉这些挂载
     volumes:
-      # 开发模式下挂载代码（生产环境可以移除）
       - ./server.js:/app/server.js:ro
       - ./db.js:/app/db.js:ro
+      - ./utils:/app/utils:ro
     ports:
       - "${PORT:-3001}:3001"
     depends_on:
@@ -63,31 +72,30 @@ services:
       - edumaster_network
 
   # Nginx 反向代理
-  nginx:
-    image: nginx:alpine
-    container_name: edumaster_nginx
-    volumes:
-      # Nginx 配置文件
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      # 前端构建产物（包含错误页面）
-      - ./dist:/usr/share/nginx/html:ro
-      # SSL 证书（如果有）
-      - ./nginx/ssl:/etc/nginx/ssl:ro
-    ports:
-      - "80:80"
-      - "443:443"
-    depends_on:
-      api:
-        condition: service_healthy
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
-      interval: 30s
-      timeout: 3s
-      retries: 3
-      start_period: 10s
-    networks:
-      - edumaster_network
+  # 注意：生产环境使用宝塔面板的主 Nginx，不需要 Docker Nginx 容器
+  # 主 Nginx 配置文件：/www/server/panel/vhost/nginx/exammaster.zzzjl.com.conf
+  # nginx:
+  #   image: nginx:alpine
+  #   container_name: edumaster_nginx
+  #   volumes:
+  #     - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+  #     - ./dist:/usr/share/nginx/html:ro
+  #     - ./nginx/ssl:/etc/nginx/ssl:ro
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+  #   depends_on:
+  #     api:
+  #       condition: service_healthy
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+  #     interval: 30s
+  #     timeout: 3s
+  #     retries: 3
+  #     start_period: 10s
+  #   networks:
+  #     - edumaster_network
 
 # 数据卷定义
 volumes:

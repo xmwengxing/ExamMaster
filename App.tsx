@@ -279,7 +279,7 @@ const App: React.FC = () => {
     }
 
     switch (activeTab) {
-      case 'home': return <StudentHome user={store.currentUser!} banks={studentBanks} activeBank={currentActiveBank as any} banners={store.systemConfig?.banners || []} announcement={store.systemConfig?.announcement || '欢迎使用'} onBankChange={store.setActiveBank} onNavigate={(tab, params) => {
+      case 'home': return <StudentHome user={store.currentUser!} banks={studentBanks} activeBank={currentActiveBank as any} banners={store.systemConfig?.banners || []} announcement={store.systemConfig?.announcement || '欢迎使用'} announcementDuration={store.systemConfig?.announcementDuration ?? 20} onBankChange={store.setActiveBank} onNavigate={(tab, params) => {
         if (tab === 'practice-mode') checkPracticeSession(params.mode, params);
         else handleNavigate(tab, params);
       }} hasBank={store.currentUser?.studentPerms?.includes('BANK')} hasVideo={store.currentUser?.studentPerms?.includes('VIDEO')} hasPractical={true} questionCounts={{[QuestionType.SINGLE]:0,[QuestionType.MULTIPLE]:0,[QuestionType.JUDGE]:0}} />;

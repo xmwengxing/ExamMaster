@@ -9,6 +9,7 @@ interface HomeProps {
   activeBank: QuestionBank;
   banners: BannerItem[];
   announcement: string;
+  announcementDuration?: number;  // 滚动时间（秒）
   onBankChange: (bank: QuestionBank) => void;
   onNavigate: (page: string, params?: any) => void;
   hasBank?: boolean;
@@ -19,7 +20,7 @@ interface HomeProps {
 }
 
 const StudentHome: React.FC<HomeProps> = ({ 
-  user, banks, activeBank, banners, announcement, onBankChange, onNavigate, hasBank = true, hasVideo = true, hasPractical = false, mistakeCount = 0, questionCounts 
+  user, banks, activeBank, banners, announcement, announcementDuration = 20, onBankChange, onNavigate, hasBank = true, hasVideo = true, hasPractical = false, mistakeCount = 0, questionCounts 
 }) => {
   const store = useAppStore();
   const [currentBanner, setCurrentBanner] = useState(0);
@@ -121,7 +122,24 @@ const StudentHome: React.FC<HomeProps> = ({
       {/* 公告栏 - 移到最顶部 */}
       <div className="bg-amber-50 text-amber-600 px-4 py-3 rounded-2xl border border-amber-100 flex items-center gap-3 overflow-hidden">
         <i className="fa-solid fa-bullhorn shrink-0 text-amber-500"></i>
-        <div className="flex-1 overflow-hidden font-black text-xs animate-marquee">{announcement}</div>
+        {announcementDuration === 0 ? (
+          // 禁用滚动时，静态显示（文字过长时截断）
+          <div className="flex-1 font-black text-xs truncate">
+            {announcement}
+          </div>
+        ) : (
+          // 启用滚动时，动画显示
+          <div 
+            className="flex-1 overflow-hidden font-black text-xs"
+            style={{
+              animation: `marquee ${announcementDuration}s linear infinite`
+            }}
+          >
+            <span className="inline-block whitespace-nowrap pr-[100%]">
+              {announcement}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* 顶部个人资料看板 */}
