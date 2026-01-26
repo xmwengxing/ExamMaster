@@ -295,63 +295,72 @@ npm run preview
 
 **新版本已支持 PostgreSQL 数据库和 Docker 容器化部署！**
 
-#### 部署步骤
+#### 快速部署
 
-1. **检查服务器环境**
-   ```bash
-   # 双击运行
-   check-server.bat
-   ```
+**一键部署脚本:**
+```batch
+# Windows 用户
+deploy.bat
 
-2. **安装缺失的软件**（如果需要）
-   ```bash
-   # 上传安装脚本到服务器
-   scp scripts/install-server-dependencies.sh root@47.104.173.139:/tmp/
-   
-   # 在服务器上执行
-   ssh root@47.104.173.139
-   chmod +x /tmp/install-server-dependencies.sh
-   /tmp/install-server-dependencies.sh
-   ```
+# 自动完成:
+# ✅ 构建前端
+# ✅ 打包文件
+# ✅ 上传到服务器
+# ✅ 部署并启动服务
+# ✅ 验证部署结果
+```
 
-3. **部署应用**
-   - 参考 [服务器部署记录.md](服务器部署记录.md) 逐步完成
+#### 部署脚本说明
+
+| 脚本 | 功能 | 使用场景 |
+|------|------|----------|
+| `deploy.bat` | 主部署脚本 | 日常部署更新 |
+| `check-server-status.bat` | 检查服务器状态 | 查看容器状态和日志 |
+| `restart-server.bat` | 重启服务 | 服务异常时重启 |
+| `fix-deployment.bat` | 诊断问题 | 部署失败时排查 |
+| `scripts/update-database-password.js` | 更新数据库密码 | 定期更换密码 |
 
 #### 部署文档
 
-- 📝 [服务器部署记录](服务器部署记录.md) - 部署检查清单和记录
-- 📖 [服务器准备指南](SERVER_PREPARATION_GUIDE.md) - 详细的操作步骤
-- 🐳 [Docker 部署指南](DOCKER_DEPLOYMENT_GUIDE.md) - Docker 容器化部署
-- 🌐 [Nginx 配置指南](NGINX_CONFIGURATION_GUIDE.md) - Web 服务器配置
+- 📖 **[部署指南](部署指南.md)** - 快速部署指南（推荐阅读）⭐
+- 📖 [完整部署指南](完整部署指南.md) - 详细部署文档
+- 📖 [服务器实际架构说明](服务器实际架构说明.md) - 架构说明
+- 📝 [数据库密码更新指南](数据库密码更新指南.md) - 密码管理
+- 🔧 [scripts/README.md](scripts/README.md) - 脚本说明文档
+- 📊 [技术文档](技术文档.md) - 完整技术文档
 
-### SQLite 传统部署
+#### 部署前准备
 
-```bash
-# 1. 构建前端
-npm run build
+- [ ] 安装 Node.js 18+
+- [ ] 安装 Docker 和 Docker Compose
+- [ ] 配置 .env 文件（数据库密码不要包含 $ 符号）
+- [ ] 准备好服务器 SSH 密码
 
-# 2. 上传到服务器
-scp -r dist server.js package.json root@your-server:/*/
+#### 重要提示
 
-# 3. 安装依赖
-ssh root@your-server "cd /* && npm install --production"
+⚠️ **数据库密码要求:**
+- ✅ 使用 `node scripts/generate-secure-passwords.js` 生成密码
+- ✅ 密码不要包含 `$` 符号（会被 docker-compose 解释为变量）
+- ✅ 密码不要用引号包裹
+- ✅ 示例: `DB_PASSWORD=Tkl@s,dla=~7Jsa.40a1ebEp9V)OS1>B`
 
-# 4. 启动服务
-ssh root@your-server "cd /* && pm2 start ecosystem.config.cjs"
-```
+### SQLite 传统部署（已废弃）
+
+**注意**: SQLite 版本已废弃，请使用 PostgreSQL + Docker 部署。
 
 ### 详细部署
-参考 [技术文档.md](技术文档.md) 获取完整部署指南，包括：
-- Nginx 配置
-- PM2 进程管理
-- SSL 证书配置
-- 数据库备份策略
+参考 [部署指南.md](部署指南.md) 获取完整部署指南，包括：
+- 快速开始步骤
+- 环境配置说明
+- 常见问题解决
+- 维护操作指南
 
 ## 🔒 安全建议
 
 1. ⚠️ **修改默认密码** - 首次登录后立即修改
 2. 🔒 **配置HTTPS** - 生产环境务必启用SSL
 3. 📦 **定期备份** - 设置数据库自动备份
+4. 🔐 **定期更换密码** - 建议每 90 天更换数据库密码
 4. 🔄 **更新依赖** - 定期更新系统和依赖包
 5. 🔑 **保护密钥** - 妥善保管 API Key 和 JWT Secret
 
@@ -390,9 +399,24 @@ EduMaster_Sqlite/
 └── README.md          # 项目说明
 ```
 
-## 📚 文档
+## 📚 文档导航
 
-- [技术文档.md](技术文档.md) - 完整的技术文档
+### 📖 用户文档
+- [docs/README.md](docs/README.md) - 文档中心索引
+- [docs/快速启动指南.md](docs/快速启动指南.md) - 本地开发环境搭建
+- [docs/完整部署指南.md](docs/完整部署指南.md) - 生产环境部署
+- [docs/题库导入说明.md](docs/题库导入说明.md) - 题库导入方法
+
+### 🔧 技术文档
+- [备忘文件/README.md](备忘文件/README.md) - 技术文档索引
+- [技术文档.md](技术文档.md) - 完整技术文档
+- [备忘文件/服务器实际架构说明.md](备忘文件/服务器实际架构说明.md) - 架构详解
+- [备忘文件/数据库配置说明.md](备忘文件/数据库配置说明.md) - 数据库配置
+
+### 🏗️ 模块化架构
+- [.kiro/specs/server-modularization/requirements.md](.kiro/specs/server-modularization/requirements.md) - 需求文档
+- [.kiro/specs/server-modularization/design.md](.kiro/specs/server-modularization/design.md) - 设计文档
+- [.kiro/specs/server-modularization/tasks.md](.kiro/specs/server-modularization/tasks.md) - 任务清单
 
 ## 🎯 系统要求
 

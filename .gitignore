@@ -7,6 +7,9 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+nginx/ssl/*.pem
+nginx/ssl/*.key
+
 # Dependencies
 node_modules
 
@@ -72,6 +75,18 @@ check-*.js
 create-*.js
 fix-*.cjs
 test-*.cjs
+
+# Test coverage reports
+coverage/
+.nyc_output/
+
+# Test database files
+*.test.db
+*_test.db
+
+# Test temporary files
+tests/**/*.tmp
+tests/**/*.temp
 
 # Git helper scripts (Windows)
 git-*.bat

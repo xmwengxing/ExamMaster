@@ -8,6 +8,9 @@ export default defineConfig({
     // 全局变量
     globals: true,
     
+    // 测试设置文件
+    setupFiles: ['./tests/setup.js'],
+    
     // 测试文件匹配模式
     include: ['**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
     
@@ -29,8 +32,17 @@ export default defineConfig({
         'dist/',
         '**/*.config.js',
         '**/*.test.js',
-        '**/*.spec.js'
-      ]
+        '**/*.spec.js',
+        'tests/helpers/',
+        'tests/setup.js'
+      ],
+      // 覆盖率阈值
+      thresholds: {
+        lines: 70,
+        functions: 70,
+        branches: 70,
+        statements: 70
+      }
     }
   }
 });
