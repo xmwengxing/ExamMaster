@@ -77,8 +77,8 @@ export function adminAuth(req, res, next) {
     });
   }
   
-  // 检查用户角色
-  if (req.user.role !== 'admin') {
+  // 检查用户角色（支持大小写）
+  if (req.user.role !== 'admin' && req.user.role !== 'ADMIN') {
     logger.warn('管理员认证失败：权限不足', {
       userId: req.user.id,
       role: req.user.role,
