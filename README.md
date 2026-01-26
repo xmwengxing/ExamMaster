@@ -399,9 +399,24 @@ EduMaster_Sqlite/
 └── README.md          # 项目说明
 ```
 
-## 📚 文档
+## 📚 文档导航
 
-- [技术文档.md](技术文档.md) - 完整的技术文档
+### 📖 用户文档
+- [docs/README.md](docs/README.md) - 文档中心索引
+- [docs/快速启动指南.md](docs/快速启动指南.md) - 本地开发环境搭建
+- [docs/完整部署指南.md](docs/完整部署指南.md) - 生产环境部署
+- [docs/题库导入说明.md](docs/题库导入说明.md) - 题库导入方法
+
+### 🔧 技术文档
+- [备忘文件/README.md](备忘文件/README.md) - 技术文档索引
+- [技术文档.md](技术文档.md) - 完整技术文档
+- [备忘文件/服务器实际架构说明.md](备忘文件/服务器实际架构说明.md) - 架构详解
+- [备忘文件/数据库配置说明.md](备忘文件/数据库配置说明.md) - 数据库配置
+
+### 🏗️ 模块化架构
+- [.kiro/specs/server-modularization/requirements.md](.kiro/specs/server-modularization/requirements.md) - 需求文档
+- [.kiro/specs/server-modularization/design.md](.kiro/specs/server-modularization/design.md) - 设计文档
+- [.kiro/specs/server-modularization/tasks.md](.kiro/specs/server-modularization/tasks.md) - 任务清单
 
 ## 🎯 系统要求
 
