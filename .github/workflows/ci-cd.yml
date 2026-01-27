@@ -74,7 +74,11 @@ jobs:
           DB_USER: test_user
           DB_PASSWORD: test_password
           JWT_SECRET: test_jwt_secret_key_for_ci
-        run: npm test
+          NODE_ENV: test
+        run: |
+          # 确保使用模块化服务器文件
+          echo "使用模块化服务器架构进行测试"
+          npm test
       
       - name: 生成测试覆盖率报告
         if: always()
@@ -85,6 +89,7 @@ jobs:
           DB_USER: test_user
           DB_PASSWORD: test_password
           JWT_SECRET: test_jwt_secret_key_for_ci
+          NODE_ENV: test
         run: npm run test:coverage || true
       
       - name: 上传测试覆盖率报告

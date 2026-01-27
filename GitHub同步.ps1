@@ -1,6 +1,9 @@
 # GitHub 同步脚本 (PowerShell 版本)
 # 更好的中文支持和错误处理
 
+# 设置错误时不退出
+$ErrorActionPreference = "Continue"
+
 # 设置控制台编码为 UTF-8
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
@@ -13,12 +16,13 @@ Write-Host ""
 
 # 检查是否在 Git 仓库中
 try {
-    git rev-parse --git-dir 2>&1 | Out-Null
+    $null = git rev-parse --git-dir 2>&1
     if ($LASTEXITCODE -ne 0) {
         throw "当前目录不是 Git 仓库"
     }
 } catch {
     Write-Host "❌ 错误：$_" -ForegroundColor Red
+    Write-Host ""
     Read-Host "按回车键退出"
     exit 1
 }
