@@ -112,3 +112,6 @@ convert-questions-python.bat
 
 # PostgreSQL data directory (数据目录不提交)
 postgres/data/
+
+# git仓库批处理
+GitHub一键同步.bat

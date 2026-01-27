@@ -42,7 +42,7 @@ describe('题目服务 - getQuestions', () => {
 
     mockDb.paginate.mockResolvedValue(mockResult);
 
-    const result = await questionService.getQuestions(mockDb, { page: 1, pageSize: 20 });
+    const result = await questionService.getQuestionsPaginated(mockDb, { page: 1, pageSize: 20 });
 
     expect(mockDb.paginate).toHaveBeenCalledWith('questions', {
       page: 1,
@@ -67,7 +67,7 @@ describe('题目服务 - getQuestions', () => {
 
     mockDb.paginate.mockResolvedValue(mockResult);
 
-    await questionService.getQuestions(mockDb, { bankId: 'bank-1', page: 1, pageSize: 20 });
+    await questionService.getQuestionsPaginated(mockDb, { bankId: 'bank-1', page: 1, pageSize: 20 });
 
     expect(mockDb.paginate).toHaveBeenCalledWith('questions', {
       page: 1,

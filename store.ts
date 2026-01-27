@@ -6,6 +6,7 @@ import {
   AuditLog, QuestionNote, DailyProgress, StudentPermission, PracticeMode,
   PracticalTask, PracticalTaskRecord, SrsRecord
 } from './types';
+import { getCachedData, setCachedData, CACHE_KEYS, clearAllCache } from './utils/cache';
 
 const API_BASE = '/api';
 
@@ -139,83 +140,58 @@ export const useAppStore = () => {
     }
 
     try {
-      // First, fetch profile to determine role and avoid calling admin-only endpoints for students
-      const userProfile = await fetchApi('/user/profile').catch(err => {
-        console.warn('[refreshAll] Failed to fetch profile', err);
-        return null;
-      });
+      // ========== 阶段 1: 核心数据（优先使用缓存，< 0.5秒）==========
+      console.log('[refreshAll] 阶段1: 加载核心数据...');
+      
+      // 尝试从缓存加载
+      const cachedBanks = getCachedData<QuestionBank[]>(CACHE_KEYS.BANKS);
+      const cachedConfig = getCachedData<any>(CACHE_KEYS.CONFIG);
+      const cachedProfile = getCachedData<User>(CACHE_KEYS.USER_PROFILE);
+      
+      // 如果有缓存，立即显示
+      if (cachedProfile && cachedBanks && cachedConfig) {
+        console.log('[refreshAll] 使用缓存数据，立即显示页面');
+        setCurrentUser(cachedProfile);
+        setBanks(cachedBanks);
+        setSystemConfig(cachedConfig);
+        setCustomFieldSchema(cachedConfig?.customFieldSchema || []);
+        if (!activeBank && cachedBanks?.length > 0) {
+          setActiveBank(cachedBanks[0]);
+        }
+        setIsLoading(false);
+        
+        // 后台刷新数据
+        console.log('[refreshAll] 后台刷新核心数据...');
+      }
+      
+      // 从服务器加载最新数据
+      const [userProfile, banksData, configData] = await Promise.all([
+        fetchApi('/user/profile').catch(err => {
+          console.warn('[refreshAll] Failed to fetch profile', err);
+          return cachedProfile || null;
+        }),
+        fetchApi('/banks').catch(err => { 
+          console.debug('[refreshAll] /banks failed:', err); 
+          return cachedBanks || []; 
+        }),
+        fetchApi('/config').catch(err => { 
+          console.debug('[refreshAll] /config failed:', err); 
+          return cachedConfig || null; 
+        }),
+      ]);
 
-      // 如果获取用户信息失败，说明token无效，停止后续调用
+      // 如果获取用户信息失败且没有缓存，停止
       if (!userProfile) {
         console.warn('[refreshAll] User profile is null, stopping refresh');
         setIsLoading(false);
         return;
       }
 
-      const promises: Array<Promise<any>> = [
-        Promise.resolve(userProfile),
-        fetchApi('/banks').catch(err => { console.debug('[refreshAll] /banks failed:', err); return []; }),
-        fetchApi('/questions').catch(err => { console.debug('[refreshAll] /questions failed:', err); return []; }),
-        fetchApi('/exams').catch(err => { console.debug('[refreshAll] /exams failed:', err); return []; }),
-        fetchApi('/config').catch(err => { console.debug('[refreshAll] /config failed:', err); return null; }),
-        fetchApi('/practice').catch(err => { console.debug('[refreshAll] /practice failed:', err); return []; }),
-        fetchApi('/favorites').catch(err => { console.debug('[refreshAll] /favorites failed:', err); return []; }),
-        fetchApi('/user/progress').catch(err => { console.debug('[refreshAll] /user/progress failed:', err); return []; }),
-      ];
-
-      // Conditionally add admin-only endpoints
-      if (userProfile && userProfile.role === 'ADMIN') {
-        promises.push(fetchApi('/admin/students').catch(err => { console.debug('[refreshAll] /admin/students failed:', err); return []; }));
-        promises.push(fetchApi('/admin/admins').catch(err => { console.debug('[refreshAll] /admin/admins failed:', err); return []; }));
-        promises.push(fetchApi('/admin/login-logs').catch(err => { console.debug('[refreshAll] /admin/login-logs failed:', err); return []; }));
-        promises.push(fetchApi('/admin/audit-logs').catch(err => { console.debug('[refreshAll] /admin/audit-logs failed:', err); return []; }));
-        promises.push(fetchApi('/admin/all-progress').catch(err => { console.debug('[refreshAll] /admin/all-progress failed:', err); return []; }));
-      } else {
-        // placeholders for indexes consistency
-        promises.push(Promise.resolve([])); // students
-        promises.push(Promise.resolve([])); // admins
-        promises.push(Promise.resolve([])); // login-logs
-        promises.push(Promise.resolve([])); // audit-logs
-        promises.push(Promise.resolve([])); // all-progress
-      }
-
-      // Non-admin functional endpoints
-      promises.push(fetchApi('/practical/tasks').catch(err => { console.debug('[refreshAll] /practical/tasks failed:', err); return []; }));
-      promises.push(fetchApi('/practical/records').catch(err => { console.debug('[refreshAll] /practical/records failed:', err); return []; }));
-      promises.push(fetchApi('/srs/records').catch(err => { console.debug('[refreshAll] /srs/records failed:', err); return []; }));
-      promises.push(fetchApi('/mistakes').catch(err => { console.debug('[refreshAll] /mistakes failed:', err); return []; }));
+      // 更新状态
+      setCurrentUser(userProfile);
       
-      // 管理员获取所有考试历史，学员只获取自己的
-      if (userProfile && userProfile.role === 'ADMIN') {
-        promises.push(fetchApi('/admin/exam-history').catch(err => { console.debug('[refreshAll] /admin/exam-history failed:', err); return []; }));
-      } else {
-        promises.push(fetchApi('/exams/history').catch(err => { console.debug('[refreshAll] /exams/history failed:', err); return []; }));
-      }
-
-      const results = await Promise.all(promises);
-
-      const user = results[0] || null;
-      const b = results[1] || [];
-      const q = results[2] || [];
-      const e = results[3] || [];
-      const config = results[4] || null;
-      const pr = results[5] || [];
-      const fav = results[6] || [];
-      const progress = results[7] || [];
-      const st = results[8] || [];
-      const adm = results[9] || [];
-      const lLogs = results[10] || [];
-      const aLogs = results[11] || [];
-      const allProg = results[12] || [];
-      const pTasks = results[13] || [];
-      const pRecs = results[14] || [];
-      const srs = results[15] || [];
-      const mist = results[16] || [];
-      const eHist = results[17] || [];
-
-      setCurrentUser(user);
-      // 规范化 banks 数据，确保 scoreConfig 是对象
-      const normalizedBanks = (b || []).map((bank: any) => ({
+      // 规范化 banks 数据
+      const normalizedBanks = (banksData || []).map((bank: any) => ({
         ...bank,
         scoreConfig: typeof bank.scoreConfig === 'string' ? (() => {
           try {
@@ -226,35 +202,121 @@ export const useAppStore = () => {
         })() : (bank.scoreConfig || { SINGLE: 1, MULTIPLE: 2, JUDGE: 1 })
       }));
       setBanks(normalizedBanks);
-      setQuestions(q || []);
-      setExams(e || []);
-      setSystemConfig(config);
-      // 解析 practice_records 中的 userAnswers（可能是 JSON 字符串）和 isCustom（可能是 0/1）
-      const parsedPracticeRecords = (pr || []).map((r: any) => ({
-        ...r,
-        userAnswers: typeof r.userAnswers === 'string' ? (() => {
-          try { return JSON.parse(r.userAnswers); } catch { return {}; }
-        })() : (r.userAnswers || {}),
-        isCustom: r.isCustom === 1 || r.isCustom === true
-      }));
-      setPracticeRecords(parsedPracticeRecords);
-      setFavorites(fav || []);
-      setStudents(st || []);
-      setAdmins(adm || []);
-      setLoginLogs(lLogs || []);
-      setAuditLogs(aLogs || []);
-      setAllProgress(allProg || []);
-      setPracticalTasks(pTasks || []);
-      setPracticalRecords(pRecs || []);
-      setSrsRecords(srs || []);
-      setMistakes(mist || []);
-      setExamHistory(eHist || []);
-      setCustomFieldSchema(config?.customFieldSchema || []);
+      setSystemConfig(configData);
+      setCustomFieldSchema(configData?.customFieldSchema || []);
       
-      if (!activeBank && b?.length > 0) setActiveBank(b[0]);
+      if (!activeBank && normalizedBanks?.length > 0) {
+        setActiveBank(normalizedBanks[0]);
+      }
+
+      // 缓存核心数据（30分钟）
+      setCachedData(CACHE_KEYS.USER_PROFILE, userProfile, 30 * 60 * 1000);
+      setCachedData(CACHE_KEYS.BANKS, normalizedBanks, 30 * 60 * 1000);
+      setCachedData(CACHE_KEYS.CONFIG, configData, 30 * 60 * 1000);
+
+      // 如果之前没有缓存，现在解除加载状态
+      if (!cachedProfile || !cachedBanks || !cachedConfig) {
+        setIsLoading(false);
+      }
+      console.log('[refreshAll] 阶段1完成，页面已可用');
+
+      // ========== 阶段 2: 次要数据（后台加载，优先使用缓存）==========
+      setTimeout(async () => {
+        console.log('[refreshAll] 阶段2: 后台加载次要数据...');
+        
+        // 尝试从缓存加载
+        const cachedPractice = getCachedData<PracticeRecord[]>(CACHE_KEYS.PRACTICE_RECORDS);
+        const cachedFavorites = getCachedData<Question[]>(CACHE_KEYS.FAVORITES);
+        const cachedQuestions = getCachedData<Question[]>(CACHE_KEYS.QUESTIONS);
+        const cachedExams = getCachedData<Exam[]>(CACHE_KEYS.EXAMS);
+        
+        // 如果有缓存，立即使用
+        if (cachedPractice) setPracticeRecords(cachedPractice);
+        if (cachedFavorites) setFavorites(cachedFavorites);
+        if (cachedQuestions) setQuestions(cachedQuestions);
+        if (cachedExams) setExams(cachedExams);
+        
+        // 从服务器加载最新数据
+        const [practiceData, favoritesData, questionsData, examsData] = await Promise.all([
+          fetchApi('/practice').catch(() => cachedPractice || []),
+          fetchApi('/favorites').catch(() => cachedFavorites || []),
+          fetchApi('/questions').catch(() => cachedQuestions || []),
+          fetchApi('/exams').catch(() => cachedExams || []),
+        ]);
+
+        // 解析 practice_records
+        const parsedPracticeRecords = (practiceData || []).map((r: any) => ({
+          ...r,
+          userAnswers: typeof r.userAnswers === 'string' ? (() => {
+            try { return JSON.parse(r.userAnswers); } catch { return {}; }
+          })() : (r.userAnswers || {}),
+          isCustom: r.isCustom === 1 || r.isCustom === true
+        }));
+        
+        setPracticeRecords(parsedPracticeRecords);
+        setFavorites(favoritesData || []);
+        setQuestions(questionsData || []);
+        setExams(examsData || []);
+        
+        // 缓存次要数据（10分钟）
+        setCachedData(CACHE_KEYS.PRACTICE_RECORDS, parsedPracticeRecords, 10 * 60 * 1000);
+        setCachedData(CACHE_KEYS.FAVORITES, favoritesData, 10 * 60 * 1000);
+        setCachedData(CACHE_KEYS.QUESTIONS, questionsData, 30 * 60 * 1000);
+        setCachedData(CACHE_KEYS.EXAMS, examsData, 10 * 60 * 1000);
+        
+        console.log('[refreshAll] 阶段2完成');
+      }, 100);
+
+      // ========== 阶段 3: 管理员数据（后台加载）==========
+      if (userProfile.role === 'ADMIN') {
+        setTimeout(async () => {
+          console.log('[refreshAll] 阶段3: 后台加载管理员数据...');
+          const [students, admins, loginLogs, auditLogs, allProgress] = await Promise.all([
+            fetchApi('/admin/students').catch(() => []),
+            fetchApi('/admin/admins').catch(() => []),
+            fetchApi('/admin/login-logs').catch(() => []),
+            fetchApi('/admin/audit-logs').catch(() => []),
+            fetchApi('/admin/all-progress').catch(() => []),
+          ]);
+
+          setStudents(students || []);
+          setAdmins(admins || []);
+          setLoginLogs(loginLogs || []);
+          setAuditLogs(auditLogs || []);
+          setAllProgress(allProgress || []);
+          console.log('[refreshAll] 阶段3完成');
+        }, 200);
+      }
+
+      // ========== 阶段 4: 其他功能数据（后台加载）==========
+      setTimeout(async () => {
+        console.log('[refreshAll] 阶段4: 后台加载其他数据...');
+        const promises = [
+          fetchApi('/practical/tasks').catch(() => []),
+          fetchApi('/practical/records').catch(() => []),
+          fetchApi('/srs/records').catch(() => []),
+          fetchApi('/mistakes').catch(() => []),
+        ];
+
+        // 考试历史
+        if (userProfile.role === 'ADMIN') {
+          promises.push(fetchApi('/admin/exam-history').catch(() => []));
+        } else {
+          promises.push(fetchApi('/exams/history').catch(() => []));
+        }
+
+        const [pTasks, pRecs, srs, mist, eHist] = await Promise.all(promises);
+
+        setPracticalTasks(pTasks || []);
+        setPracticalRecords(pRecs || []);
+        setSrsRecords(srs || []);
+        setMistakes(mist || []);
+        setExamHistory(eHist || []);
+        console.log('[refreshAll] 阶段4完成，所有数据加载完毕');
+      }, 300);
+
     } catch (err) {
       console.error("Refresh failed", err);
-    } finally {
       setIsLoading(false);
     }
   }, [activeBank]);
@@ -360,6 +422,9 @@ export const useAppStore = () => {
     logout: () => {
       // 先清除 token，这样后续的 API 调用会被阻止
       localStorage.removeItem('edu_token');
+      
+      // 清除所有缓存
+      clearAllCache();
       
       // 清空所有状态
       setCurrentUser(null);

@@ -15,6 +15,7 @@ import { corsOptions } from './src/config/cors.js';
 // 导入中间件
 import { requestLogger, errorLogger } from './utils/logger.js';
 import { errorHandler } from './src/middleware/errorHandler.js';
+import { injectDatabase } from './src/middleware/database.js';
 
 // 导入路由聚合器
 import { registerRoutes } from './src/routes/index.js';
@@ -36,6 +37,9 @@ app.use(cors(corsOptions));
 
 // JSON 解析（限制 50MB）
 app.use(express.json({ limit: '50mb' }));
+
+// 数据库中间件（必须在路由之前）
+app.use(injectDatabase);
 
 // 请求日志中间件
 app.use(requestLogger);
@@ -67,16 +71,18 @@ app.use(errorLogger);
 
 // ========== 服务器启动 ==========
 
-app.listen(port, () => {
-  logger.info('服务器启动成功', {
-    port,
-    environment: process.env.NODE_ENV || 'development',
-    logLevel: process.env.LOG_LEVEL || 'info',
-    database: 'PostgreSQL',
-    poolStatus: db.getPoolStatus()
-  });
-  
-  console.log(`
+// 只在非测试环境下启动服务器
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(port, () => {
+    logger.info('服务器启动成功', {
+      port,
+      environment: process.env.NODE_ENV || 'development',
+      logLevel: process.env.LOG_LEVEL || 'info',
+      database: 'PostgreSQL',
+      poolStatus: db.getPoolStatus()
+    });
+    
+    console.log(`
 ╔════════════════════════════════════════════════════════════╗
 ║                                                            ║
 ║   🎓 EduMaster 全栈刷题系统                                ║
@@ -92,8 +98,9 @@ app.listen(port, () => {
 ║   - AI、标签、管理员、系统监控                             ║
 ║                                                            ║
 ╚════════════════════════════════════════════════════════════╝
-  `);
-});
+    `);
+  });
+}
 
 // 优雅关闭
 process.on('SIGTERM', () => {
@@ -107,3 +114,6 @@ process.on('SIGINT', () => {
   db.closePool();
   process.exit(0);
 });
+
+// 导出 app 供测试使用
+export default app;

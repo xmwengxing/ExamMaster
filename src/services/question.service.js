@@ -8,61 +8,89 @@ import { validateFillInBlankAnswers } from '../utils/validators.js';
  * 获取题目列表
  * @param {Object} db - 数据库实例
  * @param {Object} options - 查询选项
- * @returns {Promise<Array|Object>} 题目列表或分页结果
+ * @returns {Promise<Array>} 题目列表
  */
 export async function getQuestions(db, options = {}) {
-  const { bankId, page, pageSize } = options;
+  const { bankId } = options;
   
-  // 如果提供了分页参数，使用分页查询
-  if (page && pageSize) {
-    const pageNum = parseInt(page) || 1;
-    const pageSizeNum = parseInt(pageSize) || 20;
-    
-    let where = '';
-    let params = [];
-    
-    if (bankId) {
-      where = 'bank_id = $1';
-      params = [bankId];
-    }
-    
-    const result = await db.paginate('questions', {
-      page: pageNum,
-      pageSize: pageSizeNum,
-      where,
-      params,
-      orderBy: bankId ? 'sort_order ASC, id ASC' : 'bank_id ASC, sort_order ASC, id ASC'
-    });
-    
-    // 处理返回数据（转换为 camelCase）
-    const processedData = result.data.map(formatQuestion);
-    
-    return {
-      data: processedData,
-      pagination: {
-        total: result.total,
-        page: result.page,
-        pageSize: result.pageSize,
-        totalPages: result.totalPages
-      }
-    };
+  let rows;
+  
+  if (bankId) {
+    rows = await db.getMany(
+      'SELECT * FROM questions WHERE bank_id = $1 ORDER BY sort_order ASC, id ASC',
+      [bankId]
+    );
   } else {
-    // 不使用分页，返回所有数据
-    let rows;
-    
-    if (bankId) {
-      rows = await db.getMany(
-        'SELECT * FROM questions WHERE bank_id = $1 ORDER BY sort_order ASC, id ASC',
-        [bankId]
-      );
-    } else {
-      rows = await db.getMany(
-        'SELECT * FROM questions ORDER BY bank_id ASC, sort_order ASC, id ASC'
-      );
-    }
-    
-    return (rows || []).map(formatQuestion);
+    rows = await db.getMany(
+      'SELECT * FROM questions ORDER BY bank_id ASC, sort_order ASC, id ASC'
+    );
   }
+  
+  return (rows || []).map(formatQuestion);
+}
+
+/**
+ * 获取题目列表（分页）
+ * @param {Object} db - 数据库实例
+ * @param {Object} options - 查询选项
+ * @returns {Promise<Object>} 分页结果
+ */
+export async function getQuestionsPaginated(db, options = {}) {
+  const { bankId, page = 1, pageSize = 50 } = options;
+  
+  let where = '';
+  let params = [];
+  
+  if (bankId) {
+    where = 'bank_id = $1';
+    params = [bankId];
+  }
+  
+  const result = await db.paginate('questions', {
+    page,
+    pageSize,
+    where,
+    params,
+    orderBy: bankId ? 'sort_order ASC, id ASC' : 'bank_id ASC, sort_order ASC, id ASC'
+  });
+  
+  // 处理返回数据（转换为 camelCase）
+  const processedData = result.data.map(formatQuestion);
+  
+  return {
+    data: processedData,
+    pagination: {
+      total: result.total,
+      page: result.page,
+      pageSize: result.pageSize,
+      totalPages: result.totalPages
+    }
+  };
+}
+
+/**
+ * 只获取题目 ID 列表（用于优化）
+ * @param {Object} db - 数据库实例
+ * @param {Object} options - 查询选项
+ * @returns {Promise<Array<string>>} 题目 ID 列表
+ */
+export async function getQuestionIds(db, options = {}) {
+  const { bankId } = options;
+  
+  let rows;
+  
+  if (bankId) {
+    rows = await db.getMany(
+      'SELECT id FROM questions WHERE bank_id = $1 ORDER BY sort_order ASC, id ASC',
+      [bankId]
+    );
+  } else {
+    rows = await db.getMany(
+      'SELECT id FROM questions ORDER BY bank_id ASC, sort_order ASC, id ASC'
+    );
+  }
+  
+  return (rows || []).map(row => row.id);
 }
 
 /**

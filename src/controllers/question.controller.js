@@ -6,6 +6,7 @@ import logger from '../../utils/logger.js';
 
 /**
  * 获取题目列表
+ * 支持分页和按题库筛选
  */
 export async function getQuestions(req, res, next) {
   try {
@@ -16,14 +17,26 @@ export async function getQuestions(req, res, next) {
       'Expires': '0'
     });
     
-    const { bankId, page, pageSize } = req.query;
+    const { bankId, page, pageSize, idsOnly } = req.query;
     
-    const result = await questionService.getQuestions(req.db, {
-      bankId,
-      page,
-      pageSize
-    });
+    // 如果只请求 ID 列表（用于优化）
+    if (idsOnly === 'true') {
+      const ids = await questionService.getQuestionIds(req.db, { bankId });
+      return res.json({ ids });
+    }
     
+    // 如果提供了分页参数，使用分页查询
+    if (page && pageSize) {
+      const result = await questionService.getQuestionsPaginated(req.db, {
+        bankId,
+        page: parseInt(page),
+        pageSize: parseInt(pageSize)
+      });
+      return res.json(result);
+    }
+    
+    // 否则返回所有题目（向后兼容）
+    const result = await questionService.getQuestions(req.db, { bankId });
     res.json(result);
   } catch (error) {
     logger.error('[Questions] 获取题目列表失败:', error);

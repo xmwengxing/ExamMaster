@@ -2,11 +2,12 @@
 node_modules/
 npm-debug.log*
 
-# 测试
+# 测试（Docker 构建时不需要）
 tests/
 *.test.js
 *.test.ts
 coverage/
+vitest.config.js
 
 # 构建产物
 dist/
@@ -27,10 +28,12 @@ postgres/data/
 # Git
 .git/
 .gitignore
+.github/
 
 # IDE
 .vscode/
 .idea/
+.kiro/
 
 # 文档
 *.md
@@ -48,11 +51,18 @@ temp/
 
 # 脚本
 scripts/
+*.bat
 
 # Docker
 Dockerfile
 docker-compose.yml
 .dockerignore
+
+# 备份
+backups/
+
+# 旧版本文件（保留 server-new.js 作为主入口）
+server.js
 
 # 其他
 .DS_Store
