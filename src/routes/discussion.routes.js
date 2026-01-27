@@ -13,9 +13,10 @@ router.get('/', auth, discussionController.getDiscussions);
 router.post('/', auth, discussionController.createDiscussion);
 router.get('/:id', auth, discussionController.getDiscussionById);
 router.put('/:id', auth, discussionController.updateDiscussion);
-router.delete('/:id', adminAuth, discussionController.deleteDiscussion);
-router.post('/:id/toggle-visibility', adminAuth, discussionController.toggleDiscussionVisibility);
-router.post('/:id/toggle-pin', adminAuth, discussionController.toggleDiscussionPin);
+// 讨论管理需要先验证 JWT token，再验证管理员权限
+router.delete('/:id', auth, adminAuth, discussionController.deleteDiscussion);
+router.post('/:id/toggle-visibility', auth, adminAuth, discussionController.toggleDiscussionVisibility);
+router.post('/:id/toggle-pin', auth, adminAuth, discussionController.toggleDiscussionPin);
 router.post('/:id/like', auth, discussionController.toggleDiscussionLike);
 
 // 评论路由

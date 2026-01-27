@@ -111,6 +111,42 @@ const App: React.FC = () => {
     return () => window.removeEventListener('storage', handleStorageChange);
   }, [store]);
 
+  // 自动加载题目：当切换到需要题目的页面时
+  useEffect(() => {
+    // 学员端页面：按需加载当前题库的题目
+    const studentNeedsQuestions = ['practice', 'practice-mode', 'favorites', 'mistakes'];
+    
+    if (studentNeedsQuestions.includes(activeTab) && store.activeBank?.id) {
+      // 检查是否已加载该题库的题目
+      const hasQuestions = store.questions.some(q => q.bankId === store.activeBank?.id);
+      
+      if (!hasQuestions) {
+        console.log('[App] 学员端自动加载题库题目:', store.activeBank.name, store.activeBank.id);
+        store.loadBankQuestions(store.activeBank.id).catch(err => {
+          console.error('[App] 加载题目失败:', err);
+        });
+      }
+    }
+    
+    // 管理员页面：需要加载所有题目
+    const adminNeedsAllQuestions = ['banks', 'admin-exams'];
+    
+    if (adminNeedsAllQuestions.includes(activeTab) && store.currentUser?.role === UserRole.ADMIN) {
+      // 检查是否已加载所有题目
+      if (store.questions.length === 0) {
+        console.log('[App] 管理员页面加载所有题目');
+        // 加载所有题库的题目
+        Promise.all(
+          store.banks.map(bank => store.loadBankQuestions(bank.id))
+        ).then(() => {
+          console.log('[App] 所有题目加载完成，共', store.questions.length, '题');
+        }).catch(err => {
+          console.error('[App] 加载所有题目失败:', err);
+        });
+      }
+    }
+  }, [activeTab, store.activeBank?.id, store.questions.length, store.currentUser?.role, store.banks.length]);
+
   const handleNavigate = (tab: string, params: any = null) => {
     setActiveTab(tab);
     setActiveParams(params);

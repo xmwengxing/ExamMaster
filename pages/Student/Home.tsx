@@ -31,10 +31,11 @@ const StudentHome: React.FC<HomeProps> = ({
   const [historyData, setHistoryData] = useState<DailyProgress[]>([]);
 
   // 计算当前题库的题目总数
+  // 使用题库自带的 questionCount，不再依赖 store.questions
   const currentBankQuestionCount = useMemo(() => {
     if (!activeBank) return 0;
-    return store.questions.filter(q => q.bankId === activeBank.id).length;
-  }, [activeBank, store.questions]);
+    return activeBank.questionCount || 0;
+  }, [activeBank]);
 
   // 季度热力图相关计算（90天）
   const heatmapData = useMemo(() => {

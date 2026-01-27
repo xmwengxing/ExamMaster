@@ -29,7 +29,8 @@ router.get('/health', async (req, res) => {
 });
 
 // 数据库监控（管理员）
-router.get('/monitor/database', adminAuth, systemController.getDatabaseMonitor);
+// 需要先验证 JWT token，再验证管理员权限
+router.get('/monitor/database', auth, adminAuth, systemController.getDatabaseMonitor);
 
 export default router;
 
@@ -39,4 +40,5 @@ progressRouter.get('/progress', auth, systemController.getUserProgress);
 
 // 管理员进度路由
 export const adminProgressRouter = express.Router();
-adminProgressRouter.get('/all-progress', adminAuth, systemController.getAllProgress);
+// 需要先验证 JWT token，再验证管理员权限
+adminProgressRouter.get('/all-progress', auth, adminAuth, systemController.getAllProgress);

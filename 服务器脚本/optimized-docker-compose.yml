@@ -1,0 +1,125 @@
+version: '3.8'
+
+# ========================================
+# EduMaster 优化版 Docker Compose 配置
+# 针对 Alibaba Cloud Linux 3 优化
+# ========================================
+
+services:
+  # PostgreSQL 数据库服务
+  postgres:
+    image: postgres:16-alpine  # 升级到最新稳定版
+    container_name: edumaster_postgres
+    environment:
+      POSTGRES_DB: ${DB_NAME:-edumaster}
+      POSTGRES_USER: ${DB_USER:-edumaster_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_INITDB_ARGS: "-E UTF8 --locale=C"
+      # 性能优化参数
+      POSTGRES_SHARED_BUFFERS: "256MB"
+      POSTGRES_EFFECTIVE_CACHE_SIZE: "1GB"
+      POSTGRES_WORK_MEM: "16MB"
+      POSTGRES_MAINTENANCE_WORK_MEM: "128MB"
+    volumes:
+      # 数据持久化
+      - postgres_data:/var/lib/postgresql/data
+      # 数据库初始化脚本
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      # 性能优化配置
+      - ./postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+    # 仅绑定到 localhost，提高安全性
+    ports:
+      - "127.0.0.1:5432:5432"
+    # 资源限制（根据服务器配置调整）
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-edumaster_user} -d ${DB_NAME:-edumaster}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - edumaster_network
+    # 日志限制
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # API 服务器
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NODE_ENV: production
+    container_name: edumaster_api
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: ${PORT:-3001}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-edumaster}
+      DB_USER: ${DB_USER:-edumaster_user}
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
+      # Node.js 性能优化
+      NODE_OPTIONS: "--max-old-space-size=512"
+      UV_THREADPOOL_SIZE: "8"
+    # 生产环境不挂载代码，使用镜像内代码
+    ports:
+      - "127.0.0.1:3001:3001"  # 仅内网访问，通过宝塔 Nginx 代理
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # 资源限制
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 768M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/api/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    networks:
+      - edumaster_network
+    # 日志限制
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# 数据卷定义
+volumes:
+  postgres_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /www/wwwroot/exammaster.zzzjl.com/postgres_data
+
+# 网络定义（使用 host 模式提高性能）
+networks:
+  edumaster_network:
+    driver: bridge
+    driver_opts:
+      com.docker.network.driver.mtu: "1500"

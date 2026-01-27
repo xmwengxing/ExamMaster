@@ -100,6 +100,7 @@ const fetchApi = async (endpoint: string, options: any = {}, retries: number = 2
 export const useAppStore = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingQuestions, setIsLoadingQuestions] = useState(false);  // 题目加载状态
   const [banks, setBanks] = useState<QuestionBank[]>([]);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [exams, setExams] = useState<Exam[]>([]);
@@ -227,21 +228,20 @@ export const useAppStore = () => {
         // 尝试从缓存加载
         const cachedPractice = getCachedData<PracticeRecord[]>(CACHE_KEYS.PRACTICE_RECORDS);
         const cachedFavorites = getCachedData<Question[]>(CACHE_KEYS.FAVORITES);
-        const cachedQuestions = getCachedData<Question[]>(CACHE_KEYS.QUESTIONS);
         const cachedExams = getCachedData<Exam[]>(CACHE_KEYS.EXAMS);
+        // ⚠️ 不再加载所有题目，改为按需加载以避免数据过大问题
         
         // 如果有缓存，立即使用
         if (cachedPractice) setPracticeRecords(cachedPractice);
         if (cachedFavorites) setFavorites(cachedFavorites);
-        if (cachedQuestions) setQuestions(cachedQuestions);
         if (cachedExams) setExams(cachedExams);
         
-        // 从服务器加载最新数据
-        const [practiceData, favoritesData, questionsData, examsData] = await Promise.all([
+        // 从服务器加载最新数据（移除 questions 的全量加载）
+        const [practiceData, favoritesData, examsData] = await Promise.all([
           fetchApi('/practice').catch(() => cachedPractice || []),
           fetchApi('/favorites').catch(() => cachedFavorites || []),
-          fetchApi('/questions').catch(() => cachedQuestions || []),
           fetchApi('/exams').catch(() => cachedExams || []),
+          // ❌ 移除：fetchApi('/questions').catch(() => [])  // 数据过大（8MB+），导致 HTTP/2 错误
         ]);
 
         // 解析 practice_records
@@ -255,14 +255,14 @@ export const useAppStore = () => {
         
         setPracticeRecords(parsedPracticeRecords);
         setFavorites(favoritesData || []);
-        setQuestions(questionsData || []);
         setExams(examsData || []);
+        // ✅ 题目数据将在切换题库或进入练习时按需加载
         
         // 缓存次要数据（10分钟）
         setCachedData(CACHE_KEYS.PRACTICE_RECORDS, parsedPracticeRecords, 10 * 60 * 1000);
         setCachedData(CACHE_KEYS.FAVORITES, favoritesData, 10 * 60 * 1000);
-        setCachedData(CACHE_KEYS.QUESTIONS, questionsData, 30 * 60 * 1000);
         setCachedData(CACHE_KEYS.EXAMS, examsData, 10 * 60 * 1000);
+        // ❌ 不再缓存所有题目
         
         console.log('[refreshAll] 阶段2完成');
       }, 100);
@@ -338,6 +338,65 @@ export const useAppStore = () => {
     }
   }, [activeBank]);
 
+  // 按需加载题库题目（避免一次性加载所有题目导致数据过大）
+  const loadBankQuestions = useCallback(async (bankId: string) => {
+    try {
+      const cacheKey = `questions_bank_${bankId}`;
+      
+      // 检查缓存
+      const cached = getCachedData<Question[]>(cacheKey);
+      if (cached && cached.length > 0) {
+        console.log(`[loadBankQuestions] 使用缓存: ${bankId} (${cached.length} 题)`);
+        setQuestions(prev => {
+          // 合并缓存数据，避免重复
+          const existingIds = new Set(prev.map(q => q.id));
+          const newQuestions = cached.filter(q => !existingIds.has(q.id));
+          return [...prev, ...newQuestions];
+        });
+        return cached;
+      }
+      
+      // 设置加载状态
+      setIsLoadingQuestions(true);
+      
+      // 从服务器加载
+      console.log(`[loadBankQuestions] 加载题库: ${bankId}`);
+      const questions = await fetchApi(`/questions?bankId=${bankId}`);
+      
+      console.log(`[loadBankQuestions] 加载成功: ${bankId} (${questions.length} 题)`);
+      
+      // 缓存单个题库（30分钟）
+      setCachedData(cacheKey, questions, 30 * 60 * 1000);
+      
+      // 合并到现有题目列表
+      setQuestions(prev => {
+        const existingIds = new Set(prev.map(q => q.id));
+        const newQuestions = questions.filter((q: Question) => !existingIds.has(q.id));
+        return [...prev, ...newQuestions];
+      });
+      
+      return questions;
+    } catch (error) {
+      console.error('[loadBankQuestions] 加载失败:', error);
+      return [];
+    } finally {
+      setIsLoadingQuestions(false);
+    }
+  }, []);
+
+  // 修改 setActiveBank 以支持按需加载
+  const handleSetActiveBank = useCallback(async (bank: QuestionBank | null) => {
+    setActiveBank(bank);
+    
+    // 切换题库时加载该题库的题目
+    if (bank && bank.id) {
+      await loadBankQuestions(bank.id);
+    } else {
+      // 未选择题库时，清空题目列表
+      setQuestions([]);
+    }
+  }, [loadBankQuestions]);
+
   useEffect(() => { refreshAll(); }, [refreshAll]);
 
   // Heartbeat interval - send heartbeat every 2 minutes to update online status
@@ -408,9 +467,13 @@ export const useAppStore = () => {
   }, [refreshPracticeRecords]);
 
   const storeValue = useMemo(() => ({
-    isLoading, currentUser, banks, questions, exams, practiceRecords, examHistory, systemConfig, mistakes, favorites, srsRecords,
+    isLoading, 
+    isLoadingQuestions,  // 导出题目加载状态
+    currentUser, banks, questions, exams, practiceRecords, examHistory, systemConfig, mistakes, favorites, srsRecords,
     students, admins, loginLogs, auditLogs, practicalTasks, practicalRecords, customFieldSchema, allProgress,
-    activeBank: activeBank || banks[0], setActiveBank,
+    activeBank: activeBank || banks[0], 
+    setActiveBank: handleSetActiveBank,  // 使用新的处理函数，支持按需加载题目
+    loadBankQuestions,  // 导出按需加载函数
     
     login: async (phone: string, pass: string, role: UserRole) => {
       try {
@@ -1200,7 +1263,7 @@ export const useAppStore = () => {
         throw e;
       }
     }
-  }), [isLoading, currentUser, banks, questions, exams, practiceRecords, examHistory, systemConfig, mistakes, favorites, srsRecords, students, admins, loginLogs, auditLogs, practicalTasks, practicalRecords, customFieldSchema, refreshAll]);
+  }), [isLoading, currentUser, banks, questions, exams, practiceRecords, examHistory, systemConfig, mistakes, favorites, srsRecords, students, admins, loginLogs, auditLogs, practicalTasks, practicalRecords, customFieldSchema, refreshAll, handleSetActiveBank, loadBankQuestions]);
 
   return storeValue;
 };

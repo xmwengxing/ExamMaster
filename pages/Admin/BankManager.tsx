@@ -896,6 +896,41 @@ const BankManager: React.FC<BankManagerProps> = ({
                </div>
             </aside>
             <div className="md:col-span-3 flex flex-col space-y-4">
+              {/* 题目加载状态 */}
+              {store.isLoadingQuestions && (
+                <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-3xl border-2 border-dashed border-indigo-200 p-8">
+                  <div className="flex flex-col items-center justify-center space-y-4">
+                    <div className="relative">
+                      <div className="w-16 h-16 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <i className="fa-solid fa-book text-indigo-400 text-xl"></i>
+                      </div>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-sm font-bold text-indigo-900 mb-1">正在加载题目...</p>
+                      <p className="text-xs text-indigo-600">
+                        正在从服务器获取题库数据，请稍候
+                      </p>
+                      <div className="mt-3 flex items-center justify-center gap-1">
+                        <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                        <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                        <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {/* 题目列表 */}
+              {!store.isLoadingQuestions && paginatedQuestions.length === 0 && (
+                <div className="bg-white rounded-3xl border shadow-sm p-12 text-center">
+                  <i className="fa-solid fa-inbox text-gray-300 text-5xl mb-4"></i>
+                  <p className="text-sm font-bold text-gray-500 mb-2">暂无题目</p>
+                  <p className="text-xs text-gray-400">点击"添加题目"按钮开始创建</p>
+                </div>
+              )}
+              
+              {!store.isLoadingQuestions && paginatedQuestions.length > 0 && (
               <div className="bg-white rounded-3xl border shadow-sm divide-y overflow-hidden">
                 {paginatedQuestions.map((q, i) => {
                   const isDup = duplicateIds.includes(q.id);
@@ -987,8 +1022,9 @@ const BankManager: React.FC<BankManagerProps> = ({
                   <div className="py-20 text-center text-gray-300 italic">暂无题目内容</div>
                 )}
               </div>
+              )}
               
-              {totalPages > 1 && (
+              {!store.isLoadingQuestions && totalPages > 1 && (
                 <div className="flex items-center justify-between px-2">
                   <span className="text-xs font-bold text-gray-400">共 {filteredQuestions.length} 题，第 {currentPage} / {totalPages} 页</span>
                   <div className="flex gap-2">
