@@ -36,6 +36,7 @@ async function getUserProfile(db, userId) {
     className: user.class_name,
     studentPerms: user.student_perms || [],
     allowedBankIds: user.allowed_bank_ids || [],
+    permissions: user.permissions || [],  // 添加管理员权限字段
     lastLogin: user.last_login,
     lastActivity: user.last_activity,
     loginHistory: user.login_history || [],

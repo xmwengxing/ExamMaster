@@ -2,6 +2,7 @@
 import React, { useState, useRef, useMemo } from 'react';
 import { User } from '../../types';
 import { EDUCATION_TYPE_OPTIONS, EDUCATION_LEVEL_OPTIONS } from '../../constants';
+import * as XLSX from 'xlsx';
 
 interface StudentManagerProps {
   students: User[];
@@ -67,67 +68,122 @@ const StudentManager: React.FC<StudentManagerProps> = ({ students, customFields,
   };
 
   const handleDownloadTemplate = () => {
+    // 创建Excel模板
     const fixedHeaders = ['姓名*', '手机号*', '性别', '密码', '身份证号', '毕业院校', '学历性质', '最高学历', '专业', '工作单位', '班级'];
-    const headers = [...fixedHeaders, ...customFields].join(',');
-    const example = ['张三', '13800138001', '男', '123456', '440101199001018888', '清华大学', '全日制', '本科', '计算机', '某科技公司', '2024春季班'].join(',');
-    const blob = new Blob([`\uFEFF${headers}\n${example}`], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = "学员导入模板.csv";
-    link.click();
+    const headers = [...fixedHeaders, ...customFields];
+    
+    // 示例数据
+    const exampleData = ['张三', '13800138001', '男', '123456', '440101199001018888', '清华大学', '全日制', '本科', '计算机', '某科技公司', '2024春季班'];
+    // 补齐自定义字段的示例数据
+    const fullExampleData = [...exampleData, ...customFields.map(() => '')];
+    
+    // 创建工作簿
+    const wb = XLSX.utils.book_new();
+    const wsData = [headers, fullExampleData];
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    
+    // 设置列宽
+    ws['!cols'] = headers.map(() => ({ wch: 15 }));
+    
+    XLSX.utils.book_append_sheet(wb, ws, '学员名单');
+    
+    // 导出Excel文件
+    XLSX.writeFile(wb, '学员导入模板.xlsx');
   };
 
   const handleBatchImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    
     const reader = new FileReader();
     reader.onload = (ev) => {
-      const text = ev.target?.result as string;
-      const lines = text.split('\n').filter(l => l.trim());
-      const headerRow = lines[0].split(',');
-      
-      const newStudents = lines.slice(1).map((line, idx) => {
-        const values = line.split(',');
-        const s: any = { customFields: {} };
-        headerRow.forEach((h, i) => {
-          const val = values[i]?.trim();
-          const cleanH = h.replace('*', '').trim();
-          if (cleanH === '姓名') s.realName = val;
-          else if (cleanH === '手机号') s.phone = val;
-          else if (cleanH === '性别') s.gender = val;
-          else if (cleanH === '密码') s.password = val;
-          else if (cleanH === '身份证号') s.idCard = val;
-          else if (cleanH === '毕业院校') s.school = val;
-          else if (cleanH === '学历性质') s.educationType = val;
-          else if (cleanH === '最高学历') s.educationLevel = val;
-          else if (cleanH === '专业') s.major = val;
-          else if (cleanH === '工作单位') s.company = val;
-          else if (cleanH === '班级') s.className = val;
-          else if (customFields.includes(cleanH)) s.customFields[cleanH] = val;
-        });
-
-        // 批量导入默认密码逻辑：若未填密码则取手机号后6位，否则取123456兜底
-        if (!s.password) {
-            s.password = s.phone ? s.phone.slice(-6) : '123456';
+      try {
+        const data = ev.target?.result;
+        const workbook = XLSX.read(data, { type: 'binary' });
+        
+        // 读取第一个工作表
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        
+        // 转换为JSON数据
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+        
+        if (jsonData.length < 2) {
+          alert('Excel文件格式错误：至少需要包含表头和一行数据');
+          return;
         }
-
-        return {
-          ...s,
-          id: `imp-${Date.now()}-${idx}`,
-          role: 'STUDENT',
-          nickname: s.realName,
-          avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${s.phone}`,
-          accuracy: 0,
-          mistakeCount: 0,
-          studentPerms: ['BANK', 'VIDEO', 'EXAM']
-        };
-      });
-
-      newStudents.forEach(st => onAdd(st));
-      alert(`成功导入 ${newStudents.length} 名学员`);
-      setIsImportModalOpen(false);
+        
+        // 第一行是表头
+        const headerRow = jsonData[0].map((h: any) => String(h || '').trim());
+        
+        // 从第二行开始是数据
+        const dataRows = jsonData.slice(1).filter(row => row && row.length > 0 && row.some(cell => cell));
+        
+        if (dataRows.length === 0) {
+          alert('Excel文件中没有有效的学员数据');
+          return;
+        }
+        
+        const newStudents = dataRows.map((row, idx) => {
+          const s: any = { customFields: {} };
+          
+          headerRow.forEach((h, i) => {
+            const val = row[i] ? String(row[i]).trim() : '';
+            const cleanH = h.replace('*', '').trim();
+            
+            if (cleanH === '姓名') s.realName = val;
+            else if (cleanH === '手机号') s.phone = val;
+            else if (cleanH === '性别') s.gender = val;
+            else if (cleanH === '密码') s.password = val;
+            else if (cleanH === '身份证号') s.idCard = val;
+            else if (cleanH === '毕业院校') s.school = val;
+            else if (cleanH === '学历性质') s.educationType = val;
+            else if (cleanH === '最高学历') s.educationLevel = val;
+            else if (cleanH === '专业') s.major = val;
+            else if (cleanH === '工作单位') s.company = val;
+            else if (cleanH === '班级') s.className = val;
+            else if (customFields.includes(cleanH)) s.customFields[cleanH] = val;
+          });
+          
+          // 验证必填字段
+          if (!s.realName || !s.phone) {
+            console.warn(`第 ${idx + 2} 行数据缺少必填字段（姓名或手机号），已跳过`);
+            return null;
+          }
+          
+          // 批量导入默认密码逻辑：若未填密码则取手机号后6位，否则取123456兜底
+          if (!s.password) {
+            s.password = s.phone ? s.phone.slice(-6) : '123456';
+          }
+          
+          return {
+            ...s,
+            id: `imp-${Date.now()}-${idx}`,
+            role: 'STUDENT',
+            nickname: s.realName,
+            avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${s.phone}`,
+            accuracy: 0,
+            mistakeCount: 0,
+            studentPerms: ['BANK', 'VIDEO', 'EXAM']
+          };
+        }).filter(st => st !== null); // 过滤掉无效数据
+        
+        if (newStudents.length === 0) {
+          alert('没有有效的学员数据可以导入');
+          return;
+        }
+        
+        // 批量添加学员
+        newStudents.forEach(st => onAdd(st));
+        alert(`成功导入 ${newStudents.length} 名学员`);
+        setIsImportModalOpen(false);
+      } catch (error) {
+        console.error('Excel解析错误:', error);
+        alert('Excel文件解析失败，请检查文件格式是否正确');
+      }
     };
-    reader.readAsText(file);
+    
+    reader.readAsBinaryString(file);
     e.target.value = '';
   };
 
@@ -191,7 +247,7 @@ const StudentManager: React.FC<StudentManagerProps> = ({ students, customFields,
                       <div className="w-10 h-10 rounded-xl shadow-sm border border-white bg-gray-100 flex items-center justify-center text-indigo-600 font-black">{(s.realName || s.nickname || '学')[0]}</div>
                     )}
                     <div>
-                      <button onClick={() => { setEditingId(s.id); setForm(s); setIsModalOpen(true); }} className="font-bold text-gray-900 hover:text-indigo-600 underline decoration-gray-200 underline-offset-4">{s.realName}</button>
+                      <div className="font-bold text-gray-900">{s.realName || s.nickname || '未设置姓名'}</div>
                       <div className="text-[10px] text-gray-400 font-mono mt-0.5">{s.idCard || '无身份证'}</div>
                     </div>
                   </div>
@@ -206,7 +262,22 @@ const StudentManager: React.FC<StudentManagerProps> = ({ students, customFields,
                   <div className="text-[10px] text-indigo-500 font-black">{s.major || '--'}</div>
                 </td>
                 <td className="px-6 py-4 text-center">
-                   <button onClick={() => { if(confirm(`确定删除学员「${s.realName}」吗？`)) onDelete([s.id]); }} className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl"><i className="fa-solid fa-trash-can"></i></button>
+                  <div className="flex items-center justify-center gap-2">
+                    <button 
+                      onClick={() => { setEditingId(s.id); setForm(s); setIsModalOpen(true); }} 
+                      className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors"
+                      title="编辑学员"
+                    >
+                      <i className="fa-solid fa-pen-to-square"></i>
+                    </button>
+                    <button 
+                      onClick={() => { if(confirm(`确定删除学员「${s.realName || s.nickname || s.phone}」吗？`)) onDelete([s.id]); }} 
+                      className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-colors"
+                      title="删除学员"
+                    >
+                      <i className="fa-solid fa-trash-can"></i>
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -339,8 +410,8 @@ const StudentManager: React.FC<StudentManagerProps> = ({ students, customFields,
               >
                 <i className="fa-solid fa-cloud-arrow-up text-4xl text-indigo-400 mb-4 group-hover:scale-110 transition-transform"></i>
                 <div className="text-sm font-bold text-indigo-600">点击此处上传学员名单</div>
-                <div className="text-[10px] text-gray-400 mt-2">支持标准 CSV 表格文件</div>
-                <input type="file" ref={fileInputRef} className="hidden" accept=".csv" onChange={handleBatchImport} />
+                <div className="text-[10px] text-gray-400 mt-2">支持 Excel 表格文件（.xlsx, .xls）</div>
+                <input type="file" ref={fileInputRef} className="hidden" accept=".xlsx,.xls" onChange={handleBatchImport} />
               </div>
 
               <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100">
@@ -356,7 +427,7 @@ const StudentManager: React.FC<StudentManagerProps> = ({ students, customFields,
                 onClick={handleDownloadTemplate}
                 className="w-full py-4 border-2 border-gray-100 text-gray-500 rounded-2xl text-xs font-black hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
               >
-                <i className="fa-solid fa-download"></i> 下载标准 CSV 导入模板
+                <i className="fa-solid fa-download"></i> 下载标准 Excel 导入模板
               </button>
 
               <div className="flex gap-4 pt-4">

@@ -208,6 +208,7 @@ const ExamPublisher: React.FC<ExamPublisherProps> = ({ banks, exams, allQuestion
               <thead className="text-[10px] font-black text-gray-400 uppercase tracking-widest border-b bg-gray-50">
                 <tr>
                   <th className="px-6 py-4">学员姓名 / 账号</th>
+                  <th className="px-6 py-4">班级</th>
                   <th className="px-6 py-4">交卷时间</th>
                   <th className="px-6 py-4">得分</th>
                   <th className="px-6 py-4">结果</th>
@@ -222,6 +223,9 @@ const ExamPublisher: React.FC<ExamPublisherProps> = ({ banks, exams, allQuestion
                       <td className="px-6 py-4">
                         <div className="font-bold text-gray-800">{student?.realName || '未知学员'}</div>
                         <div className="text-[10px] text-gray-400 font-mono">{student?.phone || '--'}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="text-sm font-bold text-indigo-600">{student?.className || '--'}</span>
                       </td>
                       <td className="px-6 py-4 text-xs font-medium text-gray-500">{record.submitTime}</td>
                       <td className="px-6 py-4">
@@ -271,9 +275,10 @@ const ExamPublisher: React.FC<ExamPublisherProps> = ({ banks, exams, allQuestion
                       <div className="flex items-center gap-2">
                         <button 
                           onClick={() => { setSelectedExamIdForResults(e.id); setView('results'); }}
-                          className="font-black text-lg text-gray-900 leading-none hover:text-indigo-600 transition-colors text-left"
+                          className="font-black text-lg text-gray-900 leading-none hover:text-indigo-600 transition-colors text-left flex items-center gap-2"
                         >
                           {e.title}
+                          <i className="fa-solid fa-arrow-up-right-from-square text-xs text-indigo-400"></i>
                         </button>
                         {e.isVisible ? (
                           <span className="bg-emerald-50 text-emerald-600 text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-widest border border-emerald-100">正在显示</span>

@@ -53,9 +53,10 @@ services:
     # 开发模式：挂载本地代码，修改后无需重新构建
     # 生产环境请注释掉这些挂载
     volumes:
-      - ./server.js:/app/server.js:ro
+      - ./server-new.js:/app/server.js:ro
       - ./db.js:/app/db.js:ro
       - ./utils:/app/utils:ro
+      - ./src:/app/src:ro
     ports:
       - "${PORT:-3001}:3001"
     depends_on:
@@ -74,28 +75,28 @@ services:
   # Nginx 反向代理
   # 注意：生产环境使用宝塔面板的主 Nginx，不需要 Docker Nginx 容器
   # 主 Nginx 配置文件：/www/server/panel/vhost/nginx/exammaster.zzzjl.com.conf
-  # nginx:
-  #   image: nginx:alpine
-  #   container_name: edumaster_nginx
-  #   volumes:
-  #     - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-  #     - ./dist:/usr/share/nginx/html:ro
-  #     - ./nginx/ssl:/etc/nginx/ssl:ro
-  #   ports:
-  #     - "80:80"
-  #     - "443:443"
-  #   depends_on:
-  #     api:
-  #       condition: service_healthy
-  #   restart: unless-stopped
-  #   healthcheck:
-  #     test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
-  #     interval: 30s
-  #     timeout: 3s
-  #     retries: 3
-  #     start_period: 10s
-  #   networks:
-  #     - edumaster_network
+  nginx:
+    image: nginx:alpine
+    container_name: edumaster_nginx
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./dist:/usr/share/nginx/html:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    networks:
+      - edumaster_network
 
 # 数据卷定义
 volumes:

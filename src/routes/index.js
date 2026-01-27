@@ -18,6 +18,11 @@ import aiRoutes, { adminAiRouter } from './ai.routes.js';
 import tagRoutes from './tag.routes.js';
 import adminRoutes from './admin.routes.js';
 import systemRoutes, { progressRouter, adminProgressRouter } from './system.routes.js';
+import configRoutes from './config.routes.js';
+import mistakeRoutes from './mistake.routes.js';
+import favoriteRoutes from './favorite.routes.js';
+import noteRoutes from './note.routes.js';
+import srsRoutes from './srs.routes.js';
 
 /**
  * 注册所有路由到主路由器
@@ -26,6 +31,9 @@ import systemRoutes, { progressRouter, adminProgressRouter } from './system.rout
 export function registerRoutes(app) {
   // 系统路由（无需认证）
   app.use('/api', systemRoutes);
+  
+  // 系统配置路由
+  app.use('/api/config', configRoutes);
   
   // 认证路由
   app.use('/api/auth', authRoutes);
@@ -57,9 +65,24 @@ export function registerRoutes(app) {
   // 标签路由
   app.use('/api/tags', tagRoutes);
   
+  // 错题路由
+  app.use('/api/mistakes', mistakeRoutes);
+  
+  // 收藏路由
+  app.use('/api/favorites', favoriteRoutes);
+  
+  // 笔记路由
+  app.use('/api/notes', noteRoutes);
+  
+  // SRS 路由
+  app.use('/api/srs', srsRoutes);
+  
   // 管理员路由
   app.use('/api/admin', adminRoutes);
   app.use('/api/admin', adminAiRouter);
+  
+  // 管理员配置路由（自定义字段）
+  app.use('/api/admin/config', configRoutes);
   
   console.log('✅ 所有路由已注册');
 }

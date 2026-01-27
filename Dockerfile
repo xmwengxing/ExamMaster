@@ -22,12 +22,14 @@ WORKDIR /app
 # 从构建阶段复制 node_modules
 COPY --from=builder /app/node_modules ./node_modules
 
-# 复制应用代码
+# 复制应用代码 - 模块化架构
 COPY server.js ./
 COPY db.js ./
 COPY constants.ts ./
 COPY types.ts ./
+COPY store.ts ./
 COPY utils ./utils
+COPY src ./src
 COPY package.json ./
 
 # 创建非 root 用户

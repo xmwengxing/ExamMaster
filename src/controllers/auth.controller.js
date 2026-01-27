@@ -98,14 +98,14 @@ export const verifyToken = asyncHandler(async (req, res) => {
  * 登出控制器
  * POST /api/auth/logout
  * 注意：JWT 是无状态的，登出主要由客户端处理（删除 token）
- * 服务端可以记录登出日志
+ * 服务端记录登出时间和本次登录时长
  */
 export const logout = asyncHandler(async (req, res) => {
   const userId = req.user?.id;
   
-  // 可以在这里记录登出日志
+  // 记录登出时间
   if (userId) {
-    // TODO: 记录登出日志到数据库
+    await authService.recordLogout(userId);
     console.log('[Logout] User logged out:', userId);
   }
   

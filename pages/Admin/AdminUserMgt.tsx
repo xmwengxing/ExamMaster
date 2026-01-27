@@ -33,6 +33,14 @@ const AdminUserMgt: React.FC<AdminUserMgtProps> = ({ currentUser, admins, studen
   const pageSize = 20;
 
   const isSuperAdmin = currentUser.phone === 'admin';
+  const hasStudentPermsAccess = isSuperAdmin || currentUser.permissions?.includes('student-perms');
+
+  // 初始化标签页：二级管理员默认显示学员权限管理
+  useEffect(() => {
+    if (!isSuperAdmin && hasStudentPermsAccess) {
+      setTab('student');
+    }
+  }, [isSuperAdmin, hasStudentPermsAccess]);
 
   // Local state for pending permission changes
   const [pendingPerms, setPendingPerms] = useState<Record<string, StudentPermission[]>>({});
@@ -41,10 +49,12 @@ const AdminUserMgt: React.FC<AdminUserMgtProps> = ({ currentUser, admins, studen
   const menuOptions = [
     { id: 'dashboard', label: '数据看板' },
     { id: 'students', label: '学员管理' },
+    { id: 'student-perms', label: '学员权限管理' },
     { id: 'banks', label: '题库管理' },
     { id: 'admin-exams', label: '考试发布' },
     { id: 'practical-center', label: '实操发布' },
     { id: 'supervisor', label: '督学管理' },
+    { id: 'logs', label: '日志管理' },
     { id: 'discussion-manager', label: '讨论管理' },
     { id: 'tags', label: '标签管理' },
     { id: 'ai-analysis', label: 'AI解析' },
@@ -95,13 +105,28 @@ const AdminUserMgt: React.FC<AdminUserMgtProps> = ({ currentUser, admins, studen
     console.log('[AdminUserMgt useEffect] Sync complete. Total students:', safeStudents.length);
   }, [safeStudents, tab]);
 
+  // 权限检查：如果用户既不是超级管理员，也没有学员权限管理权限，则无法访问
+  if (!isSuperAdmin && !hasStudentPermsAccess) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[50vh] text-center p-8 bg-white rounded-3xl border border-rose-100 animate-in fade-in duration-300">
+        <i className="fa-solid fa-ban text-5xl text-rose-500 mb-4"></i>
+        <h3 className="text-xl font-bold text-gray-800">无访问权限</h3>
+        <p className="text-gray-400 mt-2">您没有权限访问权限管理功能。如需开通，请联系超级管理员。</p>
+      </div>
+    );
+  }
+
   if (tab === 'admin' && !isSuperAdmin) {
     return (
       <div className="flex flex-col items-center justify-center h-[50vh] text-center p-8 bg-white rounded-3xl border border-rose-100 animate-in fade-in duration-300">
         <i className="fa-solid fa-lock text-5xl text-rose-500 mb-4"></i>
         <h3 className="text-xl font-bold text-gray-800">仅超级管理员可见</h3>
-        <p className="text-gray-400 mt-2">二级管理员无法访问账号权限管理中心。如需调整，请联系上级。</p>
-        <button onClick={() => setTab('student')} className="mt-6 text-indigo-600 font-bold hover:underline">返回学员权限管理</button>
+        <p className="text-gray-400 mt-2">二级管理员无法访问管理员账号管理。如需调整，请联系上级。</p>
+        {hasStudentPermsAccess && (
+          <button onClick={() => setTab('student')} className="mt-6 text-indigo-600 font-bold hover:underline">
+            切换到学员权限管理
+          </button>
+        )}
       </div>
     );
   }
@@ -110,6 +135,14 @@ const AdminUserMgt: React.FC<AdminUserMgtProps> = ({ currentUser, admins, studen
     e.preventDefault();
     const formData = new FormData(e.currentTarget as HTMLFormElement);
     const perms = menuOptions.map(m => m.id).filter(id => formData.get(id));
+    
+    console.log('[AdminUserMgt] 表单数据:', {
+      phone: formData.get('phone'),
+      realName: formData.get('realName'),
+      permissions: perms,
+      allFormData: Array.from(formData.entries())
+    });
+    
     const password = formData.get('password') as string;
     
     const data: any = {
@@ -121,6 +154,8 @@ const AdminUserMgt: React.FC<AdminUserMgtProps> = ({ currentUser, admins, studen
     if (password) {
       data.password = password;
     }
+
+    console.log('[AdminUserMgt] 提交数据:', data);
 
     if (editingAdmin) {
       onUpdateAdmin(editingAdmin.id, data);
@@ -273,12 +308,24 @@ const AdminUserMgt: React.FC<AdminUserMgtProps> = ({ currentUser, admins, studen
 
   return (
     <div className="space-y-6">
+      {/* 标签页切换 - 只有超级管理员才能看到"管理员账号"标签 */}
       <div className="flex bg-white p-1 rounded-2xl shadow-sm border self-start w-fit">
-        {['admin', 'student'].map((v) => (
-          <button key={v} onClick={() => setTab(v as any)} className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${tab === v ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`}>
-            {v === 'admin' ? '二级管理员管理' : '学员权限管理'}
+        {isSuperAdmin && (
+          <button 
+            onClick={() => setTab('admin')} 
+            className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${tab === 'admin' ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
+          >
+            管理员账号管理
           </button>
-        ))}
+        )}
+        {hasStudentPermsAccess && (
+          <button 
+            onClick={() => setTab('student')} 
+            className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${tab === 'student' ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
+          >
+            学员权限管理
+          </button>
+        )}
       </div>
 
       {tab === 'admin' ? (
@@ -538,6 +585,13 @@ const AdminUserMgt: React.FC<AdminUserMgtProps> = ({ currentUser, admins, studen
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <form onSubmit={handleAdminSave} className="bg-white rounded-3xl w-full max-w-md p-8 animate-in zoom-in-95 duration-200 shadow-2xl overflow-y-auto max-h-[90vh]">
             <h3 className="text-2xl font-black text-gray-900 mb-6">{editingAdmin ? '编辑管理员权限' : '新增二级管理员'}</h3>
+            {editingAdmin && console.log('[AdminUserMgt Modal] 编辑管理员:', {
+              id: editingAdmin.id,
+              realName: editingAdmin.realName,
+              permissions: editingAdmin.permissions,
+              permissionsType: typeof editingAdmin.permissions,
+              isArray: Array.isArray(editingAdmin.permissions)
+            })}
             <div className="space-y-4">
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">管理员姓名</label>

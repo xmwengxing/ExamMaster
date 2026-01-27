@@ -5,6 +5,7 @@ import TagSelector from '../../components/TagSelector';
 import RichTextEditor from '../../components/RichTextEditor';
 import RichTextDisplay from '../../components/RichTextDisplay';
 import { useAppStore } from '../../store';
+import * as XLSX from 'xlsx';
 
 interface BankManagerProps {
   banks: QuestionBank[];
@@ -202,22 +203,335 @@ const BankManager: React.FC<BankManagerProps> = ({
     }
   };
 
-  const handleFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !editingBankId) return;
+  // 统一的数据处理逻辑（CSV和Excel共用）
+  const processImportData = async (headerRow: string[], dataRows: string[][]) => {
+    const newQs: Question[] = [];
+    const errors: string[] = [];
+    
+    for (let i = 0; i < dataRows.length; i++) {
+      const parts = dataRows[i];
+      
+      try {
+        // 新格式：题型,题干,选项,答案,解析,单元/章节,填空配置,简答参考答案
+        if (parts.length < 4) {
+          errors.push(`第${i+2}行：字段不足（至少需要4个字段）`);
+          continue;
+        }
+        const [typeStr, content, optionsStr, answer, explanation = '', chapter = '', fillBlanksStr = '', shortAnswerRef = ''] = parts.map(p => String(p || '').trim());
+        const type = typeStr.toUpperCase() as QuestionType;
+        
+        // 验证题型
+        if (![QuestionType.SINGLE, QuestionType.MULTIPLE, QuestionType.JUDGE, QuestionType.FILL_IN_BLANK, QuestionType.SHORT_ANSWER].includes(type)) {
+          errors.push(`第${i+2}行：题型无效（${typeStr}），应为SINGLE/MULTIPLE/JUDGE/FILL_IN_BLANK/SHORT_ANSWER`);
+          continue;
+        }
+        
+        // 验证题干
+        if (!content || content.trim() === '') {
+          errors.push(`第${i+2}行：题干不能为空`);
+          continue;
+        }
+        // 处理填空题
+        if (type === QuestionType.FILL_IN_BLANK) {
+          if (!fillBlanksStr || fillBlanksStr.trim() === '') {
+            errors.push(`第${i+2}行：填空题需要填空配置（格式：blank1:答案1|答案2;blank2:答案3）`);
+            continue;
+          }
+          try {
+            const blanks: any[] = [];
+            const blankConfigs = fillBlanksStr.split(';').filter(b => b.trim());
+            
+            blankConfigs.forEach((config, idx) => {
+              const [blankId, answersStr] = config.split(':');
+              if (!blankId || !answersStr) {
+                throw new Error('填空配置格式错误');
+              }
+              
+              const acceptedAnswers = answersStr.split('|').map(a => a.trim()).filter(a => a);
+              if (acceptedAnswers.length === 0) {
+                throw new Error(`${blankId} 至少需要一个答案`);
+              }
+              
+              blanks.push({
+                id: blankId.trim(),
+                position: idx,
+                acceptedAnswers: acceptedAnswers,
+                caseSensitive: false
+              });
+            });
+            
+            newQs.push({
+              id: `q-imp-${Date.now()}-${Math.floor(Math.random()*1000000)}-${i}`,
+              bankId: editingBankId!,
+              type: type,
+              content: content.trim(),
+              options: [],
+              answer: '',
+              explanation: explanation.trim(),
+              chapter: chapter.trim() || undefined,
+              blanks: blanks
+            });
+            continue;
+          } catch (err: any) {
+            errors.push(`第${i+2}行：填空题配置解析失败 - ${err.message}`);
+            continue;
+          }
+        }
+        // 处理简答题
+        if (type === QuestionType.SHORT_ANSWER) {
+          if (!shortAnswerRef || shortAnswerRef.trim() === '') {
+            errors.push(`第${i+2}行：简答题需要参考答案`);
+            continue;
+          }
+          
+          newQs.push({
+            id: `q-imp-${Date.now()}-${Math.floor(Math.random()*1000000)}-${i}`,
+            bankId: editingBankId!,
+            type: type,
+            content: content.trim(),
+            options: [],
+            answer: '',
+            explanation: explanation.trim(),
+            chapter: chapter.trim() || undefined,
+            referenceAnswer: shortAnswerRef.trim(),
+            aiGradingEnabled: false
+          });
+          continue;
+        }
+        // 处理选择题和判断题
+        let options: string[] = [];
+        if (type === QuestionType.JUDGE) {
+          options = ['正确', '错误'];
+        } else {
+          options = optionsStr ? optionsStr.split('|').map(o => o.trim()).filter(o => o) : [];
+          if (options.length < 2) {
+            errors.push(`第${i+2}行：选择题至少需要2个选项`);
+            continue;
+          }
+          if (options.length > 8) {
+            errors.push(`第${i+2}行：选项数量不能超过8个`);
+            continue;
+          }
+        }
+        
+        // 验证答案
+        if (!answer || answer.trim() === '') {
+          errors.push(`第${i+2}行：答案不能为空`);
+          continue;
+        }
+        
+        const answerUpper = answer.toUpperCase().trim();
+        let finalAnswer: string | string[];
+        
+        if (type === QuestionType.MULTIPLE) {
+          finalAnswer = answerUpper.split('').filter(a => /^[A-Z]$/.test(a));
+          if (finalAnswer.length === 0) {
+            errors.push(`第${i+2}行：多选题答案格式错误（如：ABC）`);
+            continue;
+          }
+          // 验证答案选项是否在范围内
+          const maxOption = String.fromCharCode(65 + options.length - 1);
+          if (finalAnswer.some(a => a > maxOption)) {
+            errors.push(`第${i+2}行：答案超出选项范围（最大为${maxOption}）`);
+            continue;
+          }
+        } else {
+          finalAnswer = answerUpper;
+          if (type === QuestionType.JUDGE) {
+            if (!['A', 'B'].includes(finalAnswer)) {
+              errors.push(`第${i+2}行：判断题答案应为A（正确）或B（错误）`);
+              continue;
+            }
+          } else {
+            // 单选题
+            if (!/^[A-Z]$/.test(finalAnswer)) {
+              errors.push(`第${i+2}行：单选题答案格式错误（如：A）`);
+              continue;
+            }
+            const maxOption = String.fromCharCode(65 + options.length - 1);
+            if (finalAnswer > maxOption) {
+              errors.push(`第${i+2}行：答案超出选项范围（最大为${maxOption}）`);
+              continue;
+            }
+          }
+        }
 
+        newQs.push({
+          id: `q-imp-${Date.now()}-${Math.floor(Math.random()*1000000)}-${i}`,
+          bankId: editingBankId!,
+          type: type,
+          content: content.trim(),
+          options: options,
+          answer: finalAnswer,
+          explanation: explanation.trim(),
+          chapter: chapter.trim() || undefined
+        });
+      } catch (err: any) {
+        errors.push(`第${i+2}行：解析失败 - ${err.message}`);
+      }
+    }
+    
+    // 显示导入结果
+    if (errors.length > 0) {
+      const errorMsg = `导入完成，但有 ${errors.length} 条错误：\n\n${errors.slice(0, 10).join('\n')}${errors.length > 10 ? '\n...(更多错误已省略)' : ''}`;
+      if (newQs.length === 0) {
+        alert('导入失败！\n\n' + errorMsg);
+        return;
+      } else {
+        if (!confirm(`发现 ${errors.length} 条错误，成功解析 ${newQs.length} 题。\n\n是否继续导入有效题目？\n\n${errors.slice(0, 5).join('\n')}${errors.length > 5 ? '\n...' : ''}`)) {
+          return;
+        }
+      }
+    }
+    
+    if (newQs.length > 0) {
+      try {
+        console.log('[BankManager] Importing questions:', newQs.length);
+        const res = await onImportQuestions(editingBankId!, newQs as Question[]);
+        
+        const inserted = res?.inserted ?? 0;
+        const skipped = res?.skipped ?? 0;
+        const total = res?.total ?? newQs.length;
+        const serverErrors = res?.errors || [];
+        
+        // 合并前端和后端的错误
+        const allErrors = [...errors, ...serverErrors];
+        
+        // 构建结果消息
+        let message = `导入完成！\n\n`;
+        message += `总计：${total} 题\n`;
+        message += `✓ 成功：${inserted} 题\n`;
+        if (skipped > 0) {
+          message += `✗ 失败：${skipped} 题\n`;
+        }
+        
+        if (allErrors.length > 0) {
+          message += `\n错误详情（前${Math.min(10, allErrors.length)}条）：\n`;
+          message += allErrors.slice(0, 10).join('\n');
+          if (allErrors.length > 10) {
+            message += `\n...(还有${allErrors.length - 10}条错误)`;
+          }
+        }
+        
+        alert(message);
+        setIsImportModalOpen(false);
+        
+      } catch (err: any) {
+        console.error('[BankManager] Import error:', err);
+        alert('导入失败：' + (err?.message || err));
+      }
+    }
+  };
+
+  // 处理Excel导入
+  const handleExcelImport = async (file: File) => {
+    if (!editingBankId) return;
+    
     const reader = new FileReader();
     reader.onload = async (ev) => {
-      const text = ev.target?.result as string;
-      const lines = text.split('\n').filter(l => l.trim());
-      const newQs: Question[] = [];
-      const errors: string[] = [];
-      
-      for (let i = 1; i < lines.length; i++) {
-        const line = lines[i].trim();
-        if (!line) continue;
+      try {
+        const data = ev.target?.result;
+        const workbook = XLSX.read(data, { type: 'binary' });
         
-        try {
+        // 读取第一个工作表
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        
+        // 转换为JSON数据（保留原始格式）
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' }) as any[][];
+        
+        if (jsonData.length < 2) {
+          alert('Excel文件格式错误：至少需要包含表头和一行数据');
+          return;
+        }
+        
+        // 过滤掉注释行（以#开头）和空行
+        const validLines = jsonData.filter(row => {
+          if (!row || row.length === 0) return false;
+          const firstCell = String(row[0] || '').trim();
+          return firstCell && !firstCell.startsWith('#');
+        });
+        
+        if (validLines.length < 2) {
+          alert('Excel文件中没有有效的题目数据（注释行和空行已自动过滤）');
+          return;
+        }
+        
+        // 第一行是表头
+        const headerRow = validLines[0].map((h: any) => String(h || '').trim());
+        
+        // 从第二行开始是数据
+        const dataRows = validLines.slice(1);
+        
+        // 使用CSV的解析逻辑处理数据
+        await processImportData(headerRow, dataRows);
+        
+      } catch (error: any) {
+        console.error('Excel解析错误:', error);
+        alert('Excel文件解析失败：' + (error?.message || '未知错误'));
+      }
+    };
+    
+    reader.readAsBinaryString(file);
+  };
+  
+  // 处理CSV导入
+  const handleCSVImport = async (file: File) => {
+    if (!editingBankId) return;
+    
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      try {
+        const text = ev.target?.result as string;
+        const lines = text.split('\n').filter(l => l.trim());
+        
+        // 过滤掉注释行（以#开头）
+        const validLines = lines.filter(line => {
+          const trimmed = line.trim();
+          return trimmed && !trimmed.startsWith('#');
+        });
+        
+        if (validLines.length < 2) {
+          alert('CSV文件中没有有效的题目数据（注释行已自动过滤）');
+          return;
+        }
+        
+        // 解析表头
+        const headerLine = validLines[0];
+        const headerParts: string[] = [];
+        let current = '';
+        let inQuotes = false;
+        
+        for (let j = 0; j < headerLine.length; j++) {
+          const char = headerLine[j];
+          const nextChar = headerLine[j + 1];
+          
+          if (char === '"') {
+            if (inQuotes && nextChar === '"') {
+              current += '"';
+              j++;
+              continue;
+            } else {
+              inQuotes = !inQuotes;
+              continue;
+            }
+          }
+          
+          if (char === ',' && !inQuotes) {
+            headerParts.push(current.trim());
+            current = '';
+            continue;
+          }
+          
+          current += char;
+        }
+        headerParts.push(current.trim());
+        
+        // 解析数据行
+        const dataRows: string[][] = [];
+        for (let i = 1; i < validLines.length; i++) {
+          const line = validLines[i].trim();
+          if (!line) continue;
           // 改进的CSV解析：正确处理引号包裹和转义
           const parts: string[] = [];
           let current = '';
@@ -256,227 +570,42 @@ const BankManager: React.FC<BankManagerProps> = ({
           
           // 添加最后一个字段
           parts.push(current.trim());
-          
-          // 新格式：题型,题干,选项,答案,解析,单元/章节,填空配置,简答参考答案
-          if (parts.length < 4) {
-            errors.push(`第${i+1}行：字段不足（至少需要4个字段）`);
-            continue;
-          }
-          
-          const [typeStr, content, optionsStr, answer, explanation = '', chapter = '', fillBlanksStr = '', shortAnswerRef = ''] = parts;
-          const type = typeStr.toUpperCase() as QuestionType;
-          
-          // 验证题型
-          if (![QuestionType.SINGLE, QuestionType.MULTIPLE, QuestionType.JUDGE, QuestionType.FILL_IN_BLANK, QuestionType.SHORT_ANSWER].includes(type)) {
-            errors.push(`第${i+1}行：题型无效（${typeStr}），应为SINGLE/MULTIPLE/JUDGE/FILL_IN_BLANK/SHORT_ANSWER`);
-            continue;
-          }
-          
-          // 验证题干
-          if (!content || content.trim() === '') {
-            errors.push(`第${i+1}行：题干不能为空`);
-            continue;
-          }
-          
-          // 处理填空题
-          if (type === QuestionType.FILL_IN_BLANK) {
-            if (!fillBlanksStr || fillBlanksStr.trim() === '') {
-              errors.push(`第${i+1}行：填空题需要填空配置（格式：blank1:答案1|答案2;blank2:答案3）`);
-              continue;
-            }
-            
-            try {
-              const blanks: any[] = [];
-              const blankConfigs = fillBlanksStr.split(';').filter(b => b.trim());
-              
-              blankConfigs.forEach((config, idx) => {
-                const [blankId, answersStr] = config.split(':');
-                if (!blankId || !answersStr) {
-                  throw new Error('填空配置格式错误');
-                }
-                
-                const acceptedAnswers = answersStr.split('|').map(a => a.trim()).filter(a => a);
-                if (acceptedAnswers.length === 0) {
-                  throw new Error(`${blankId} 至少需要一个答案`);
-                }
-                
-                blanks.push({
-                  id: blankId.trim(),
-                  position: idx,
-                  acceptedAnswers: acceptedAnswers,
-                  caseSensitive: false
-                });
-              });
-              
-              newQs.push({
-                id: `q-imp-${Date.now()}-${Math.floor(Math.random()*1000000)}-${i}`,
-                bankId: editingBankId,
-                type: type,
-                content: content.trim(),
-                options: [],
-                answer: '',
-                explanation: explanation.trim(),
-                chapter: chapter.trim() || undefined,
-                blanks: blanks
-              });
-              continue;
-            } catch (err: any) {
-              errors.push(`第${i+1}行：填空题配置解析失败 - ${err.message}`);
-              continue;
-            }
-          }
-          
-          // 处理简答题
-          if (type === QuestionType.SHORT_ANSWER) {
-            if (!shortAnswerRef || shortAnswerRef.trim() === '') {
-              errors.push(`第${i+1}行：简答题需要参考答案`);
-              continue;
-            }
-            
-            newQs.push({
-              id: `q-imp-${Date.now()}-${Math.floor(Math.random()*1000000)}-${i}`,
-              bankId: editingBankId,
-              type: type,
-              content: content.trim(),
-              options: [],
-              answer: '',
-              explanation: explanation.trim(),
-              chapter: chapter.trim() || undefined,
-              referenceAnswer: shortAnswerRef.trim(),
-              aiGradingEnabled: false
-            });
-            continue;
-          }
-          
-          // 处理选择题和判断题
-          let options: string[] = [];
-          if (type === QuestionType.JUDGE) {
-            options = ['正确', '错误'];
-          } else {
-            options = optionsStr ? optionsStr.split('|').map(o => o.trim()).filter(o => o) : [];
-            if (options.length < 2) {
-              errors.push(`第${i+1}行：选择题至少需要2个选项`);
-              continue;
-            }
-            if (options.length > 8) {
-              errors.push(`第${i+1}行：选项数量不能超过8个`);
-              continue;
-            }
-          }
-          
-          // 验证答案
-          if (!answer || answer.trim() === '') {
-            errors.push(`第${i+1}行：答案不能为空`);
-            continue;
-          }
-          
-          const answerUpper = answer.toUpperCase().trim();
-          let finalAnswer: string | string[];
-          
-          if (type === QuestionType.MULTIPLE) {
-            finalAnswer = answerUpper.split('').filter(a => /^[A-Z]$/.test(a));
-            if (finalAnswer.length === 0) {
-              errors.push(`第${i+1}行：多选题答案格式错误（如：ABC）`);
-              continue;
-            }
-            // 验证答案选项是否在范围内
-            const maxOption = String.fromCharCode(65 + options.length - 1);
-            if (finalAnswer.some(a => a > maxOption)) {
-              errors.push(`第${i+1}行：答案超出选项范围（最大为${maxOption}）`);
-              continue;
-            }
-          } else {
-            finalAnswer = answerUpper;
-            if (type === QuestionType.JUDGE) {
-              if (!['A', 'B'].includes(finalAnswer)) {
-                errors.push(`第${i+1}行：判断题答案应为A（正确）或B（错误）`);
-                continue;
-              }
-            } else {
-              // 单选题
-              if (!/^[A-Z]$/.test(finalAnswer)) {
-                errors.push(`第${i+1}行：单选题答案格式错误（如：A）`);
-                continue;
-              }
-              const maxOption = String.fromCharCode(65 + options.length - 1);
-              if (finalAnswer > maxOption) {
-                errors.push(`第${i+1}行：答案超出选项范围（最大为${maxOption}）`);
-                continue;
-              }
-            }
-          }
-
-          newQs.push({
-            id: `q-imp-${Date.now()}-${Math.floor(Math.random()*1000000)}-${i}`,
-            bankId: editingBankId,
-            type: type,
-            content: content.trim(),
-            options: options,
-            answer: finalAnswer,
-            explanation: explanation.trim(),
-            chapter: chapter.trim() || undefined
-          });
-        } catch (err: any) {
-          errors.push(`第${i+1}行：解析失败 - ${err.message}`);
+          dataRows.push(parts);
         }
-      }
-      
-      // 显示导入结果
-      if (errors.length > 0) {
-        const errorMsg = `导入完成，但有 ${errors.length} 条错误：\n\n${errors.slice(0, 10).join('\n')}${errors.length > 10 ? '\n...(更多错误已省略)' : ''}`;
-        if (newQs.length === 0) {
-          alert('导入失败！\n\n' + errorMsg);
-          return;
-        } else {
-          if (!confirm(`发现 ${errors.length} 条错误，成功解析 ${newQs.length} 题。\n\n是否继续导入有效题目？\n\n${errors.slice(0, 5).join('\n')}${errors.length > 5 ? '\n...' : ''}`)) {
-            return;
-          }
-        }
-      }
-      
-      if (newQs.length > 0) {
-        try {
-          console.log('[BankManager] Importing questions:', newQs.length);
-          const res = await onImportQuestions(editingBankId, newQs as Question[]);
-          
-          const inserted = res?.inserted ?? 0;
-          const skipped = res?.skipped ?? 0;
-          const total = res?.total ?? newQs.length;
-          const serverErrors = res?.errors || [];
-          
-          // 合并前端和后端的错误
-          const allErrors = [...errors, ...serverErrors];
-          
-          // 构建结果消息
-          let message = `导入完成！\n\n`;
-          message += `总计：${total} 题\n`;
-          message += `✓ 成功：${inserted} 题\n`;
-          if (skipped > 0) {
-            message += `✗ 失败：${skipped} 题\n`;
-          }
-          
-          if (allErrors.length > 0) {
-            message += `\n错误详情（前${Math.min(10, allErrors.length)}条）：\n`;
-            message += allErrors.slice(0, 10).join('\n');
-            if (allErrors.length > 10) {
-              message += `\n...(还有${allErrors.length - 10}条错误)`;
-            }
-          }
-          
-          alert(message);
-          setIsImportModalOpen(false);
-          
-        } catch (err: any) {
-          console.error('[BankManager] Import error:', err);
-          alert('导入失败：' + (err?.message || err));
-        }
+        
+        // 使用统一的数据处理逻辑
+        await processImportData(headerParts, dataRows);
+        
+      } catch (error: any) {
+        console.error('CSV解析错误:', error);
+        alert('CSV文件解析失败：' + (error?.message || '未知错误'));
       }
     };
+    
     reader.readAsText(file, 'UTF-8');
+  };
+  
+  // 统一的文件导入入口
+  const handleFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !editingBankId) return;
+    
+    const fileName = file.name.toLowerCase();
+    
+    // 根据文件扩展名选择处理方式
+    if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
+      handleExcelImport(file);
+    } else if (fileName.endsWith('.csv')) {
+      handleCSVImport(file);
+    } else {
+      alert('不支持的文件格式，请上传 .xlsx、.xls 或 .csv 文件');
+    }
+    
     e.target.value = '';
   };
-
-  const downloadTemplate = () => {
+  
+  // 下载CSV模板
+  const downloadCSVTemplate = () => {
     const headers = '题型(SINGLE/MULTIPLE/JUDGE/FILL_IN_BLANK/SHORT_ANSWER),题干,选项(用|分隔),答案,解析,单元/章节,填空配置(格式:blank1:答案1|答案2;blank2:答案3),简答参考答案\n';
     const example1 = 'SINGLE,下列哪个协议用于加密网页传输？,HTTP|FTP|HTTPS|SMTP,C,HTTPS是HTTP的安全版本,第一章,,\n';
     const example2 = 'JUDGE,防火墙主要用于监控和过滤进出网络的数据包。,,A,防火墙是网络安全的第一道防线,网络基础,,\n';
@@ -501,6 +630,75 @@ const BankManager: React.FC<BankManagerProps> = ({
     link.download = "题目导入模板_完整版.csv";
     link.click();
   };
+  
+  // 下载Excel模板
+  const downloadExcelTemplate = () => {
+    const headers = ['题型', '题干', '选项', '答案', '解析', '单元/章节', '填空配置', '简答参考答案'];
+    
+    const examples = [
+      ['SINGLE', '下列哪个协议用于加密网页传输？', 'HTTP|FTP|HTTPS|SMTP', 'C', 'HTTPS是HTTP的安全版本', '第一章', '', ''],
+      ['JUDGE', '防火墙主要用于监控和过滤进出网络的数据包。', '', 'A', '防火墙是网络安全的第一道防线', '网络基础', '', ''],
+      ['MULTIPLE', '发现账号被盗应采取哪些措施？(多选)', '立即修改密码|通知银行|告知好友|举报异常', 'ABCD', '这些都是减少损失的重要步骤', '第二章', '', ''],
+      ['FILL_IN_BLANK', 'JavaScript是一种{{blank1}}语言，常用于{{blank2}}开发。', '', '', '', '模块1', 'blank1:脚本|编程|动态;blank2:前端|Web|网页', ''],
+      ['SHORT_ANSWER', '请简述HTTPS的工作原理。', '', '', '', '网络安全', '', 'HTTPS通过SSL/TLS协议对HTTP通信进行加密。客户端与服务器建立连接时会进行握手，交换密钥，之后的数据传输都经过加密处理，确保数据的机密性和完整性。']
+    ];
+    
+    // 创建工作簿
+    const wb = XLSX.utils.book_new();
+    const wsData = [headers, ...examples];
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    
+    // 设置列宽
+    ws['!cols'] = [
+      { wch: 15 },  // 题型
+      { wch: 50 },  // 题干
+      { wch: 40 },  // 选项
+      { wch: 10 },  // 答案
+      { wch: 40 },  // 解析
+      { wch: 15 },  // 单元/章节
+      { wch: 40 },  // 填空配置
+      { wch: 50 }   // 简答参考答案
+    ];
+    
+    XLSX.utils.book_append_sheet(wb, ws, '题目列表');
+    
+    // 添加说明工作表
+    const instructions = [
+      ['题目导入说明'],
+      [''],
+      ['1. 题型说明'],
+      ['SINGLE', '单选题', '需要填写选项和答案（A/B/C等）'],
+      ['MULTIPLE', '多选题', '需要填写选项和答案（ABC等，无需分隔）'],
+      ['JUDGE', '判断题', '选项可留空，答案填A（正确）或B（错误）'],
+      ['FILL_IN_BLANK', '填空题', '需要在题干中使用{{blank1}}、{{blank2}}标记，并填写填空配置'],
+      ['SHORT_ANSWER', '简答题', '需要填写参考答案，用于AI评分参考'],
+      [''],
+      ['2. 字段说明'],
+      ['题干', '题目内容，支持富文本（导入后可在编辑器中添加图片）'],
+      ['选项', '用竖线|分隔，如：选项A|选项B|选项C（支持2-8个选项）'],
+      ['答案', '单选填A/B/C等，多选填ABC等'],
+      ['解析', '选填，题目的详细解析'],
+      ['单元/章节', '选填，用于分类和筛选题目'],
+      ['填空配置', '仅填空题需要，格式：blank1:答案1|答案2;blank2:答案3'],
+      ['简答参考答案', '仅简答题需要，用于AI评分参考'],
+      [''],
+      ['3. 注意事项'],
+      ['• Excel格式会自动处理特殊字符，无需手动添加引号'],
+      ['• 以#开头的行会被视为注释，导入时自动跳过'],
+      ['• 空行会被自动过滤'],
+      ['• 系统会自动验证格式并提示错误行'],
+      ['• 只有格式正确的题目会被导入']
+    ];
+    
+    const wsInstructions = XLSX.utils.aoa_to_sheet(instructions);
+    wsInstructions['!cols'] = [{ wch: 20 }, { wch: 20 }, { wch: 60 }];
+    XLSX.utils.book_append_sheet(wb, wsInstructions, '导入说明');
+    
+    // 导出Excel文件
+    XLSX.writeFile(wb, '题目导入模板.xlsx');
+  };
+
+  const downloadTemplate = downloadCSVTemplate;
 
   return (
     <div className="space-y-6">
@@ -581,7 +779,11 @@ const BankManager: React.FC<BankManagerProps> = ({
         <div className="space-y-6 animate-in fade-in duration-500">
           <div className="flex flex-col md:flex-row justify-between items-center bg-white p-5 rounded-3xl border shadow-sm gap-4">
             <div className="flex items-center gap-4 w-full md:w-auto">
-              <button onClick={() => { setView('list'); setDuplicateIds([]); }} className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors active:scale-90"><i className="fa-solid fa-arrow-left"></i></button>
+              <button onClick={() => { setView('list'); setDuplicateIds([]); }} className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors active:scale-90" title="返回题库列表">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+              </button>
               <h2 className="text-lg font-black truncate max-w-[250px]">{editingBank?.name}</h2>
             </div>
             
@@ -1150,7 +1352,7 @@ const BankManager: React.FC<BankManagerProps> = ({
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-[2.5rem] w-full max-w-md p-8 shadow-2xl animate-in zoom-in-95 duration-200">
             <h3 className="text-2xl font-black text-gray-900 mb-2 tracking-tight">批量导入题目</h3>
-            <p className="text-xs text-gray-400 mb-8 font-medium">请严格按照 CSV 模板格式进行题目编撰后再进行上传操作。</p>
+            <p className="text-xs text-gray-400 mb-8 font-medium">支持 Excel 和 CSV 两种格式，请按照模板格式进行题目编撰后再上传。</p>
             
             <div className="space-y-6">
               <div 
@@ -1159,8 +1361,8 @@ const BankManager: React.FC<BankManagerProps> = ({
               >
                 <i className="fa-solid fa-cloud-arrow-up text-4xl text-indigo-400 mb-4 group-hover:scale-110 transition-transform"></i>
                 <div className="text-sm font-bold text-indigo-600">点击此处上传题目文件</div>
-                <div className="text-[10px] text-gray-400 mt-2">支持标准 CSV 格式表格</div>
-                <input type="file" ref={fileInputRef} className="hidden" accept=".csv" onChange={handleFileImport} />
+                <div className="text-[10px] text-gray-400 mt-2">支持 Excel (.xlsx, .xls) 和 CSV 格式</div>
+                <input type="file" ref={fileInputRef} className="hidden" accept=".csv,.xlsx,.xls" onChange={handleFileImport} />
               </div>
 
               <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100">
@@ -1173,17 +1375,25 @@ const BankManager: React.FC<BankManagerProps> = ({
                   <li>填空题: 在题干中使用 <strong>{'{{'} blank1 {'}}'}</strong> 标记，填空配置格式：<strong>blank1:答案1|答案2;blank2:答案3</strong></li>
                   <li>简答题: 需填写参考答案，用于AI评分参考</li>
                   <li>单元/章节: 选填，用于分类和筛选题目</li>
-                  <li>特殊字符: 题干或解析中如有<strong>逗号、引号</strong>，请用<strong>英文双引号</strong>包裹该字段</li>
+                  <li><strong>Excel格式</strong>会自动处理特殊字符；<strong>CSV格式</strong>中如有逗号、引号，请用英文双引号包裹该字段</li>
                   <li>系统会自动验证格式并提示错误行，只导入有效题目</li>
                 </ul>
               </div>
 
-              <button 
-                onClick={downloadTemplate}
-                className="w-full py-4 border-2 border-gray-100 text-gray-500 rounded-2xl text-xs font-black hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
-              >
-                <i className="fa-solid fa-download"></i> 获取题目导入 CSV 模板
-              </button>
+              <div className="grid grid-cols-2 gap-3">
+                <button 
+                  onClick={downloadExcelTemplate}
+                  className="py-4 border-2 border-indigo-100 text-indigo-600 rounded-2xl text-xs font-black hover:bg-indigo-50 transition-colors flex items-center justify-center gap-2"
+                >
+                  <i className="fa-solid fa-file-excel"></i> Excel 模板
+                </button>
+                <button 
+                  onClick={downloadCSVTemplate}
+                  className="py-4 border-2 border-gray-100 text-gray-500 rounded-2xl text-xs font-black hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
+                >
+                  <i className="fa-solid fa-file-csv"></i> CSV 模板
+                </button>
+              </div>
 
               <div className="flex gap-4 pt-4">
                 <button onClick={() => setIsImportModalOpen(false)} className="flex-1 py-4 bg-gray-100 text-gray-500 rounded-2xl font-black">取消</button>

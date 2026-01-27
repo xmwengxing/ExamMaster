@@ -96,7 +96,8 @@ export async function login(phone, password, role, ip = 'unknown') {
     allowedBankIds: safeUser.allowed_bank_ids || [],
     realName: safeUser.real_name,
     lastActivity: safeUser.last_activity,
-    deepseekApiKey: safeUser.deepseek_api_key
+    deepseekApiKey: safeUser.deepseek_api_key,
+    permissions: safeUser.permissions || []  // 添加管理员权限字段
   };
   
   return { 
@@ -203,6 +204,44 @@ export function refreshToken(oldToken) {
   return generateToken(payload);
 }
 
+/**
+ * 记录用户登出
+ * @param {string} userId - 用户 ID
+ * @returns {Promise<void>}
+ */
+export async function recordLogout(userId) {
+  try {
+    const nowISO = new Date().toISOString();
+    
+    // 查找该用户最近的一条未记录登出时间的登录日志
+    const lastLoginLog = await db.getOne(
+      'SELECT * FROM login_logs WHERE user_id = $1 AND logout_time IS NULL ORDER BY time DESC LIMIT 1',
+      [userId]
+    );
+    
+    if (lastLoginLog) {
+      // 计算本次登录时长（秒）
+      const loginTime = new Date(lastLoginLog.time);
+      const logoutTime = new Date(nowISO);
+      const sessionDuration = Math.floor((logoutTime - loginTime) / 1000);
+      
+      // 更新登出时间和本次登录时长
+      await db.execute(
+        'UPDATE login_logs SET logout_time = $1, session_duration = $2 WHERE id = $3',
+        [nowISO, sessionDuration, lastLoginLog.id]
+      );
+      
+      logger.info('记录用户登出', { 
+        userId, 
+        sessionDuration: `${Math.floor(sessionDuration / 60)}分${sessionDuration % 60}秒` 
+      });
+    }
+  } catch (error) {
+    logger.error('记录登出失败', { userId, error: error.message });
+    // 不抛出错误，避免影响登出流程
+  }
+}
+
 // 默认导出
 export default {
   login,
@@ -210,5 +249,6 @@ export default {
   updateLastActivity,
   verifyToken,
   generateToken,
-  refreshToken
+  refreshToken,
+  recordLogout
 };
