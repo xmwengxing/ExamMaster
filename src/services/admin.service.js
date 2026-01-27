@@ -13,14 +13,326 @@ import { v4 as uuidv4 } from 'uuid';
  */
 export async function getStudents() {
   const rows = await db.getMany(
-    "SELECT id, phone, nickname, real_name, student_perms, allowed_bank_ids FROM users WHERE role = 'STUDENT' ORDER BY id"
+    `SELECT id, phone, nickname, real_name, gender, id_card, school, 
+            education_type, education_level, major, company, class_name,
+            student_perms, allowed_bank_ids, custom_fields, avatar,
+            last_login, last_activity, total_online_time, login_history
+     FROM users WHERE role = 'STUDENT' ORDER BY id`
   );
   
+  // 获取所有学员的登录日志（包含退出时间和时长）
+  // 使用 try-catch 处理可能不存在的字段
+  let loginLogsByUser = {};
+  try {
+    const loginLogs = await db.getMany(
+      `SELECT user_id, time, logout_time, session_duration 
+       FROM login_logs 
+       WHERE user_id IN (SELECT id FROM users WHERE role = 'STUDENT')
+       ORDER BY time DESC`
+    );
+    
+    // 按用户ID分组登录日志
+    loginLogs.forEach(log => {
+      if (!loginLogsByUser[log.user_id]) {
+        loginLogsByUser[log.user_id] = [];
+      }
+      loginLogsByUser[log.user_id].push({
+        loginTime: new Date(log.time).toLocaleString('zh-CN', { 
+          year: 'numeric', 
+          month: '2-digit', 
+          day: '2-digit', 
+          hour: '2-digit', 
+          minute: '2-digit', 
+          second: '2-digit',
+          hour12: false 
+        }),
+        logoutTime: log.logout_time ? new Date(log.logout_time).toLocaleString('zh-CN', { 
+          year: 'numeric', 
+          month: '2-digit', 
+          day: '2-digit', 
+          hour: '2-digit', 
+          minute: '2-digit', 
+          second: '2-digit',
+          hour12: false 
+        }) : undefined,
+        duration: log.session_duration || undefined
+      });
+    });
+  } catch (error) {
+    console.error('[Admin Service] 获取登录日志失败，可能是字段不存在:', error.message);
+    // 如果查询失败，使用旧的 login_history 字段
+    loginLogsByUser = {};
+  }
+  
   return (rows || []).map(student => ({
-    ...student,
-    studentPerms: student.student_perms || [],
-    allowedBankIds: student.allowed_bank_ids || []
+    id: student.id,
+    phone: student.phone,
+    nickname: student.nickname,
+    realName: student.real_name,
+    gender: student.gender,
+    idCard: student.id_card,
+    school: student.school,
+    educationType: student.education_type,
+    educationLevel: student.education_level,
+    major: student.major,
+    company: student.company,
+    className: student.class_name,
+    studentPerms: Array.isArray(student.student_perms) ? student.student_perms : [],
+    allowedBankIds: Array.isArray(student.allowed_bank_ids) ? student.allowed_bank_ids : [],
+    customFields: student.custom_fields || {},
+    avatar: student.avatar,
+    lastLogin: student.last_login,
+    lastActivity: student.last_activity,
+    totalOnlineTime: student.total_online_time || 0,
+    // 使用新格式的登录历史（包含退出时间和时长），如果查询失败则使用旧格式
+    loginHistory: loginLogsByUser[student.id]?.slice(0, 100) || (Array.isArray(student.login_history) ? student.login_history : []),
+    role: 'STUDENT'
   }));
+}
+
+/**
+ * 创建学员账号
+ * @param {Object} dbConn - 数据库连接
+ * @param {Object} studentData - 学员数据
+ * @returns {Promise<Object>} { success: boolean, id: string }
+ */
+export async function createStudent(dbConn, studentData) {
+  const { 
+    phone, password, nickname, realName, 
+    gender, idCard, school, educationType, educationLevel, major, company, className,
+    studentPerms, allowedBankIds, customFields, avatar
+  } = studentData;
+  
+  // 检查手机号是否已存在
+  const existing = await dbConn.query(
+    'SELECT id FROM users WHERE phone = $1',
+    [phone]
+  );
+  
+  if (existing.rows && existing.rows.length > 0) {
+    throw new Error('手机号已存在');
+  }
+  
+  // 生成学员ID
+  const id = `student-${Date.now()}`;
+  
+  // 加密密码
+  const hashedPassword = await bcrypt.hash(password || phone.slice(-6), 10);
+  
+  // 确保权限字段是数组
+  const permsArray = Array.isArray(studentPerms) ? studentPerms : ['BANK', 'VIDEO', 'EXAM'];
+  const bankIdsArray = Array.isArray(allowedBankIds) ? allowedBankIds : [];
+  const customFieldsObj = customFields || {};
+  
+  // 插入学员记录
+  await dbConn.query(
+    `INSERT INTO users (
+      id, phone, password, nickname, real_name, role,
+      gender, id_card, school, education_type, education_level, major, company, class_name,
+      student_perms, allowed_bank_ids, custom_fields, avatar
+    ) VALUES ($1, $2, $3, $4, $5, 'STUDENT', $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
+    [
+      id, phone, hashedPassword, nickname || '', realName || '',
+      gender || null, idCard || null, school || null, educationType || null, 
+      educationLevel || null, major || null, company || null, className || null,
+      JSON.stringify(permsArray), JSON.stringify(bankIdsArray), JSON.stringify(customFieldsObj),
+      avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${phone}`
+    ]
+  );
+  
+  console.log(`[Admin] Created student: ${id} (${phone})`);
+  
+  return { success: true, id };
+}
+
+/**
+ * 更新学员信息
+ * @param {Object} dbConn - 数据库连接
+ * @param {string} studentId - 学员ID
+ * @param {Object} updates - 更新数据
+ * @returns {Promise<Object>} { success: boolean }
+ */
+export async function updateStudent(dbConn, studentId, updates) {
+  const { 
+    nickname, realName, phone, password, 
+    gender, idCard, school, educationType, educationLevel, major, company, className,
+    studentPerms, allowedBankIds, customFields
+  } = updates;
+  
+  // 检查学员是否存在
+  const existing = await dbConn.query(
+    "SELECT id FROM users WHERE id = $1 AND role = 'STUDENT'",
+    [studentId]
+  );
+  
+  if (!existing.rows || existing.rows.length === 0) {
+    throw new Error('学员不存在');
+  }
+  
+  // 如果更新手机号，检查是否与其他用户冲突
+  if (phone) {
+    const phoneCheck = await dbConn.query(
+      'SELECT id FROM users WHERE phone = $1 AND id != $2',
+      [phone, studentId]
+    );
+    
+    if (phoneCheck.rows && phoneCheck.rows.length > 0) {
+      throw new Error('手机号已被其他用户使用');
+    }
+  }
+  
+  // 构建更新语句
+  const updateFields = [];
+  const values = [];
+  let paramIndex = 1;
+  
+  if (nickname !== undefined) {
+    updateFields.push(`nickname = $$${paramIndex++}`);
+    values.push(nickname);
+  }
+  
+  if (realName !== undefined) {
+    updateFields.push(`real_name = $$${paramIndex++}`);
+    values.push(realName);
+  }
+  
+  if (phone !== undefined) {
+    updateFields.push(`phone = $$${paramIndex++}`);
+    values.push(phone);
+  }
+  
+  if (password !== undefined && password !== '') {
+    const hashedPassword = await bcrypt.hash(password, 10);
+    updateFields.push(`password = $$${paramIndex++}`);
+    values.push(hashedPassword);
+  }
+  
+  if (gender !== undefined) {
+    updateFields.push(`gender = $$${paramIndex++}`);
+    values.push(gender);
+  }
+  
+  if (idCard !== undefined) {
+    updateFields.push(`id_card = $$${paramIndex++}`);
+    values.push(idCard);
+  }
+  
+  if (school !== undefined) {
+    updateFields.push(`school = $$${paramIndex++}`);
+    values.push(school);
+  }
+  
+  if (educationType !== undefined) {
+    updateFields.push(`education_type = $$${paramIndex++}`);
+    values.push(educationType);
+  }
+  
+  if (educationLevel !== undefined) {
+    updateFields.push(`education_level = $$${paramIndex++}`);
+    values.push(educationLevel);
+  }
+  
+  if (major !== undefined) {
+    updateFields.push(`major = $$${paramIndex++}`);
+    values.push(major);
+  }
+  
+  if (company !== undefined) {
+    updateFields.push(`company = $$${paramIndex++}`);
+    values.push(company);
+  }
+  
+  if (className !== undefined) {
+    updateFields.push(`class_name = $$${paramIndex++}`);
+    values.push(className);
+  }
+  
+  if (studentPerms !== undefined) {
+    const permsArray = Array.isArray(studentPerms) ? studentPerms : [];
+    updateFields.push(`student_perms = $$${paramIndex++}`);
+    values.push(JSON.stringify(permsArray));
+  }
+  
+  if (allowedBankIds !== undefined) {
+    const bankIdsArray = Array.isArray(allowedBankIds) ? allowedBankIds : [];
+    updateFields.push(`allowed_bank_ids = $$${paramIndex++}`);
+    values.push(JSON.stringify(bankIdsArray));
+  }
+  
+  if (customFields !== undefined) {
+    updateFields.push(`custom_fields = $$${paramIndex++}`);
+    values.push(JSON.stringify(customFields || {}));
+  }
+  
+  if (updateFields.length === 0) {
+    return { success: true }; // 没有需要更新的字段
+  }
+  
+  values.push(studentId);
+  
+  await dbConn.query(
+    `UPDATE users SET ${updateFields.join(', ')} WHERE id = $${paramIndex}`,
+    values
+  );
+  
+  console.log(`[Admin] Updated student: ${studentId}`);
+  
+  return { success: true };
+}
+
+/**
+ * 删除学员账号
+ * @param {Object} dbConn - 数据库连接
+ * @param {string} studentId - 学员ID
+ * @returns {Promise<Object>} { success: boolean }
+ */
+export async function deleteStudent(dbConn, studentId) {
+  // 检查学员是否存在
+  const existing = await dbConn.query(
+    "SELECT id FROM users WHERE id = $1 AND role = 'STUDENT'",
+    [studentId]
+  );
+  
+  if (!existing.rows || existing.rows.length === 0) {
+    throw new Error('学员不存在');
+  }
+  
+  // 删除学员
+  await dbConn.query(
+    "DELETE FROM users WHERE id = $1 AND role = 'STUDENT'",
+    [studentId]
+  );
+  
+  console.log(`[Admin] Deleted student: ${studentId}`);
+  
+  return { success: true };
+}
+
+/**
+ * 批量删除学员账号
+ * @param {Object} dbConn - 数据库连接
+ * @param {Array<string>} studentIds - 学员ID列表
+ * @returns {Promise<Object>} { success: boolean, deleted: number }
+ */
+export async function batchDeleteStudents(dbConn, studentIds) {
+  if (!Array.isArray(studentIds) || studentIds.length === 0) {
+    throw new Error('学员ID列表不能为空');
+  }
+  
+  // 构建 IN 查询的占位符
+  const placeholders = studentIds.map((_, i) => `$${i + 1}`).join(', ');
+  
+  // 删除学员
+  const result = await dbConn.query(
+    `DELETE FROM users WHERE id IN (${placeholders}) AND role = 'STUDENT'`,
+    studentIds
+  );
+  
+  const deletedCount = result.rowCount || 0;
+  
+  console.log(`[Admin] Batch deleted ${deletedCount} students`);
+  
+  return { success: true, deleted: deletedCount };
 }
 
 /**
@@ -29,10 +341,33 @@ export async function getStudents() {
  */
 export async function getAdmins() {
   const rows = await db.getMany(
-    "SELECT id, phone, nickname, real_name FROM users WHERE role = 'ADMIN' ORDER BY id"
+    "SELECT id, phone, nickname, real_name, permissions FROM users WHERE role = 'ADMIN' ORDER BY id"
   );
   
-  return rows || [];
+  return (rows || []).map(admin => {
+    // 解析 permissions 字段（可能是 JSON 字符串或已解析的数组）
+    let permissions = [];
+    if (admin.permissions) {
+      if (typeof admin.permissions === 'string') {
+        try {
+          permissions = JSON.parse(admin.permissions);
+        } catch (e) {
+          console.error(`[Admin] Failed to parse permissions for admin ${admin.id}:`, e);
+          permissions = [];
+        }
+      } else if (Array.isArray(admin.permissions)) {
+        permissions = admin.permissions;
+      }
+    }
+    
+    return {
+      id: admin.id,
+      phone: admin.phone,
+      nickname: admin.nickname,
+      realName: admin.real_name,  // 字段名转换
+      permissions: permissions
+    };
+  });
 }
 
 /**
@@ -159,32 +494,49 @@ export async function createAuditLog(dbConn, logData) {
 }
 
 /**
- * 获取所有管理员列表（包含密码字段用于内部验证）
+ * 获取所有管理员列表（用于 API 返回）
  * @param {Object} dbConn - 数据库连接
  * @returns {Promise<Array>} 管理员列表
  */
 export async function getAllAdmins(dbConn) {
   const rows = await dbConn.query(
-    "SELECT id, phone, nickname, real_name, password FROM users WHERE role = 'ADMIN' ORDER BY id"
+    "SELECT id, phone, nickname, real_name, permissions FROM users WHERE role = 'ADMIN' ORDER BY id"
   );
   
-  return (rows.rows || []).map(admin => ({
-    id: admin.id,
-    phone: admin.phone,
-    nickname: admin.nickname,
-    realName: admin.real_name
-    // 不返回密码字段给客户端
-  }));
+  return (rows.rows || []).map(admin => {
+    // 解析 permissions 字段（可能是 JSON 字符串或已解析的数组）
+    let permissions = [];
+    if (admin.permissions) {
+      if (typeof admin.permissions === 'string') {
+        try {
+          permissions = JSON.parse(admin.permissions);
+        } catch (e) {
+          console.error(`[Admin] Failed to parse permissions for admin ${admin.id}:`, e);
+          permissions = [];
+        }
+      } else if (Array.isArray(admin.permissions)) {
+        permissions = admin.permissions;
+      }
+    }
+    
+    return {
+      id: admin.id,
+      phone: admin.phone,
+      nickname: admin.nickname,
+      realName: admin.real_name,
+      permissions: permissions
+    };
+  });
 }
 
 /**
  * 创建管理员账号
  * @param {Object} dbConn - 数据库连接
- * @param {Object} adminData - 管理员数据 { phone, password, nickname, realName }
+ * @param {Object} adminData - 管理员数据 { phone, password, nickname, realName, permissions }
  * @returns {Promise<Object>} { success: boolean, id: string }
  */
 export async function createAdmin(dbConn, adminData) {
-  const { phone, password, nickname, realName } = adminData;
+  const { phone, password, nickname, realName, permissions } = adminData;
   
   // 检查手机号是否已存在
   const existing = await dbConn.query(
@@ -202,14 +554,17 @@ export async function createAdmin(dbConn, adminData) {
   // 加密密码
   const hashedPassword = await bcrypt.hash(password, 10);
   
+  // 确保 permissions 是数组
+  const permsArray = Array.isArray(permissions) ? permissions : [];
+  
   // 插入管理员记录
   await dbConn.query(
-    `INSERT INTO users (id, phone, password, nickname, real_name, role) 
-     VALUES ($1, $2, $3, $4, $5, 'ADMIN')`,
-    [id, phone, hashedPassword, nickname || '', realName || '']
+    `INSERT INTO users (id, phone, password, nickname, real_name, role, permissions) 
+     VALUES ($1, $2, $3, $4, $5, 'ADMIN', $6)`,
+    [id, phone, hashedPassword, nickname || '', realName || '', JSON.stringify(permsArray)]
   );
   
-  console.log(`[Admin] Created admin: ${id} (${phone})`);
+  console.log(`[Admin] Created admin: ${id} (${phone}) with permissions:`, permsArray);
   
   return { success: true, id };
 }
@@ -222,7 +577,7 @@ export async function createAdmin(dbConn, adminData) {
  * @returns {Promise<Object>} { success: boolean }
  */
 export async function updateAdmin(dbConn, adminId, updates) {
-  const { nickname, realName, phone } = updates;
+  const { nickname, realName, phone, password, permissions } = updates;
   
   // 检查管理员是否存在
   const existing = await dbConn.query(
@@ -266,6 +621,18 @@ export async function updateAdmin(dbConn, adminId, updates) {
     values.push(phone);
   }
   
+  if (password !== undefined && password !== '') {
+    const hashedPassword = await bcrypt.hash(password, 10);
+    updateFields.push(`password = $${paramIndex++}`);
+    values.push(hashedPassword);
+  }
+  
+  if (permissions !== undefined) {
+    const permsArray = Array.isArray(permissions) ? permissions : [];
+    updateFields.push(`permissions = $${paramIndex++}`);
+    values.push(JSON.stringify(permsArray));
+  }
+  
   if (updateFields.length === 0) {
     return { success: true }; // 没有需要更新的字段
   }
@@ -277,7 +644,7 @@ export async function updateAdmin(dbConn, adminId, updates) {
     values
   );
   
-  console.log(`[Admin] Updated admin: ${adminId}`);
+  console.log(`[Admin] Updated admin: ${adminId}`, permissions ? `with permissions: ${JSON.stringify(permissions)}` : '');
   
   return { success: true };
 }
@@ -486,4 +853,114 @@ export async function repairStudentSchema(dbConn) {
   console.log(`[Admin] Repaired ${fixedCount} student records`);
   
   return { success: true, fixed: fixedCount };
+}
+
+
+
+
+
+
+
+/**
+ * 批量设置学员权限
+ * @param {Object} dbConn - 数据库连接
+ * @param {Object} data - 学员权限数据 { studentId: { studentPerms, allowedBankIds } }
+ * @returns {Promise<Object>} { success: boolean }
+ */
+export async function batchSetStudentPerms(dbConn, data) {
+  const entries = Object.entries(data);
+  console.log('[Admin] Batch updating', entries.length, 'students');
+  
+  // 使用事务批量更新
+  await dbConn.transaction(async (client) => {
+    for (const [id, payload] of entries) {
+      console.log('[Admin] Updating student:', id, 'perms:', payload.studentPerms, 'bankIds:', payload.allowedBankIds);
+      
+      // 将数组转换为 JSON 字符串（JSONB 字段需要）
+      const studentPerms = JSON.stringify(payload.studentPerms || []);
+      const allowedBankIds = JSON.stringify(payload.allowedBankIds || []);
+      
+      await client.query(
+        'UPDATE users SET student_perms = $1, allowed_bank_ids = $2 WHERE id = $3',
+        [studentPerms, allowedBankIds, id]
+      );
+    }
+  });
+  
+  console.log('[Admin] Batch update complete');
+  return { success: true };
+}
+
+/**
+ * 获取学员近30天的练习统计
+ * @param {string} userId - 学员ID
+ * @returns {Promise<Array>} 每日练习统计列表
+ */
+export async function getStudentPracticeStats(userId) {
+  // 计算30天前的日期
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const startDate = thirtyDaysAgo.toISOString().split('T')[0];
+  
+  // 查询近30天的练习记录（仅统计顺序练习和自定义练习）
+  const records = await db.getMany(
+    `SELECT 
+      date,
+      mode,
+      user_answers,
+      count
+     FROM practice_records 
+     WHERE user_id = $1 
+       AND date >= $2
+       AND mode IN ('SEQUENTIAL', 'MEMORY', 'MISTAKE')
+     ORDER BY date DESC`,
+    [userId, startDate]
+  );
+  
+  // 按日期分组统计做题数量
+  const statsByDate = {};
+  
+  records.forEach(record => {
+    const date = record.date;
+    if (!statsByDate[date]) {
+      statsByDate[date] = {
+        date,
+        count: 0,
+        modes: {}
+      };
+    }
+    
+    // 统计该记录的做题数量（user_answers 中的键数量）
+    let answeredCount = 0;
+    if (record.user_answers && typeof record.user_answers === 'object') {
+      answeredCount = Object.keys(record.user_answers).length;
+    }
+    
+    statsByDate[date].count += answeredCount;
+    
+    // 按模式统计
+    const mode = record.mode || 'SEQUENTIAL';
+    if (!statsByDate[date].modes[mode]) {
+      statsByDate[date].modes[mode] = 0;
+    }
+    statsByDate[date].modes[mode] += answeredCount;
+  });
+  
+  // 生成完整的30天数据（包括没有练习的日期）
+  const result = [];
+  for (let i = 0; i < 30; i++) {
+    const date = new Date();
+    date.setDate(date.getDate() - i);
+    const dateStr = date.toISOString().split('T')[0];
+    
+    result.push({
+      date: dateStr,
+      displayDate: date.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' }),
+      count: statsByDate[dateStr]?.count || 0,
+      modes: statsByDate[dateStr]?.modes || {}
+    });
+  }
+  
+  // 按日期正序排列
+  return result.reverse();
 }

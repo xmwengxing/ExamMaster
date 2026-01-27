@@ -87,7 +87,8 @@ export function setCachedData<T>(
     // 检查数据大小（localStorage 限制通常是 5-10MB）
     const sizeInMB = new Blob([serialized]).size / (1024 * 1024);
     if (sizeInMB > 5) {
-      console.warn(`[Cache] 数据过大 (${sizeInMB.toFixed(2)}MB)，不缓存: ${key}`);
+      // 数据过大，不缓存（静默处理，不显示警告）
+      // console.warn(`[Cache] 数据过大 (${sizeInMB.toFixed(2)}MB)，不缓存: ${key}`);
       return false;
     }
     

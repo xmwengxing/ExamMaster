@@ -382,7 +382,9 @@ const PracticeModeView: React.FC<PracticeModeProps> = ({
       await saveProgressImmediately(newIndex, userAnswers);
     } else {
       if (isMockMode) {
-        if (confirm('确定要提交试卷吗？')) onFinish(calculateFinalScore(true));
+        if (confirm('确定要交卷吗？\n\n⚠️ 注意：交卷后将无法继续作答或修改答案！\n\n点击"确定"提交试卷，点击"取消"继续答题。')) {
+          onFinish(calculateFinalScore(true));
+        }
       } else onFinish();
     }
   };

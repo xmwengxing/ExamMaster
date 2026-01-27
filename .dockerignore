@@ -61,8 +61,8 @@ docker-compose.yml
 # 备份
 backups/
 
-# 旧版本文件（保留 server-new.js 作为主入口）
-server.js
+# 旧版本文件
+server-old.js
 
 # 其他
 .DS_Store

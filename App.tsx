@@ -21,6 +21,7 @@ import ExamPublisher from './pages/Admin/ExamPublisher';
 import SystemSettings from './pages/Admin/SystemSettings';
 import Supervisor from './pages/Admin/Supervisor';
 import AdminUserMgt from './pages/Admin/AdminUserMgt';
+import LogManagement from './pages/Admin/LogManagement';
 import PracticalManager from './pages/Admin/PracticalManager';
 import TagManager from './components/TagManager';
 import Discussions from './pages/Student/Discussions';
@@ -298,6 +299,7 @@ const App: React.FC = () => {
         case 'discussion-manager': return <DiscussionManager />;
         case 'ai-analysis': return <AiAnalysisViewer />;
         case 'supervisor': return <Supervisor students={store.students} logs={store.loginLogs} />;
+        case 'logs': return <LogManagement loginLogs={store.loginLogs} auditLogs={store.auditLogs} />;
         case 'settings': return <SystemSettings config={store.systemConfig} onUpdate={store.updateSystemSettings} onChangeAdminPass={store.changeAdminPassword} />;
         case 'admin-user': return <AdminUserMgt currentUser={store.currentUser!} admins={store.admins} students={store.students} banks={store.banks} onAddAdmin={store.addAdmin} onUpdateAdmin={store.updateAdmin} onDeleteAdmin={store.deleteAdmin} onBatchStudentPerms={store.batchSetStudentPerms} onUpdateStudentPerms={store.updateStudentPerms} />;
         default: return <AdminDashboard />;
@@ -314,7 +316,15 @@ const App: React.FC = () => {
       case 'favorites': return <Favorites favorites={store.favorites} banks={studentBanks} onStart={(qs) => handleNavigate('practice-mode', { questions: qs, mode: PracticeMode.SEQUENTIAL })} onToggleFavorite={store.toggleFavorite} onBack={() => setActiveTab('practice')} />;
       case 'mistakes': return <Mistakes mistakes={store.mistakes} banks={studentBanks} onStart={(m, p) => checkPracticeSession(m, p)} />;
       case 'profile': return <Profile user={store.currentUser!} customFieldSchema={store.customFieldSchema} onUpdate={store.updateProfile} onBack={() => setActiveTab('home')} />;
-      case 'exams': return <Exams initialView={activeParams?.view} exams={store.exams.filter(e => store.currentUser?.allowedBankIds?.includes(e.bankId))} history={store.examHistory} banks={studentBanks} allQuestions={store.questions} hasPermission={store.currentUser?.studentPerms?.includes('EXAM')} onStartExam={(e) => handleNavigate('practice-mode', { mode: PracticeMode.MOCK, exam: e })} onStartMock={(c) => handleNavigate('practice-mode', { mode: PracticeMode.MOCK, ...c })} onDeleteHistory={store.deleteExamHistory} />;
+      case 'exams': return <Exams initialView={activeParams?.view} exams={store.exams.filter(e => store.currentUser?.allowedBankIds?.includes(e.bankId))} history={store.examHistory} banks={studentBanks} allQuestions={store.questions} hasPermission={store.currentUser?.studentPerms?.includes('EXAM')} onStartExam={(e) => {
+        // 检查是否已经交卷
+        const existingRecord = store.examHistory.find(h => h.examId === e.id && h.userId === store.currentUser?.id && h.isFinished);
+        if (existingRecord) {
+          alert('您已经交卷完成此考试，无法再次参加。如需重新考试，请联系管理员。');
+          return;
+        }
+        handleNavigate('practice-mode', { mode: PracticeMode.MOCK, exam: e });
+      }} onStartMock={(c) => handleNavigate('practice-mode', { mode: PracticeMode.MOCK, ...c })} onDeleteHistory={store.deleteExamHistory} />;
       case 'videos': return <VideoList videos={store.currentUser!.studentPerms?.includes('VIDEO') ? (store.systemConfig?.videos || []) : []} onBack={() => setActiveTab('home')} />;
       case 'discussions': return <Discussions questionId={activeParams?.questionId} />;
       case 'account': return <AccountSettings onBack={() => setActiveTab('home')} onChangePassword={store.changePassword} onResetData={store.resetUserData} onLogout={store.logout} onDeleteAccount={store.logout} currentUser={store.currentUser} onUpdateApiKey={async (apiKey) => { await store.updateProfile({ deepseekApiKey: apiKey }); }} />;

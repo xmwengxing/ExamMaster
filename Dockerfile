@@ -23,7 +23,7 @@ WORKDIR /app
 COPY --from=builder /app/node_modules ./node_modules
 
 # 复制应用代码 - 模块化架构
-COPY server-new.js ./server.js
+COPY server.js ./
 COPY db.js ./
 COPY constants.ts ./
 COPY types.ts ./

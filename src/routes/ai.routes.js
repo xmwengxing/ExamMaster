@@ -16,6 +16,7 @@ router.post('/grade-answer', auth, aiController.gradeAnswer);
 
 // 管理员路由（需要单独导出）
 export const adminAiRouter = express.Router();
-adminAiRouter.get('/ai-analysis', adminAuth, aiController.getAllAnalysis);
+// 修复：先使用 auth 中间件验证 token，再使用 adminAuth 验证管理员权限
+adminAiRouter.get('/ai-analysis', auth, adminAuth, aiController.getAllAnalysis);
 
 export default router;

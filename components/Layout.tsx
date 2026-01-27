@@ -37,6 +37,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, activeTab, onTabChange,
     { id: 'admin-exams', icon: 'fa-paper-plane', label: '考试发布' },
     { id: 'practical-center', icon: 'fa-keyboard', label: '实操发布' },
     { id: 'supervisor', icon: 'fa-user-check', label: '督学管理' },
+    { id: 'logs', icon: 'fa-clipboard-list', label: '日志管理' },
     { id: 'discussion-manager', icon: 'fa-comments', label: '讨论管理' },
     { id: 'tags', icon: 'fa-tags', label: '标签管理' },
     { id: 'ai-analysis', icon: 'fa-wand-magic-sparkles', label: 'AI解析' },
@@ -49,8 +50,13 @@ const Layout: React.FC<LayoutProps> = ({ children, user, activeTab, onTabChange,
       currentTabs = adminTabs;
     } else {
       currentTabs = adminTabs.filter(tab => {
-        if (tab.id === 'admin-user') return false;
+        // 权限管理：只有拥有"学员权限管理"权限的管理员才能访问
+        if (tab.id === 'admin-user') {
+          return user.permissions?.includes('student-perms');
+        }
+        // 数据看板：所有管理员都可以访问
         if (tab.id === 'dashboard') return true;
+        // 其他功能：根据permissions判断
         return user.permissions?.includes(tab.id);
       });
     }

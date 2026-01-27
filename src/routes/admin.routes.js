@@ -10,6 +10,12 @@ const router = express.Router();
 
 // 学生管理
 router.get('/students', auth, adminAuth, adminController.getStudents);
+router.post('/students', auth, adminAuth, adminController.createStudent);
+router.put('/students/:id', auth, adminAuth, adminController.updateStudent);
+router.delete('/students/:id', auth, adminAuth, adminController.deleteStudent);
+router.post('/students/batch-delete', auth, adminAuth, adminController.batchDeleteStudents);
+router.post('/students/batch-perms', auth, adminAuth, adminController.batchSetStudentPerms);
+router.get('/students/:userId/practice-stats', auth, adminAuth, adminController.getStudentPracticeStats);
 
 // 管理员账号管理
 router.get('/admins', auth, adminAuth, adminController.getAllAdmins);

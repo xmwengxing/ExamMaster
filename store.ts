@@ -279,6 +279,23 @@ export const useAppStore = () => {
             fetchApi('/admin/all-progress').catch(() => []),
           ]);
 
+          console.log('[refreshAll] 管理员数据:', admins);
+          console.log('[refreshAll] 管理员数量:', admins?.length);
+          console.log('[refreshAll] 登录日志数量:', loginLogs?.length);
+          console.log('[refreshAll] 审计日志数量:', auditLogs?.length);
+          if (admins && admins.length > 0) {
+            admins.forEach((admin: any, index: number) => {
+              console.log(`[refreshAll] 管理员 ${index + 1}:`, {
+                id: admin.id,
+                phone: admin.phone,
+                realName: admin.realName || admin.real_name,
+                permissions: admin.permissions,
+                permissionsType: typeof admin.permissions,
+                isArray: Array.isArray(admin.permissions)
+              });
+            });
+          }
+
           setStudents(students || []);
           setAdmins(admins || []);
           setLoginLogs(loginLogs || []);
@@ -1175,6 +1192,7 @@ export const useAppStore = () => {
         if (params?.type) searchParams.append('type', params.type);
         
         const query = searchParams.toString();
+        // 修复：不需要 /api 前缀，因为 API_BASE 已经包含了
         const result = await fetchApi(`/admin/ai-analysis${query ? '?' + query : ''}`);
         return result;
       } catch (e: any) {

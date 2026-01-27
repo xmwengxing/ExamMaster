@@ -301,6 +301,8 @@ CREATE TABLE IF NOT EXISTS login_logs (
   phone VARCHAR(50),
   role VARCHAR(20),
   time TIMESTAMP NOT NULL,
+  logout_time TIMESTAMP,
+  session_duration INTEGER DEFAULT 0,
   ip VARCHAR(50),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -309,6 +311,7 @@ CREATE TABLE IF NOT EXISTS login_logs (
 -- 登录日志表索引
 CREATE INDEX IF NOT EXISTS idx_login_logs_user_id ON login_logs(user_id);
 CREATE INDEX IF NOT EXISTS idx_login_logs_time ON login_logs(time);
+CREATE INDEX IF NOT EXISTS idx_login_logs_logout_time ON login_logs(logout_time);
 
 -- ============================================================
 -- 15. 审计日志表 (audit_logs)

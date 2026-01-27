@@ -57,9 +57,16 @@ export interface User {
   lastLogin?: string;
   isOnline?: boolean;
   totalOnlineTime?: number;
-  loginHistory?: string[];
+  loginHistory?: string[] | LoginSession[]; // 支持旧格式和新格式
   dailyGoal?: number;
   deepseekApiKey?: string;
+}
+
+// 登录会话信息
+export interface LoginSession {
+  loginTime: string;
+  logoutTime?: string;
+  duration?: number; // 本次登录时长（秒）
 }
 
 export interface Question {
@@ -189,6 +196,8 @@ export interface LoginLog {
   userId: string;
   userName: string;
   loginTime: string;
+  logoutTime?: string;        // 退出时间（可选）
+  sessionDuration?: number;   // 本次登录时长（秒）
 }
 
 export interface ExamRecord {
