@@ -29,6 +29,22 @@ const PracticeList: React.FC<PracticeProps> = ({ banks, activeBank, history, onS
     }
   });
 
+  // 确保当前题库的题目已加载
+  const [questionsLoaded, setQuestionsLoaded] = React.useState(false);
+  
+  React.useEffect(() => {
+    if (activeBank && activeBank.id) {
+      console.log('[Practice] 组件加载，当前题库:', activeBank.id, activeBank.name);
+      console.log('[Practice] 当前题目数量:', store.questions.filter(q => q.bankId === activeBank.id).length);
+      console.log('[Practice] 开始加载题库题目...');
+      setQuestionsLoaded(false);
+      store.loadBankQuestions(activeBank.id).then(() => {
+        console.log('[Practice] 题目加载完成，数量:', store.questions.filter(q => q.bankId === activeBank.id).length);
+        setQuestionsLoaded(true);
+      });
+    }
+  }, [activeBank?.id]);
+
   // 严格过滤：仅显示 isCustom 为 1 (true) 的记录
   const customHistory = useMemo(() => 
     history.filter(h => (h.isCustom === true || (h.isCustom as any) === 1))
@@ -46,6 +62,20 @@ const PracticeList: React.FC<PracticeProps> = ({ banks, activeBank, history, onS
   // 根据选中的章节过滤题目，然后统计题型
   const typeStats = useMemo(() => {
     const bankQs = store.questions.filter(q => q.bankId === activeBank.id);
+    
+    console.log('[Practice] 计算 typeStats，题目数量:', bankQs.length, '加载状态:', store.isLoadingQuestions, '已加载:', questionsLoaded);
+    
+    // 如果题目还在加载中，返回空统计
+    if (store.isLoadingQuestions && bankQs.length === 0) {
+      return {
+        [QuestionType.SINGLE]: 0,
+        [QuestionType.MULTIPLE]: 0,
+        [QuestionType.JUDGE]: 0,
+        [QuestionType.FILL_IN_BLANK]: 0,
+        [QuestionType.SHORT_ANSWER]: 0,
+      };
+    }
+    
     // 如果选择了章节，只统计这些章节的题目
     const filteredQs = form.selectedChapters.length > 0
       ? bankQs.filter(q => q.chapter && form.selectedChapters.includes(q.chapter))
@@ -58,10 +88,10 @@ const PracticeList: React.FC<PracticeProps> = ({ banks, activeBank, history, onS
       [QuestionType.FILL_IN_BLANK]: filteredQs.filter(q => q.type === QuestionType.FILL_IN_BLANK).length,
       [QuestionType.SHORT_ANSWER]: filteredQs.filter(q => q.type === QuestionType.SHORT_ANSWER).length,
     };
-  }, [store.questions, activeBank.id, form.selectedChapters]);
+  }, [store.questions, store.isLoadingQuestions, activeBank.id, form.selectedChapters, questionsLoaded]);
 
   const totalCount = useMemo(() => {
-    return Object.values(form.counts).reduce((sum, count) => sum + count, 0);
+    return Object.values(form.counts).reduce((sum: number, count: number) => sum + count, 0);
   }, [form.counts]);
 
   const getTypeLabel = (type: string) => {
@@ -118,7 +148,7 @@ const PracticeList: React.FC<PracticeProps> = ({ banks, activeBank, history, onS
       
       // 生成类型摘要
       const selectedTypes = Object.entries(form.counts)
-        .filter(([_, count]) => count > 0)
+        .filter(([_, count]) => (count as number) > 0)
         .map(([type, count]) => `${getTypeLabel(type as QuestionType)}×${count}`)
         .join(' + ');
 
@@ -133,23 +163,55 @@ const PracticeList: React.FC<PracticeProps> = ({ banks, activeBank, history, onS
         date: new Date().toLocaleString(),
         currentIndex: 0,
         userAnswers: {},
-        isCustom: true
-      };
+        isCustom: true,
+        // 保存自定义配置，用于继续练习时重新生成题目
+        customCounts: form.counts,
+        selectedChapters: form.selectedChapters,
+        strategy: form.strategy
+      } as any;
 
       // 1. 先保存到数据库
       await store.addPracticeRecord(newRecord);
       
-      // 2. 关闭弹窗
+      // 2. 确保题目数据已加载，并获取题目数组
+      console.log('[Practice] 开始练习前，加载题目数据...');
+      const bankQuestions = await store.loadBankQuestions(activeBank.id);
+      console.log('[Practice] 题目加载完成，数量:', bankQuestions.length);
+      
+      // 3. 根据用户选择生成题目列表
+      let selectedQuestions = bankQuestions;
+      
+      // 如果选择了章节，先按章节过滤
+      if (form.selectedChapters.length > 0) {
+        selectedQuestions = selectedQuestions.filter(q => q.chapter && form.selectedChapters.includes(q.chapter));
+      }
+      
+      // 按题型抽取题目
+      const singles = selectedQuestions.filter(q => q.type === QuestionType.SINGLE).sort(() => Math.random() - 0.5).slice(0, form.counts[QuestionType.SINGLE] || 0);
+      const multiples = selectedQuestions.filter(q => q.type === QuestionType.MULTIPLE).sort(() => Math.random() - 0.5).slice(0, form.counts[QuestionType.MULTIPLE] || 0);
+      const judges = selectedQuestions.filter(q => q.type === QuestionType.JUDGE).sort(() => Math.random() - 0.5).slice(0, form.counts[QuestionType.JUDGE] || 0);
+      const fillInBlanks = selectedQuestions.filter(q => q.type === QuestionType.FILL_IN_BLANK).sort(() => Math.random() - 0.5).slice(0, form.counts[QuestionType.FILL_IN_BLANK] || 0);
+      const shortAnswers = selectedQuestions.filter(q => q.type === QuestionType.SHORT_ANSWER).sort(() => Math.random() - 0.5).slice(0, form.counts[QuestionType.SHORT_ANSWER] || 0);
+      
+      const finalQuestions = [...singles, ...multiples, ...judges, ...fillInBlanks, ...shortAnswers];
+      
+      // 根据策略排序
+      if (form.strategy === 'RANDOM') {
+        finalQuestions.sort(() => Math.random() - 0.5);
+      }
+      
+      console.log('[Practice] 生成题目列表:', finalQuestions.length, '题');
+      
+      // 4. 关闭弹窗
       setIsModalOpen(false);
       
-      // 3. 直接开始练习，传递skipCheck标志跳过历史进度检查
+      // 5. 直接开始练习，传递题目列表
       onStart(PracticeMode.SEQUENTIAL, {
         ...newRecord,
         strategy: form.strategy,
         isCustom: true,
         bankId: activeBank.id,
-        customCounts: form.counts, // 传递自定义题数配置
-        selectedChapters: form.selectedChapters, // 传递选中的章节
+        questions: finalQuestions, // 直接传递题目列表
         skipCheck: true
       });
       
@@ -245,7 +307,12 @@ const PracticeList: React.FC<PracticeProps> = ({ banks, activeBank, history, onS
             自定义练习任务
           </h3>
           <button 
-            onClick={() => setIsModalOpen(true)}
+            onClick={() => {
+              console.log('[Practice] 打开弹窗，当前题库:', activeBank.id);
+              console.log('[Practice] 当前题目数:', store.questions.filter(q => q.bankId === activeBank.id).length);
+              console.log('[Practice] 题型统计:', typeStats);
+              setIsModalOpen(true);
+            }}
             className="text-indigo-600 text-sm font-bold bg-indigo-50 px-4 py-2 rounded-xl hover:bg-indigo-100 transition-colors"
           >
             <i className="fa-solid fa-plus mr-1"></i> 新建个性化练习
@@ -273,7 +340,65 @@ const PracticeList: React.FC<PracticeProps> = ({ banks, activeBank, history, onS
                   </div>
                   <div className="flex gap-2">
                     <button 
-                      onClick={() => onStart(item.mode, { ...item, isCustom: true })}
+                      onClick={async () => {
+                        console.log('[Practice] 继续练习，记录:', item);
+                        console.log('[Practice] customCounts:', (item as any).customCounts);
+                        console.log('[Practice] 记录的所有字段:', Object.keys(item));
+                        
+                        // 如果有 customCounts，需要重新生成题目列表
+                        if ((item as any).customCounts) {
+                          console.log('[Practice] 加载题目并重新生成...');
+                          const bankQuestions = await store.loadBankQuestions(item.bankId);
+                          console.log('[Practice] 题目加载完成:', bankQuestions.length);
+                          
+                          let selectedQuestions = bankQuestions;
+                          const customCounts = (item as any).customCounts;
+                          const selectedChapters = (item as any).selectedChapters || [];
+                          
+                          // 如果选择了章节，先按章节过滤
+                          if (selectedChapters.length > 0) {
+                            selectedQuestions = selectedQuestions.filter(q => q.chapter && selectedChapters.includes(q.chapter));
+                          }
+                          
+                          // 按题型抽取题目
+                          const singles = selectedQuestions.filter(q => q.type === QuestionType.SINGLE).sort(() => Math.random() - 0.5).slice(0, customCounts[QuestionType.SINGLE] || 0);
+                          const multiples = selectedQuestions.filter(q => q.type === QuestionType.MULTIPLE).sort(() => Math.random() - 0.5).slice(0, customCounts[QuestionType.MULTIPLE] || 0);
+                          const judges = selectedQuestions.filter(q => q.type === QuestionType.JUDGE).sort(() => Math.random() - 0.5).slice(0, customCounts[QuestionType.JUDGE] || 0);
+                          const fillInBlanks = selectedQuestions.filter(q => q.type === QuestionType.FILL_IN_BLANK).sort(() => Math.random() - 0.5).slice(0, customCounts[QuestionType.FILL_IN_BLANK] || 0);
+                          const shortAnswers = selectedQuestions.filter(q => q.type === QuestionType.SHORT_ANSWER).sort(() => Math.random() - 0.5).slice(0, customCounts[QuestionType.SHORT_ANSWER] || 0);
+                          
+                          const finalQuestions = [...singles, ...multiples, ...judges, ...fillInBlanks, ...shortAnswers];
+                          
+                          // 根据策略排序
+                          const strategy = (item as any).strategy;
+                          if (strategy === 'RANDOM') {
+                            finalQuestions.sort(() => Math.random() - 0.5);
+                          }
+                          
+                          console.log('[Practice] 生成题目列表:', finalQuestions.length);
+                          
+                          // 传递题目列表
+                          onStart(item.mode, { ...item, isCustom: true, questions: finalQuestions });
+                        } else {
+                          // 旧的练习记录，没有 customCounts，使用 customCounts 参数让 App.tsx 处理
+                          console.log('[Practice] 旧记录，使用 customCounts 参数');
+                          // 从 item.count 推算每种题型的数量（简单平均分配）
+                          const avgCount = Math.floor(item.count / 3); // 假设是单选、多选、判断各占1/3
+                          const fallbackCounts = {
+                            [QuestionType.SINGLE]: avgCount,
+                            [QuestionType.MULTIPLE]: avgCount,
+                            [QuestionType.JUDGE]: item.count - avgCount * 2,
+                            [QuestionType.FILL_IN_BLANK]: 0,
+                            [QuestionType.SHORT_ANSWER]: 0,
+                          };
+                          onStart(item.mode, { 
+                            ...item, 
+                            isCustom: true, 
+                            customCounts: fallbackCounts,
+                            selectedChapters: []
+                          });
+                        }
+                      }}
                       className="px-5 py-2 bg-indigo-600 text-white rounded-xl text-xs font-black shadow-md shadow-indigo-100 hover:bg-indigo-700 transition-all"
                     >
                       继续练习
@@ -361,7 +486,13 @@ const PracticeList: React.FC<PracticeProps> = ({ banks, activeBank, history, onS
 
               <div>
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-3 ml-1">选择题型和题数</label>
-                <div className="space-y-3">
+                {store.isLoadingQuestions ? (
+                  <div className="flex items-center justify-center py-12 text-gray-400">
+                    <i className="fa-solid fa-spinner fa-spin mr-2"></i>
+                    <span>正在加载题库数据...</span>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
                   {[
                     { type: QuestionType.SINGLE, label: '单选题', icon: 'fa-circle-dot', color: 'indigo' },
                     { type: QuestionType.MULTIPLE, label: '多选题', icon: 'fa-square-check', color: 'purple' },
@@ -411,6 +542,7 @@ const PracticeList: React.FC<PracticeProps> = ({ banks, activeBank, history, onS
                     </div>
                   ))}
                 </div>
+                )}
               </div>
 
               <div>

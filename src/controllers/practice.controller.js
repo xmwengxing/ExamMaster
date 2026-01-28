@@ -56,7 +56,10 @@ export async function createPracticeRecord(req, res, next) {
       date: req.body.date,
       currentIndex: req.body.currentIndex || 0,
       userAnswers: req.body.userAnswers || {},
-      isCustom: req.body.isCustom || false
+      isCustom: req.body.isCustom || false,
+      customCounts: req.body.customCounts,
+      selectedChapters: req.body.selectedChapters,
+      strategy: req.body.strategy
     };
     
     const practiceId = await practiceService.createPracticeRecord(
