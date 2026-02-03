@@ -17,7 +17,7 @@ const createMockDb = () => {
   return {
     query: async (sql, params = []) => {
       // 模拟查询管理员
-      if (sql.includes("SELECT id, phone, nickname, real_name, password FROM users WHERE role = 'ADMIN'")) {
+      if (sql.includes("SELECT id, phone, nickname, real_name") && sql.includes("WHERE role = 'ADMIN'")) {
         return {
           rows: data.users.filter(u => u.role === 'ADMIN')
         };

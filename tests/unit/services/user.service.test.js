@@ -4,14 +4,20 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // Mock bcryptjs（必须在导入服务之前）
 vi.mock('bcryptjs', () => {
+  const mockCompare = vi.fn();
+  const mockHash = vi.fn();
   const mockCompareSync = vi.fn();
   const mockHashSync = vi.fn();
   
   return {
     default: {
+      compare: mockCompare,
+      hash: mockHash,
       compareSync: mockCompareSync,
       hashSync: mockHashSync
     },
+    compare: mockCompare,
+    hash: mockHash,
     compareSync: mockCompareSync,
     hashSync: mockHashSync
   };
@@ -84,6 +90,7 @@ describe('用户服务 - getUserProfile', () => {
       className: '2024级1班',
       studentPerms: ['exam', 'practice'],
       allowedBankIds: [1, 2, 3],
+      permissions: [], // 添加 permissions 字段
       lastLogin: '2024-01-01T00:00:00Z',
       lastActivity: '2024-01-01T12:00:00Z',
       loginHistory: [{ time: '2024-01-01T00:00:00Z' }],
@@ -221,9 +228,9 @@ describe('用户服务 - changePassword', () => {
     };
 
     mockDb.getOne.mockResolvedValue(mockUser);
-    // 在测试中设置 bcrypt mock 的返回值
-    bcrypt.compareSync.mockReturnValueOnce(true);
-    bcrypt.hashSync.mockReturnValueOnce('new_hashed_password');
+    // 在测试中设置 bcrypt mock 的返回值（使用异步方法）
+    bcrypt.compare.mockResolvedValueOnce(true);
+    bcrypt.hash.mockResolvedValueOnce('new_hashed_password');
 
     const result = await userService.changePassword(mockDb, 1, 'oldPass', 'newPass');
 
@@ -272,7 +279,7 @@ describe('用户服务 - changePassword', () => {
     };
 
     mockDb.getOne.mockResolvedValue(mockUser);
-    bcrypt.compareSync.mockReturnValueOnce(false);
+    bcrypt.compare.mockResolvedValueOnce(false); // 使用异步方法
 
     const result = await userService.changePassword(mockDb, 1, 'wrongPass', 'newPass');
 

@@ -78,10 +78,11 @@ const PracticeModeView: React.FC<PracticeModeProps> = ({
   const [isSrsMasteryUpdated, setIsSrsMasteryUpdated] = useState(false);
 
   // 触摸滑动相关状态
-  const [touchStart, setTouchStart] = useState<number | null>(null);
-  const [touchEnd, setTouchEnd] = useState<number | null>(null);
+  const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(null);
+  const [touchEnd, setTouchEnd] = useState<{ x: number; y: number } | null>(null);
   const [swipeOffset, setSwipeOffset] = useState(0); // 滑动偏移量
   const [isTransitioning, setIsTransitioning] = useState(false); // 是否在过渡动画中
+  const [isHorizontalSwipe, setIsHorizontalSwipe] = useState<boolean | null>(null); // 判断是否为横向滑动
 
   // 填空题状态
   const [fillBlankAnswers, setFillBlankAnswers] = useState<Record<string, string>>({});
@@ -326,6 +327,9 @@ const PracticeModeView: React.FC<PracticeModeProps> = ({
   };
 
   const handleOptionClick = async (label: string) => {
+    // 如果正在横向滑动，忽略点击事件
+    if (isHorizontalSwipe) return;
+    
     if (isAnswered && !isMockMode && !isMemoryMode) return;
     const current = userAnswers[currentQuestion.id] || [];
     let next: string[];
@@ -358,7 +362,24 @@ const PracticeModeView: React.FC<PracticeModeProps> = ({
         else onWrong(currentQuestion);
         
         provideFeedback(isCorrect);
-        setShowExplanation(true);
+        
+        // 答对：自动跳转下一题；答错：显示解析，保持当前题
+        if (isCorrect) {
+          // 答对了，延迟跳转到下一题
+          setTimeout(() => {
+            if (currentIndex < questions.length - 1) {
+              const newIndex = currentIndex + 1;
+              setCurrentIndex(newIndex);
+              currentProgressRef.current.currentIndex = newIndex;
+            } else {
+              // 最后一题答对了，完成练习
+              onFinish();
+            }
+          }, 600); // 给用户看到正确反馈的时间
+        } else {
+          // 答错了，显示解析让用户学习
+          setShowExplanation(true);
+        }
         
         // 移除立即保存：依赖 useEffect 的防抖保存机制
         // 这样可以避免频繁的 API 调用，提升性能
@@ -376,7 +397,6 @@ const PracticeModeView: React.FC<PracticeModeProps> = ({
     }
     setConfirmedIds(prev => new Set(prev).add(currentQuestion.id));
     setIsAnswered(true);
-    setShowExplanation(true);
     const uAnswerStr = [...answers].sort().join('');
     const correctStr = (Array.isArray(currentQuestion.answer) ? [...currentQuestion.answer].sort() : [currentQuestion.answer]).join('');
     const isCorrect = uAnswerStr === correctStr;
@@ -386,6 +406,24 @@ const PracticeModeView: React.FC<PracticeModeProps> = ({
     
     // 更新 ref（防抖保存会自动处理）
     currentProgressRef.current.userAnswers = userAnswers;
+    
+    // 答对：自动跳转下一题；答错：显示解析，保持当前题
+    if (isCorrect) {
+      // 答对了，延迟跳转到下一题
+      setTimeout(() => {
+        if (currentIndex < questions.length - 1) {
+          const newIndex = currentIndex + 1;
+          setCurrentIndex(newIndex);
+          currentProgressRef.current.currentIndex = newIndex;
+        } else {
+          // 最后一题答对了，完成练习
+          onFinish();
+        }
+      }, 600); // 给用户看到正确反馈的时间
+    } else {
+      // 答错了，显示解析让用户学习
+      setShowExplanation(true);
+    }
   };
 
   // 填空题提交处理
@@ -407,7 +445,6 @@ const PracticeModeView: React.FC<PracticeModeProps> = ({
       
       setFillBlankResult(result);
       setIsAnswered(true);
-      setShowExplanation(true);
       
       // 保存用户答案（转换为数组格式以兼容现有系统）
       const answerArray = blanks.map(blank => fillBlankAnswers[blank.id] || '');
@@ -421,9 +458,22 @@ const PracticeModeView: React.FC<PracticeModeProps> = ({
       if (result.isAllCorrect) {
         onCorrect(currentQuestion);
         provideFeedback(true);
+        
+        // 答对了，延迟跳转到下一题
+        setTimeout(() => {
+          if (currentIndex < questions.length - 1) {
+            const newIndex = currentIndex + 1;
+            setCurrentIndex(newIndex);
+            currentProgressRef.current.currentIndex = newIndex;
+          } else {
+            onFinish();
+          }
+        }, 600);
       } else {
         onWrong(currentQuestion);
         provideFeedback(false);
+        // 答错了，显示解析
+        setShowExplanation(true);
       }
       
       // 记录每日进度
@@ -454,6 +504,8 @@ const PracticeModeView: React.FC<PracticeModeProps> = ({
     setIsGradingShortAnswer(true);
     
     try {
+      let isCorrect = false;
+      
       // 如果启用了AI评分，调用AI评分API
       if (currentQuestion.aiGradingEnabled && currentQuestion.referenceAnswer) {
         const result = await store.gradeShortAnswer(
@@ -463,10 +515,11 @@ const PracticeModeView: React.FC<PracticeModeProps> = ({
         );
         
         setShortAnswerResult(result);
+        // 简答题根据AI评分判断是否正确（例如：80分以上算正确）
+        isCorrect = result.score >= 80;
       }
       
       setIsAnswered(true);
-      setShowExplanation(true);
       
       // 保存用户答案
       const newAnswers = {
@@ -475,8 +528,30 @@ const PracticeModeView: React.FC<PracticeModeProps> = ({
       };
       setUserAnswers(newAnswers);
       
-      // 简答题不自动判断对错，由AI评分或教师评分
-      // 但仍然记录进度
+      // 简答题根据AI评分结果决定是否自动跳转
+      if (isCorrect) {
+        onCorrect(currentQuestion);
+        provideFeedback(true);
+        
+        // 答对了，延迟跳转到下一题
+        setTimeout(() => {
+          if (currentIndex < questions.length - 1) {
+            const newIndex = currentIndex + 1;
+            setCurrentIndex(newIndex);
+            currentProgressRef.current.currentIndex = newIndex;
+          } else {
+            onFinish();
+          }
+        }, 800); // 简答题给更多时间看评分结果
+      } else {
+        // 答错或未启用AI评分，显示解析
+        setShowExplanation(true);
+        if (!isCorrect && currentQuestion.aiGradingEnabled) {
+          provideFeedback(false);
+        }
+      }
+      
+      // 记录进度
       if (!isMockMode && !isMemoryMode && !sessionProgressRecorded.current.has(currentQuestion.id)) {
         store.incrementDailyProgress();
         sessionProgressRecorded.current.add(currentQuestion.id);
@@ -572,70 +647,114 @@ const PracticeModeView: React.FC<PracticeModeProps> = ({
     };
   }, [triggerArrows]);
 
-  // 触摸滑动处理
+  // 触摸滑动处理 - 优化版：锁定方向，无缝衔接
   const minSwipeDistance = 50;
   const maxSwipeDistance = 300; // 最大滑动距离，超过此距离不再增加偏移
+  const directionLockThreshold = 10; // 方向锁定阈值
 
   const onTouchStart = (e: React.TouchEvent) => {
+    // 只排除输入框和文本域，允许在按钮和选项上滑动
+    const target = e.target as HTMLElement;
+    if (target.closest('input, textarea')) {
+      return; // 不处理输入框和文本域上的触摸
+    }
+    
     setTouchEnd(null);
-    setTouchStart(e.targetTouches[0].clientX);
+    setTouchStart({
+      x: e.targetTouches[0].clientX,
+      y: e.targetTouches[0].clientY
+    });
     setSwipeOffset(0);
     setIsTransitioning(false);
+    setIsHorizontalSwipe(null);
   };
 
   const onTouchMove = (e: React.TouchEvent) => {
     if (!touchStart) return;
     
-    const currentTouch = e.targetTouches[0].clientX;
-    setTouchEnd(currentTouch);
+    const currentX = e.targetTouches[0].clientX;
+    const currentY = e.targetTouches[0].clientY;
     
-    // 计算滑动距离
-    const distance = currentTouch - touchStart;
+    const deltaX = currentX - touchStart.x;
+    const deltaY = currentY - touchStart.y;
     
-    // 限制滑动距离，并添加阻尼效果
-    let offset = distance;
-    
-    // 边界检查：如果已经是第一题，限制右滑；如果是最后一题，限制左滑
-    if ((currentIndex === 0 && distance > 0) || (currentIndex === questions.length - 1 && distance < 0)) {
-      // 添加阻尼效果：滑动距离越大，实际偏移越小
-      offset = distance * 0.3;
-    } else {
-      // 正常滑动也添加轻微阻尼，让滑动更平滑
-      if (Math.abs(distance) > maxSwipeDistance) {
-        offset = Math.sign(distance) * (maxSwipeDistance + (Math.abs(distance) - maxSwipeDistance) * 0.2);
-      }
+    // 首次移动时判断滑动方向
+    if (isHorizontalSwipe === null && (Math.abs(deltaX) > directionLockThreshold || Math.abs(deltaY) > directionLockThreshold)) {
+      // 判断是横向还是纵向滑动
+      setIsHorizontalSwipe(Math.abs(deltaX) > Math.abs(deltaY));
     }
     
-    setSwipeOffset(offset);
+    // 如果是横向滑动，阻止默认的垂直滚动行为和点击事件
+    if (isHorizontalSwipe) {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      setTouchEnd({ x: currentX, y: currentY });
+      
+      // 计算滑动距离
+      let offset = deltaX;
+      
+      // 边界检查：如果已经是第一题，限制右滑；如果是最后一题，限制左滑
+      if ((currentIndex === 0 && deltaX > 0) || (currentIndex === questions.length - 1 && deltaX < 0)) {
+        // 添加阻尼效果：滑动距离越大，实际偏移越小
+        offset = deltaX * 0.25;
+      } else {
+        // 正常滑动也添加轻微阻尼，让滑动更平滑
+        if (Math.abs(deltaX) > maxSwipeDistance) {
+          offset = Math.sign(deltaX) * (maxSwipeDistance + (Math.abs(deltaX) - maxSwipeDistance) * 0.15);
+        }
+      }
+      
+      setSwipeOffset(offset);
+    }
+    // 如果是纵向滑动，不做任何处理，让页面正常滚动
   };
 
   const onTouchEnd = () => {
-    if (!touchStart || !touchEnd) {
+    if (!touchStart || !touchEnd || !isHorizontalSwipe) {
+      // 重置状态
       setSwipeOffset(0);
+      setTouchStart(null);
+      setTouchEnd(null);
+      setIsHorizontalSwipe(null);
       return;
     }
     
-    const distance = touchStart - touchEnd;
+    const distance = touchStart.x - touchEnd.x;
     const isLeftSwipe = distance > minSwipeDistance;
     const isRightSwipe = distance < -minSwipeDistance;
     
-    setIsTransitioning(true);
-    
-    if (isLeftSwipe && currentIndex < questions.length - 1) {
-      // 左滑切换到下一题
-      handleNext();
-    } else if (isRightSwipe && currentIndex > 0) {
-      // 右滑切换到上一题
-      handlePrev();
-    }
-    
-    // 重置滑动状态
-    setTimeout(() => {
+    // 如果滑动距离足够，执行切换
+    if (isLeftSwipe || isRightSwipe) {
+      setIsTransitioning(true);
+      
+      if (isLeftSwipe && currentIndex < questions.length - 1) {
+        // 左滑切换到下一题
+        handleNext();
+      } else if (isRightSwipe && currentIndex > 0) {
+        // 右滑切换到上一题
+        handlePrev();
+      }
+      
+      // 重置滑动状态
+      setTimeout(() => {
+        setSwipeOffset(0);
+        setIsTransitioning(false);
+        setTouchStart(null);
+        setTouchEnd(null);
+        setIsHorizontalSwipe(null);
+      }, 300);
+    } else {
+      // 滑动距离不够，恢复原位
+      setIsTransitioning(true);
       setSwipeOffset(0);
-      setIsTransitioning(false);
-      setTouchStart(null);
-      setTouchEnd(null);
-    }, 300);
+      setTimeout(() => {
+        setIsTransitioning(false);
+        setTouchStart(null);
+        setTouchEnd(null);
+        setIsHorizontalSwipe(null);
+      }, 200);
+    }
   };
 
   const getQuestionTypeLabel = (type: QuestionType) => {
@@ -721,10 +840,18 @@ const PracticeModeView: React.FC<PracticeModeProps> = ({
 
   return (
     <div 
-      className="max-w-4xl mx-auto space-y-2 md:space-y-6 flex flex-col min-h-full pb-32 md:pb-8 relative select-none"
+      className="max-w-4xl mx-auto space-y-2 md:space-y-6 flex flex-col min-h-full pb-32 md:pb-8 relative select-none touch-pan-y"
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
+      style={{
+        // 优化触摸体验
+        WebkitTouchCallout: 'none',
+        WebkitUserSelect: 'none',
+        userSelect: 'none',
+        // 防止过度滚动
+        overscrollBehaviorX: 'none'
+      }}
     >
       <div className="fixed inset-0 pointer-events-none z-30 flex items-center justify-between px-2 md:px-6">
         <button onClick={(e) => { e.stopPropagation(); handlePrev(); }} disabled={currentIndex === 0} className={`pointer-events-auto w-12 h-12 md:w-16 md:h-16 rounded-full bg-black/30 backdrop-blur-md text-white flex items-center justify-center transition-opacity shadow-xl ${showArrows && currentIndex > 0 ? 'opacity-100' : 'opacity-0 disabled:opacity-0'}`}><i className="fa-solid fa-chevron-left text-xl md:text-2xl"></i></button>
@@ -733,18 +860,70 @@ const PracticeModeView: React.FC<PracticeModeProps> = ({
 
       <div className="flex items-center justify-between px-4 py-0.5 md:py-2 relative z-10">
         <button onClick={(e) => { e.stopPropagation(); handleExit(); }} className="text-gray-400 hover:text-indigo-600 font-black flex items-center gap-2"><i className="fa-solid fa-arrow-left-long"></i> {isMockMode ? '保存并退出' : '退出'}</button>
-        <button onClick={(e) => { e.stopPropagation(); setIsNavOpen(true); }} className="bg-indigo-600 text-white px-4 py-1.5 rounded-2xl text-xs font-black shadow-lg">{currentIndex + 1} / {questions.length} <i className="fa-solid fa-list-check ml-1"></i></button>
+        
+        <div className="flex items-center gap-2">
+          {/* 答对/答错统计 */}
+          {!isMockMode && !isMemoryMode && (
+            <div className="flex items-center gap-2 mr-2">
+              <div className="flex items-center gap-1 bg-emerald-50 px-2 py-1 rounded-lg">
+                <i className="fa-solid fa-check text-emerald-600 text-xs"></i>
+                <span className="text-emerald-600 font-black text-xs">
+                  {questions.filter(q => {
+                    const answer = userAnswers[q.id];
+                    if (!answer || answer.length === 0) return false;
+                    const correctStr = Array.isArray(q.answer) ? q.answer.sort().join('') : q.answer;
+                    const userStr = Array.isArray(answer) ? [...answer].sort().join('') : answer.join('');
+                    return userStr === correctStr;
+                  }).length}
+                </span>
+              </div>
+              <div className="flex items-center gap-1 bg-rose-50 px-2 py-1 rounded-lg">
+                <i className="fa-solid fa-xmark text-rose-600 text-xs"></i>
+                <span className="text-rose-600 font-black text-xs">
+                  {questions.filter(q => {
+                    const answer = userAnswers[q.id];
+                    if (!answer || answer.length === 0) return false;
+                    const correctStr = Array.isArray(q.answer) ? q.answer.sort().join('') : q.answer;
+                    const userStr = Array.isArray(answer) ? [...answer].sort().join('') : answer.join('');
+                    return userStr !== correctStr;
+                  }).length}
+                </span>
+              </div>
+            </div>
+          )}
+          
+          {/* 答题卡按钮 */}
+          <button onClick={(e) => { e.stopPropagation(); setIsNavOpen(true); }} className="bg-indigo-600 text-white px-4 py-1.5 rounded-2xl text-xs font-black shadow-lg">{currentIndex + 1} / {questions.length} <i className="fa-solid fa-list-check ml-1"></i></button>
+        </div>
       </div>
 
-      {/* 题目卡片容器 - 添加滑动动画 */}
+      {/* 题目卡片容器 - 优化的滑动动画 */}
       <div 
-        className="relative"
+        className="relative overflow-hidden"
         style={{
           transform: `translateX(${swipeOffset}px)`,
-          transition: isTransitioning ? 'transform 0.3s ease-out' : 'none',
-          opacity: Math.max(0.5, 1 - Math.abs(swipeOffset) / 400)
+          transition: isTransitioning ? 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)' : 'none',
         }}
       >
+        {/* 滑动提示指示器 */}
+        {Math.abs(swipeOffset) > 20 && !isTransitioning && (
+          <div 
+            className="absolute top-1/2 -translate-y-1/2 z-50 pointer-events-none"
+            style={{
+              [swipeOffset > 0 ? 'left' : 'right']: '20px',
+              opacity: Math.min(Math.abs(swipeOffset) / 100, 0.8)
+            }}
+          >
+            <div className={`w-16 h-16 rounded-full flex items-center justify-center ${
+              (swipeOffset > 0 && currentIndex > 0) || (swipeOffset < 0 && currentIndex < questions.length - 1)
+                ? 'bg-indigo-500/90 text-white'
+                : 'bg-gray-300/90 text-gray-500'
+            } backdrop-blur-sm shadow-xl`}>
+              <i className={`fa-solid ${swipeOffset > 0 ? 'fa-chevron-left' : 'fa-chevron-right'} text-2xl`}></i>
+            </div>
+          </div>
+        )}
+        
         <div className={`bg-white rounded-[2.5rem] p-4 md:p-12 shadow-sm border border-gray-100 animate-in fade-in duration-500 z-10 ${feedbackClass}`}>
           <div className="flex justify-between items-start mb-4 md:mb-8">
              <div className="flex gap-2">
@@ -1148,8 +1327,19 @@ const PracticeModeView: React.FC<PracticeModeProps> = ({
                     </div>
                     <div className="grid grid-cols-5 md:grid-cols-6 gap-2.5">
                       {group.items.map((item) => {
+                        const question = questions.find(q => q.id === item.id);
                         const isAnswered = !!userAnswers[item.id];
                         const isCurrent = currentIndex === item.index;
+                        
+                        // 判断是否答错
+                        let isWrong = false;
+                        if (isAnswered && question && !isMockMode && !isMemoryMode) {
+                          const correctStr = Array.isArray(question.answer) ? question.answer.sort().join('') : question.answer;
+                          const userAnswer = userAnswers[item.id];
+                          const userStr = Array.isArray(userAnswer) ? [...userAnswer].sort().join('') : userAnswer.join('');
+                          isWrong = userStr !== correctStr;
+                        }
+                        
                         return (
                           <button 
                             key={item.id} 
@@ -1157,14 +1347,16 @@ const PracticeModeView: React.FC<PracticeModeProps> = ({
                             className={`aspect-square rounded-xl font-black text-sm border-2 transition-all relative ${
                               isCurrent
                                 ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg scale-105' 
-                                : isAnswered
-                                  ? 'bg-emerald-50 border-emerald-200 text-emerald-600 hover:bg-emerald-100' 
-                                  : 'bg-gray-50 border-gray-200 text-gray-400 hover:border-gray-300 hover:bg-gray-100'
+                                : isWrong
+                                  ? 'bg-rose-500 border-rose-600 text-white hover:bg-rose-600'
+                                  : isAnswered
+                                    ? 'bg-emerald-50 border-emerald-200 text-emerald-600 hover:bg-emerald-100' 
+                                    : 'bg-gray-50 border-gray-200 text-gray-400 hover:border-gray-300 hover:bg-gray-100'
                             }`}
                           >
                             {item.index + 1}
                             {isAnswered && !isCurrent && (
-                              <i className="fa-solid fa-check absolute top-0.5 right-0.5 text-[8px] text-emerald-500"></i>
+                              <i className={`fa-solid ${isWrong ? 'fa-xmark' : 'fa-check'} absolute top-0.5 right-0.5 text-[8px] ${isWrong ? 'text-white' : 'text-emerald-500'}`}></i>
                             )}
                           </button>
                         );

@@ -365,7 +365,7 @@ const App: React.FC = () => {
       case 'home': return <StudentHome user={store.currentUser!} banks={studentBanks} activeBank={currentActiveBank as any} banners={store.systemConfig?.banners || []} announcement={store.systemConfig?.announcement || '欢迎使用'} announcementDuration={store.systemConfig?.announcementDuration ?? 20} onBankChange={store.setActiveBank} onNavigate={(tab, params) => {
         if (tab === 'practice-mode') checkPracticeSession(params.mode, params);
         else handleNavigate(tab, params);
-      }} hasBank={store.currentUser?.studentPerms?.includes('BANK')} hasVideo={store.currentUser?.studentPerms?.includes('VIDEO')} hasPractical={true} questionCounts={{[QuestionType.SINGLE]:0,[QuestionType.MULTIPLE]:0,[QuestionType.JUDGE]:0}} />;
+      }} onLogout={store.logout} hasBank={store.currentUser?.studentPerms?.includes('BANK')} hasVideo={store.currentUser?.studentPerms?.includes('VIDEO')} hasPractical={true} questionCounts={{[QuestionType.SINGLE]:0,[QuestionType.MULTIPLE]:0,[QuestionType.JUDGE]:0}} />;
       case 'banner-detail': return <BannerDetail banner={activeParams?.banner} onBack={() => setActiveTab('home')} />;
       case 'practice': return <PracticeList banks={studentBanks} activeBank={currentActiveBank as any} history={store.practiceRecords} onStart={(m, p) => checkPracticeSession(m, p)} onAddRecord={store.addPracticeRecord} onDeleteRecord={store.deletePracticeRecord} onNavigate={setActiveTab} />;
       case 'favorites': return <Favorites favorites={store.favorites} banks={studentBanks} onStart={(qs) => handleNavigate('practice-mode', { questions: qs, mode: PracticeMode.SEQUENTIAL })} onToggleFavorite={store.toggleFavorite} onBack={() => setActiveTab('practice')} />;

@@ -12,6 +12,7 @@ interface HomeProps {
   announcementDuration?: number;  // 滚动时间（秒）
   onBankChange: (bank: QuestionBank) => void;
   onNavigate: (page: string, params?: any) => void;
+  onLogout: () => void;  // 新增：退出登录回调
   hasBank?: boolean;
   hasVideo?: boolean;
   hasPractical?: boolean;
@@ -20,7 +21,7 @@ interface HomeProps {
 }
 
 const StudentHome: React.FC<HomeProps> = ({ 
-  user, banks, activeBank, banners, announcement, announcementDuration = 20, onBankChange, onNavigate, hasBank = true, hasVideo = true, hasPractical = false, mistakeCount = 0, questionCounts 
+  user, banks, activeBank, banners, announcement, announcementDuration = 20, onBankChange, onNavigate, onLogout, hasBank = true, hasVideo = true, hasPractical = false, mistakeCount = 0, questionCounts 
 }) => {
   const store = useAppStore();
   const [currentBanner, setCurrentBanner] = useState(0);
@@ -167,8 +168,11 @@ const StudentHome: React.FC<HomeProps> = ({
           <button onClick={() => onNavigate('profile')} className="flex items-center gap-2 bg-gray-50 text-gray-600 px-4 md:px-5 py-2 md:py-3 rounded-2xl text-xs font-black hover:bg-gray-100 transition-all border border-gray-100">
             <i className="fa-solid fa-user-pen"></i> 个人档案
           </button>
-          <button onClick={() => onNavigate('account')} className="flex items-center gap-2 bg-gray-900 text-white px-4 md:px-5 py-2 md:py-3 rounded-2xl text-xs font-black hover:bg-black transition-all shadow-lg">
+          <button onClick={() => onNavigate('account')} className="flex items-center gap-2 bg-indigo-600 text-white px-4 md:px-5 py-2 md:py-3 rounded-2xl text-xs font-black hover:bg-indigo-700 transition-all shadow-lg">
             <i className="fa-solid fa-gears"></i> 系统设置
+          </button>
+          <button onClick={onLogout} className="flex items-center gap-2 bg-rose-500 text-white px-4 md:px-5 py-2 md:py-3 rounded-2xl text-xs font-black hover:bg-rose-600 transition-all shadow-lg">
+            <i className="fa-solid fa-right-from-bracket"></i> 退出登录
           </button>
         </div>
       </div>
