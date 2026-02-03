@@ -187,80 +187,80 @@ export async function updateStudent(dbConn, studentId, updates) {
   let paramIndex = 1;
   
   if (nickname !== undefined) {
-    updateFields.push(`nickname = $$${paramIndex++}`);
+    updateFields.push('nickname = $' + paramIndex++);
     values.push(nickname);
   }
   
   if (realName !== undefined) {
-    updateFields.push(`real_name = $$${paramIndex++}`);
+    updateFields.push('real_name = $' + paramIndex++);
     values.push(realName);
   }
   
   if (phone !== undefined) {
-    updateFields.push(`phone = $$${paramIndex++}`);
+    updateFields.push('phone = $' + paramIndex++);
     values.push(phone);
   }
   
   if (password !== undefined && password !== '') {
     const hashedPassword = await bcrypt.hash(password, 10);
-    updateFields.push(`password = $$${paramIndex++}`);
+    updateFields.push('password = $' + paramIndex++);
     values.push(hashedPassword);
   }
   
   if (gender !== undefined) {
-    updateFields.push(`gender = $$${paramIndex++}`);
+    updateFields.push('gender = $' + paramIndex++);
     values.push(gender);
   }
   
   if (idCard !== undefined) {
-    updateFields.push(`id_card = $$${paramIndex++}`);
+    updateFields.push('id_card = $' + paramIndex++);
     values.push(idCard);
   }
   
   if (school !== undefined) {
-    updateFields.push(`school = $$${paramIndex++}`);
+    updateFields.push('school = $' + paramIndex++);
     values.push(school);
   }
   
   if (educationType !== undefined) {
-    updateFields.push(`education_type = $$${paramIndex++}`);
+    updateFields.push('education_type = $' + paramIndex++);
     values.push(educationType);
   }
   
   if (educationLevel !== undefined) {
-    updateFields.push(`education_level = $$${paramIndex++}`);
+    updateFields.push('education_level = $' + paramIndex++);
     values.push(educationLevel);
   }
   
   if (major !== undefined) {
-    updateFields.push(`major = $$${paramIndex++}`);
+    updateFields.push('major = $' + paramIndex++);
     values.push(major);
   }
   
   if (company !== undefined) {
-    updateFields.push(`company = $$${paramIndex++}`);
+    updateFields.push('company = $' + paramIndex++);
     values.push(company);
   }
   
   if (className !== undefined) {
-    updateFields.push(`class_name = $$${paramIndex++}`);
+    updateFields.push('class_name = $' + paramIndex++);
     values.push(className);
   }
   
   if (studentPerms !== undefined) {
     const permsArray = Array.isArray(studentPerms) ? studentPerms : [];
-    updateFields.push(`student_perms = $$${paramIndex++}`);
+    updateFields.push('student_perms = $' + paramIndex++);
     values.push(JSON.stringify(permsArray));
   }
   
   if (allowedBankIds !== undefined) {
     const bankIdsArray = Array.isArray(allowedBankIds) ? allowedBankIds : [];
-    updateFields.push(`allowed_bank_ids = $$${paramIndex++}`);
+    updateFields.push('allowed_bank_ids = $' + paramIndex++);
     values.push(JSON.stringify(bankIdsArray));
   }
   
   if (customFields !== undefined) {
-    updateFields.push(`custom_fields = $$${paramIndex++}`);
+    updateFields.push('custom_fields = $' + paramIndex++);
     values.push(JSON.stringify(customFields || {}));
   }
   
@@ -271,7 +271,7 @@ export async function updateStudent(dbConn, studentId, updates) {
   values.push(studentId);
   
   await dbConn.query(
-    `UPDATE users SET ${updateFields.join(', ')} WHERE id = $${paramIndex}`,
+    'UPDATE users SET ' + updateFields.join(', ') + ' WHERE id = $' + paramIndex,
     values
   );
   
@@ -607,29 +607,29 @@ export async function updateAdmin(dbConn, adminId, updates) {
   let paramIndex = 1;
   
   if (nickname !== undefined) {
-    updateFields.push(`nickname = $${paramIndex++}`);
+    updateFields.push('nickname = $' + paramIndex++);
     values.push(nickname);
   }
   
   if (realName !== undefined) {
-    updateFields.push(`real_name = $${paramIndex++}`);
+    updateFields.push('real_name = $' + paramIndex++);
     values.push(realName);
   }
   
   if (phone !== undefined) {
-    updateFields.push(`phone = $${paramIndex++}`);
+    updateFields.push('phone = $' + paramIndex++);
     values.push(phone);
   }
   
   if (password !== undefined && password !== '') {
     const hashedPassword = await bcrypt.hash(password, 10);
-    updateFields.push(`password = $${paramIndex++}`);
+    updateFields.push('password = $' + paramIndex++);
     values.push(hashedPassword);
   }
   
   if (permissions !== undefined) {
     const permsArray = Array.isArray(permissions) ? permissions : [];
-    updateFields.push(`permissions = $${paramIndex++}`);
+    updateFields.push('permissions = $' + paramIndex++);
     values.push(JSON.stringify(permsArray));
   }
   
@@ -640,7 +640,7 @@ export async function updateAdmin(dbConn, adminId, updates) {
   values.push(adminId);
   
   await dbConn.query(
-    `UPDATE users SET ${updateFields.join(', ')} WHERE id = $${paramIndex}`,
+    'UPDATE users SET ' + updateFields.join(', ') + ' WHERE id = $' + paramIndex,
     values
   );
   

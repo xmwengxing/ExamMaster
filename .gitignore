@@ -114,4 +114,4 @@ convert-questions-python.bat
 postgres/data/
 
 # git仓库批处理
-GitHub一键同步.bat
+快速同步.bat

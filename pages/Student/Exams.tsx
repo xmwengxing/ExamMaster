@@ -135,6 +135,7 @@ interface ExamsProps {
 }
 
 const Exams: React.FC<ExamsProps> = ({ exams, history, banks, allQuestions, onStartExam, onStartMock, onDeleteHistory, initialView, hasPermission = true }) => {
+  const store = useAppStore();
   const [view, setView] = useState<'system' | 'mock' | 'history' | 'review_wrong'>(initialView || 'system');
   const [reviewRecord, setReviewRecord] = useState<ExamRecord | null>(null);
   const [passScorePercent] = useState(60); // 默认及格比例
@@ -261,6 +262,8 @@ const Exams: React.FC<ExamsProps> = ({ exams, history, banks, allQuestions, onSt
     );
   };
 
+  // 区分系统考试历史和模拟考试历史
+  const systemHistory = useMemo(() => history.filter(h => h.examId && !h.id.startsWith('mock')), [history]);
   const mockHistory = useMemo(() => history.filter(h => h.id.startsWith('mock')), [history]);
 
   return (
@@ -282,26 +285,203 @@ const Exams: React.FC<ExamsProps> = ({ exams, history, banks, allQuestions, onSt
       )}
 
       {view === 'system' && (
-        <div className="grid gap-4">
-          {visibleSystemExams.length > 0 ? visibleSystemExams.map(exam => (
-            <div key={exam.id} className="bg-white p-6 rounded-3xl border shadow-sm flex flex-col md:flex-row justify-between items-center gap-4">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600"><i className="fa-solid fa-file-signature text-xl"></i></div>
-                <div>
-                  <h4 className="font-bold text-lg">{exam.title}</h4>
-                  <div className="text-xs text-gray-400 flex flex-wrap gap-4 mt-1">
-                    <span><i className="fa-regular fa-clock mr-1"></i> {exam.duration} 分钟</span>
-                    <span><i className="fa-solid fa-star mr-1"></i> 总分 {exam.totalScore}</span>
-                    {exam.endTime && <span className="text-rose-500 font-bold">截止: {exam.endTime.replace('T', ' ')}</span>}
+        <div className="space-y-6">
+          {/* 系统考试列表 */}
+          <div className="grid gap-4">
+            {visibleSystemExams.length > 0 ? visibleSystemExams.map(exam => {
+              // 检查是否已经参加过此考试
+              const existingRecord = systemHistory.find(h => h.examId === exam.id && h.isFinished);
+              const hasStarted = systemHistory.find(h => h.examId === exam.id);
+              
+              return (
+                <div key={exam.id} className="bg-white p-6 rounded-3xl border shadow-sm flex flex-col md:flex-row justify-between items-center gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600"><i className="fa-solid fa-file-signature text-xl"></i></div>
+                    <div>
+                      <h4 className="font-bold text-lg">{exam.title}</h4>
+                      <div className="text-xs text-gray-400 flex flex-wrap gap-4 mt-1">
+                        <span><i className="fa-regular fa-clock mr-1"></i> {exam.duration} 分钟</span>
+                        <span><i className="fa-solid fa-star mr-1"></i> 总分 {exam.totalScore}</span>
+                        {exam.endTime && <span className="text-rose-500 font-bold">截止: {exam.endTime.replace('T', ' ')}</span>}
+                      </div>
+                      {existingRecord && (
+                        <div className="mt-2 text-xs font-bold text-emerald-600">
+                          <i className="fa-solid fa-check-circle mr-1"></i>
+                          已完成 (得分: {existingRecord.score})
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    {existingRecord ? (
+                      <button 
+                        onClick={() => {
+                          alert('您已经交卷完成此考试，无法再次参加。如需重新考试，请联系管理员。');
+                        }}
+                        className="w-full md:w-auto px-8 py-3 bg-gray-100 text-gray-400 rounded-2xl font-bold"
+                        disabled
+                      >
+                        已完成
+                      </button>
+                    ) : hasStarted && !hasStarted.isFinished ? (
+                      <button 
+                        onClick={async () => {
+                          console.log('[Exams] 继续系统考试，记录:', hasStarted);
+                          
+                          // 先加载题目
+                          const bankId = exam.bankId;
+                          let bankQuestions = [];
+                          if (bankId) {
+                            console.log('[Exams] 加载题库题目:', bankId);
+                            bankQuestions = await store.loadBankQuestions(bankId);
+                            console.log('[Exams] 题目加载完成:', bankQuestions.length);
+                          }
+                          
+                          // 根据 orderedQuestionIds 生成题目列表
+                          let finalQuestions = [];
+                          if (hasStarted.orderedQuestionIds && hasStarted.orderedQuestionIds.length > 0) {
+                            finalQuestions = hasStarted.orderedQuestionIds
+                              .map((id: string) => bankQuestions.find(q => q.id === id))
+                              .filter(Boolean) as Question[];
+                            console.log('[Exams] 根据 orderedQuestionIds 生成题目:', finalQuestions.length);
+                          }
+                          
+                          onStartExam({
+                            ...exam,
+                            initialIndex: hasStarted.currentIndex,
+                            existingAnswers: hasStarted.userAnswers,
+                            orderedQuestionIds: hasStarted.orderedQuestionIds,
+                            recordId: hasStarted.id,
+                            questions: finalQuestions
+                          });
+                        }}
+                        className="w-full md:w-auto px-8 py-3 bg-amber-500 text-white rounded-2xl font-bold shadow-lg shadow-amber-100"
+                      >
+                        继续考试
+                      </button>
+                    ) : (
+                      <button 
+                        onClick={async () => {
+                          console.log('[Exams] 开始系统考试:', exam);
+                          
+                          // 先加载题目
+                          const bankId = exam.bankId;
+                          let bankQuestions = [];
+                          if (bankId) {
+                            console.log('[Exams] 加载题库题目:', bankId);
+                            bankQuestions = await store.loadBankQuestions(bankId);
+                            console.log('[Exams] 题目加载完成:', bankQuestions.length);
+                          }
+                          
+                          // 根据考试配置生成题目列表
+                          let finalQuestions = [];
+                          if (exam.questionIds && exam.questionIds.length > 0) {
+                            // 如果考试指定了题目ID列表
+                            finalQuestions = exam.questionIds
+                              .map((id: string) => bankQuestions.find(q => q.id === id))
+                              .filter(Boolean) as Question[];
+                            console.log('[Exams] 根据 questionIds 生成题目:', finalQuestions.length);
+                          } else {
+                            // 否则随机抽题
+                            const singles = bankQuestions.filter(q => q.type === QuestionType.SINGLE).sort(() => Math.random() - 0.5).slice(0, exam.singleCount || 0);
+                            const multiples = bankQuestions.filter(q => q.type === QuestionType.MULTIPLE).sort(() => Math.random() - 0.5).slice(0, exam.multipleCount || 0);
+                            const judges = bankQuestions.filter(q => q.type === QuestionType.JUDGE).sort(() => Math.random() - 0.5).slice(0, exam.judgeCount || 0);
+                            finalQuestions = [...singles, ...multiples, ...judges];
+                            console.log('[Exams] 随机生成题目:', finalQuestions.length);
+                          }
+                          
+                          onStartExam({
+                            ...exam,
+                            questions: finalQuestions
+                          });
+                        }}
+                        className="w-full md:w-auto px-8 py-3 bg-indigo-600 text-white rounded-2xl font-bold shadow-lg shadow-indigo-100"
+                      >
+                        开始考试
+                      </button>
+                    )}
                   </div>
                 </div>
+              );
+            }) : (
+              <div className="py-20 text-center text-gray-300">
+                 <i className="fa-solid fa-calendar-xmark text-4xl mb-4 opacity-20"></i>
+                 <p className="font-bold">当前暂无正在进行的考试</p>
               </div>
-              <button onClick={() => onStartExam(exam)} className="w-full md:w-auto px-8 py-3 bg-indigo-600 text-white rounded-2xl font-bold shadow-lg shadow-indigo-100">开始考试</button>
-            </div>
-          )) : (
-            <div className="py-20 text-center text-gray-300">
-               <i className="fa-solid fa-calendar-xmark text-4xl mb-4 opacity-20"></i>
-               <p className="font-bold">当前暂无正在进行的考试</p>
+            )}
+          </div>
+          
+          {/* 系统考试历史记录 */}
+          {systemHistory.length > 0 && (
+            <div className="space-y-4">
+              <h3 className="font-black text-gray-400 text-xs uppercase tracking-widest ml-1">系统考试历史记录</h3>
+              <div className="bg-white rounded-3xl border shadow-sm overflow-hidden">
+                <div className="divide-y divide-gray-50">
+                  {systemHistory.map(record => (
+                    <div key={record.id} className="p-5 flex items-center justify-between hover:bg-gray-50/50 transition-colors">
+                      <div className="flex items-center gap-4">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${record.isFinished ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
+                          <i className={`fa-solid ${record.isFinished ? 'fa-check-double' : 'fa-hourglass-half'}`}></i>
+                        </div>
+                        <div>
+                          <div className="font-bold text-gray-800">{record.examTitle}</div>
+                          <div className="flex items-center gap-3 text-xs text-gray-400 font-medium">
+                            <span>得分: <span className="font-black text-gray-600">{record.isFinished ? record.score : '未完成'}</span></span>
+                            <span>|</span>
+                            <span>{record.submitTime}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        {record.isFinished ? (
+                          <button onClick={() => { setReviewRecord(record); setView('review_wrong'); }} className="px-4 py-2 bg-white border text-indigo-600 rounded-xl text-xs font-bold">查阅</button>
+                        ) : (
+                          <button 
+                            onClick={async () => {
+                              console.log('[Exams] 继续系统考试，记录:', record);
+                              
+                              // 先加载题目
+                              const bankId = record.bankId;
+                              let bankQuestions = [];
+                              if (bankId) {
+                                console.log('[Exams] 加载题库题目:', bankId);
+                                bankQuestions = await store.loadBankQuestions(bankId);
+                                console.log('[Exams] 题目加载完成:', bankQuestions.length);
+                              }
+                              
+                              // 根据 orderedQuestionIds 生成题目列表
+                              let finalQuestions = [];
+                              if (record.orderedQuestionIds && record.orderedQuestionIds.length > 0) {
+                                finalQuestions = record.orderedQuestionIds
+                                  .map((id: string) => bankQuestions.find(q => q.id === id))
+                                  .filter(Boolean) as Question[];
+                                console.log('[Exams] 根据 orderedQuestionIds 生成题目:', finalQuestions.length);
+                              }
+                              
+                              // 找到对应的考试配置
+                              const exam = exams.find(e => e.id === record.examId);
+                              if (exam) {
+                                onStartExam({
+                                  ...exam,
+                                  initialIndex: record.currentIndex,
+                                  existingAnswers: record.userAnswers,
+                                  orderedQuestionIds: record.orderedQuestionIds,
+                                  recordId: record.id,
+                                  questions: finalQuestions
+                                });
+                              }
+                            }}
+                            className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-100"
+                          >
+                            继续考试
+                          </button>
+                        )}
+                        <button onClick={() => { if(confirm('确认删除记录？')) onDeleteHistory(record.id); }} className="p-2 text-rose-300 hover:text-rose-600"><i className="fa-solid fa-trash-can"></i></button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -367,7 +547,40 @@ const Exams: React.FC<ExamsProps> = ({ exams, history, banks, allQuestions, onSt
                 <div className="space-y-2"><label className="text-[10px] font-black text-gray-400 uppercase block text-center">简答</label><input type="number" min="0" className="w-full bg-gray-50 border-none rounded-xl px-4 py-3 text-center font-bold" value={mockConfig.shortAnswerCount} onChange={e => setMockConfig({...mockConfig, shortAnswerCount: Number(e.target.value)})} /></div>
               </div>
               <div className="bg-indigo-50/50 p-4 rounded-2xl flex items-center justify-between border border-indigo-100"><span className="text-sm font-bold text-indigo-600">总分</span><span className="text-2xl font-black text-indigo-600">{totalScore}</span></div>
-              <button onClick={() => onStartMock({ ...mockConfig, totalScore, passScore: Math.floor(totalScore * (passScorePercent / 100)) })} className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black shadow-xl">生成随机模拟试卷</button>
+              <button 
+                onClick={async () => {
+                  console.log('[Exams] 生成模拟试卷，配置:', mockConfig);
+                  
+                  // 先加载题目
+                  let bankQuestions = [];
+                  if (mockConfig.bankId) {
+                    console.log('[Exams] 加载题库题目:', mockConfig.bankId);
+                    bankQuestions = await store.loadBankQuestions(mockConfig.bankId);
+                    console.log('[Exams] 题目加载完成:', bankQuestions.length);
+                  }
+                  
+                  // 根据配置生成题目列表
+                  const singles = bankQuestions.filter(q => q.type === QuestionType.SINGLE).sort(() => Math.random() - 0.5).slice(0, mockConfig.singleCount || 0);
+                  const multiples = bankQuestions.filter(q => q.type === QuestionType.MULTIPLE).sort(() => Math.random() - 0.5).slice(0, mockConfig.multipleCount || 0);
+                  const judges = bankQuestions.filter(q => q.type === QuestionType.JUDGE).sort(() => Math.random() - 0.5).slice(0, mockConfig.judgeCount || 0);
+                  const fillInBlanks = bankQuestions.filter(q => q.type === QuestionType.FILL_IN_BLANK).sort(() => Math.random() - 0.5).slice(0, mockConfig.fillInBlankCount || 0);
+                  const shortAnswers = bankQuestions.filter(q => q.type === QuestionType.SHORT_ANSWER).sort(() => Math.random() - 0.5).slice(0, mockConfig.shortAnswerCount || 0);
+                  
+                  const finalQuestions = [...singles, ...multiples, ...judges, ...fillInBlanks, ...shortAnswers];
+                  console.log('[Exams] 生成题目列表:', finalQuestions.length);
+                  
+                  // 传递题目列表
+                  onStartMock({ 
+                    ...mockConfig, 
+                    totalScore, 
+                    passScore: Math.floor(totalScore * (passScorePercent / 100)),
+                    questions: finalQuestions
+                  });
+                }} 
+                className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black shadow-xl"
+              >
+                生成随机模拟试卷
+              </button>
             </div>
           </div>
 
@@ -397,13 +610,37 @@ const Exams: React.FC<ExamsProps> = ({ exams, history, banks, allQuestions, onSt
                             </>
                          ) : (
                             <button 
-                              onClick={() => onStartMock({ 
-                                config: record.examConfig, 
-                                initialIndex: record.currentIndex, 
-                                existingAnswers: record.userAnswers, 
-                                orderedQuestionIds: record.orderedQuestionIds,
-                                recordId: record.id 
-                              })} 
+                              onClick={async () => {
+                                console.log('[Exams] 继续考试，记录:', record);
+                                console.log('[Exams] orderedQuestionIds:', record.orderedQuestionIds);
+                                
+                                // 先加载题目
+                                const bankId = record.examConfig?.bankId || banks[0]?.id;
+                                let bankQuestions = [];
+                                if (bankId) {
+                                  console.log('[Exams] 加载题库题目:', bankId);
+                                  bankQuestions = await store.loadBankQuestions(bankId);
+                                  console.log('[Exams] 题目加载完成:', bankQuestions.length);
+                                }
+                                
+                                // 根据 orderedQuestionIds 生成题目列表
+                                let finalQuestions = [];
+                                if (record.orderedQuestionIds && record.orderedQuestionIds.length > 0) {
+                                  finalQuestions = record.orderedQuestionIds
+                                    .map((id: string) => bankQuestions.find(q => q.id === id))
+                                    .filter(Boolean) as Question[];
+                                  console.log('[Exams] 根据 orderedQuestionIds 生成题目:', finalQuestions.length);
+                                }
+                                
+                                onStartMock({ 
+                                  config: record.examConfig, 
+                                  initialIndex: record.currentIndex, 
+                                  existingAnswers: record.userAnswers, 
+                                  orderedQuestionIds: record.orderedQuestionIds,
+                                  recordId: record.id,
+                                  questions: finalQuestions
+                                });
+                              }} 
                               className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-100"
                             >
                               继续考试

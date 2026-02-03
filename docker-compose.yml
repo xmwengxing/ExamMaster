@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # PostgreSQL 数据库服务
   postgres:
@@ -53,7 +51,7 @@ services:
     # 开发模式：挂载本地代码，修改后无需重新构建
     # 生产环境请注释掉这些挂载
     volumes:
-      - ./server-new.js:/app/server.js:ro
+      - ./server.js:/app/server.js:ro
       - ./db.js:/app/db.js:ro
       - ./utils:/app/utils:ro
       - ./src:/app/src:ro

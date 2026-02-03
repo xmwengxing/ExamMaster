@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { VideoConfig, BannerItem } from '../../types';
 import { useAppStore } from '../../store';
 import RichTextEditor from '../../components/RichTextEditor';
+import CacheManager from '../../components/CacheManager';
 
 interface SystemSettingsProps {
   config: any;
@@ -19,7 +20,7 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({ config, onUpdate, onCha
   const fileRef = useRef<HTMLInputElement>(null);
   const bannerFileRef = useRef<HTMLInputElement>(null);
   const [activeBannerId, setActiveBannerId] = useState<string | null>(null);
-  const [activeCategory, setActiveCategory] = useState<'theme' | 'content' | 'security' | 'ai'>('theme');
+  const [activeCategory, setActiveCategory] = useState<'theme' | 'content' | 'security' | 'ai' | 'cache'>('theme');
 
   useEffect(() => {
     setForm(config || defaultForm);
@@ -146,6 +147,17 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({ config, onUpdate, onCha
         >
           <i className="fa-solid fa-brain"></i>
           智能化
+        </button>
+        <button
+          onClick={() => setActiveCategory('cache')}
+          className={`flex-1 min-w-[120px] flex items-center justify-center gap-2 px-6 py-4 rounded-2xl font-black text-sm transition-all ${
+            activeCategory === 'cache'
+              ? 'bg-gradient-to-br from-blue-500 to-cyan-500 text-white shadow-lg shadow-blue-200'
+              : 'text-gray-400 hover:bg-gray-50'
+          }`}
+        >
+          <i className="fa-solid fa-database"></i>
+          缓存管理
         </button>
       </div>
 
@@ -384,21 +396,34 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({ config, onUpdate, onCha
             </div>
           </div>
 
-          {/* 登录页标语设置 */}
+          {/* 登录页文案设置 */}
           <div className="bg-white p-8 rounded-[2.5rem] border shadow-sm space-y-6">
             <h3 className="font-black text-lg text-gray-800 flex items-center gap-2">
-              <i className="fa-solid fa-quote-left text-emerald-500"></i> 登录页标语
+              <i className="fa-solid fa-quote-left text-emerald-500"></i> 登录页文案
             </h3>
             <div className="space-y-4">
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">PC 端标语</label>
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">PC 端大标题</label>
+                <input 
+                  className="w-full bg-gray-50 rounded-2xl px-5 py-3.5 font-bold outline-none border-2 border-transparent focus:border-emerald-200 transition-all" 
+                  value={form?.loginTitle || ''} 
+                  placeholder="留空则使用 Logo 文字"
+                  onChange={e => setForm(prev => ({ ...(prev || defaultForm), loginTitle: e.target.value }))} 
+                />
+                <p className="text-[10px] text-gray-400 font-medium italic ml-1">
+                  显示在 PC 端登录页左侧大屏顶部（大号字体）<br/>
+                  <span className="text-emerald-600 font-bold">留空则自动使用"Logo 文字"的内容</span>
+                </p>
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">PC 端副标题（标语）</label>
                 <input 
                   className="w-full bg-gray-50 rounded-2xl px-5 py-3.5 font-bold outline-none border-2 border-transparent focus:border-emerald-200 transition-all" 
                   value={form?.loginSlogan || '一站式智能学习与模拟考试管理平台'} 
                   placeholder="一站式智能学习与模拟考试管理平台"
                   onChange={e => setForm(prev => ({ ...(prev || defaultForm), loginSlogan: e.target.value }))} 
                 />
-                <p className="text-[10px] text-gray-400 font-medium italic ml-1">显示在 PC 端登录页左侧大屏区域</p>
+                <p className="text-[10px] text-gray-400 font-medium italic ml-1">显示在 PC 端登录页左侧大屏，标题下方</p>
               </div>
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">移动端标语</label>
@@ -409,6 +434,19 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({ config, onUpdate, onCha
                   onChange={e => setForm(prev => ({ ...(prev || defaultForm), loginSloganMobile: e.target.value }))} 
                 />
                 <p className="text-[10px] text-gray-400 font-medium italic ml-1">显示在移动端登录框上方</p>
+              </div>
+            </div>
+
+            {/* 预览效果 */}
+            <div className="bg-emerald-50 p-6 rounded-2xl border border-emerald-100">
+              <p className="text-xs font-bold text-emerald-700 mb-3">PC 端预览效果</p>
+              <div className="bg-indigo-600 p-6 rounded-xl text-white">
+                <h1 className="text-4xl font-black mb-3 tracking-tight">
+                  {form?.loginTitle || form?.logoText || 'EduMaster'}
+                </h1>
+                <p className="text-lg text-indigo-100 font-light leading-relaxed">
+                  {form?.loginSlogan || '一站式智能学习与模拟考试管理平台'}
+                </p>
               </div>
             </div>
           </div>
@@ -806,19 +844,68 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({ config, onUpdate, onCha
       {activeCategory === 'security' && (
         <div className="space-y-8 animate-in fade-in duration-300">
           {/* 数据维护专区 */}
-          {/* 数据维护专区 */}
           <div className="bg-white p-8 rounded-[2.5rem] border-4 border-dashed border-indigo-50 space-y-6">
             <h3 className="font-black text-lg flex items-center gap-2 text-indigo-600">
               <i className="fa-solid fa-server"></i> 数据维护与灾备
             </h3>
-            <p className="text-xs text-gray-400 font-medium leading-relaxed">建议定期导出全站数据 JSON 存档，以便在更换设备或浏览器清理后快速恢复学员档案及题库进度。</p>
-            <div className="flex gap-4">
-              <button onClick={store.exportData} className="flex-1 bg-white border-2 border-indigo-100 text-indigo-600 py-4 rounded-2xl font-black hover:bg-indigo-50 transition-all flex items-center justify-center gap-3">
-                <i className="fa-solid fa-file-export"></i> 导出完整备份
-              </button>
-              <button onClick={() => fileRef.current?.click()} className="flex-1 bg-indigo-50 text-indigo-600 py-4 rounded-2xl font-black hover:bg-indigo-100 transition-all flex items-center justify-center gap-3">
-                <i className="fa-solid fa-file-import"></i> 恢复数据存档
-                <input type="file" ref={fileRef} className="hidden" accept=".json" onChange={e => e.target.files?.[0] && store.importData(e.target.files[0])} />
+            <p className="text-xs text-gray-400 font-medium leading-relaxed">
+              支持全量数据备份和题库独立备份，建议定期导出存档以防数据丢失。
+            </p>
+            
+            {/* 全量备份 */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <i className="fa-solid fa-database text-indigo-500 text-sm"></i>
+                <span className="font-bold text-gray-800 text-sm">全量数据备份</span>
+                <span className="text-[10px] font-black bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full">JSON 格式</span>
+              </div>
+              <p className="text-[10px] text-gray-500 font-medium leading-relaxed ml-6">
+                包含所有学员信息、题库、题目、考试记录、练习进度等完整数据，适合系统迁移或完整恢复。
+              </p>
+              <div className="flex gap-4 ml-6">
+                <button onClick={store.exportData} className="flex-1 bg-white border-2 border-indigo-100 text-indigo-600 py-4 rounded-2xl font-black hover:bg-indigo-50 transition-all flex items-center justify-center gap-3">
+                  <i className="fa-solid fa-file-export"></i> 导出完整备份
+                </button>
+                <button onClick={() => fileRef.current?.click()} className="flex-1 bg-indigo-50 text-indigo-600 py-4 rounded-2xl font-black hover:bg-indigo-100 transition-all flex items-center justify-center gap-3">
+                  <i className="fa-solid fa-file-import"></i> 恢复数据存档
+                  <input type="file" ref={fileRef} className="hidden" accept=".json" onChange={e => e.target.files?.[0] && store.importData(e.target.files[0])} />
+                </button>
+              </div>
+            </div>
+
+            {/* 题库独立备份 */}
+            <div className="space-y-3 pt-4 border-t border-gray-100">
+              <div className="flex items-center gap-2">
+                <i className="fa-solid fa-book text-green-500 text-sm"></i>
+                <span className="font-bold text-gray-800 text-sm">题库独立备份</span>
+                <span className="text-[10px] font-black bg-green-100 text-green-600 px-2 py-0.5 rounded-full">SQL 格式</span>
+                <span className="text-[10px] font-black bg-amber-100 text-amber-600 px-2 py-0.5 rounded-full">推荐</span>
+              </div>
+              <p className="text-[10px] text-gray-500 font-medium leading-relaxed ml-6">
+                单独导出题库数据（包括题目、图片、标签），支持跨系统导入，适合题库备份和迁移。
+              </p>
+              <div className="bg-green-50 p-4 rounded-2xl border border-green-100 ml-6">
+                <div className="flex items-start gap-3">
+                  <i className="fa-solid fa-lightbulb text-green-500 mt-0.5"></i>
+                  <div className="flex-1">
+                    <p className="text-xs text-green-700 font-bold mb-1">使用建议</p>
+                    <p className="text-[10px] text-green-600 font-medium leading-relaxed">
+                      前往"题库管理"页面，点击题库卡片右上角的下载图标即可导出单个题库备份。
+                      题库备份包含完整的题目内容、图片和标签信息，可在任何时候一键恢复。
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <button 
+                onClick={() => {
+                  // 跳转到题库管理页面
+                  const event = new CustomEvent('navigate', { detail: { path: '/admin/banks' } });
+                  window.dispatchEvent(event);
+                }}
+                className="ml-6 bg-green-600 text-white px-6 py-3 rounded-xl font-black hover:bg-green-700 transition-all flex items-center gap-2"
+              >
+                <i className="fa-solid fa-arrow-right"></i>
+                前往题库管理
               </button>
             </div>
           </div>
@@ -871,12 +958,15 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({ config, onUpdate, onCha
           <div className="bg-white p-8 rounded-[2.5rem] border shadow-sm space-y-6">
             <h3 className="font-black text-lg text-orange-600 flex items-center gap-2">
               <i className="fa-solid fa-broom"></i> 数据清理与归档
+              <span className="text-[10px] font-black bg-amber-100 text-amber-600 px-3 py-1 rounded-full">功能规划中</span>
             </h3>
-            <p className="text-xs text-gray-400 font-medium leading-relaxed">定期清理过期数据，保持系统运行流畅</p>
+            <p className="text-xs text-gray-400 font-medium leading-relaxed">
+              定期清理过期数据，保持系统运行流畅。以下功能将在后续版本中实现。
+            </p>
             
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="p-5 bg-orange-50 rounded-2xl border border-orange-100">
+                <div className="p-5 bg-orange-50 rounded-2xl border border-orange-100 opacity-60">
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
                       <i className="fa-solid fa-clock-rotate-left text-orange-500"></i>
@@ -886,18 +976,14 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({ config, onUpdate, onCha
                   </div>
                   <p className="text-[10px] text-gray-500 font-medium mb-3">自动清理 90 天前的登录记录</p>
                   <button 
-                    onClick={() => {
-                      if (confirm('确定清理 90 天前的登录日志吗？')) {
-                        alert('清理功能开发中，将在后续版本实现');
-                      }
-                    }}
-                    className="w-full bg-white text-orange-600 py-2 rounded-xl text-xs font-black hover:bg-orange-100 transition-all border border-orange-200"
+                    disabled
+                    className="w-full bg-gray-200 text-gray-400 py-2 rounded-xl text-xs font-black cursor-not-allowed"
                   >
-                    立即清理
+                    功能开发中
                   </button>
                 </div>
 
-                <div className="p-5 bg-purple-50 rounded-2xl border border-purple-100">
+                <div className="p-5 bg-purple-50 rounded-2xl border border-purple-100 opacity-60">
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
                       <i className="fa-solid fa-file-lines text-purple-500"></i>
@@ -907,18 +993,14 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({ config, onUpdate, onCha
                   </div>
                   <p className="text-[10px] text-gray-500 font-medium mb-3">自动清理 180 天前的考试历史</p>
                   <button 
-                    onClick={() => {
-                      if (confirm('确定清理 180 天前的考试记录吗？')) {
-                        alert('清理功能开发中，将在后续版本实现');
-                      }
-                    }}
-                    className="w-full bg-white text-purple-600 py-2 rounded-xl text-xs font-black hover:bg-purple-100 transition-all border border-purple-200"
+                    disabled
+                    className="w-full bg-gray-200 text-gray-400 py-2 rounded-xl text-xs font-black cursor-not-allowed"
                   >
-                    立即清理
+                    功能开发中
                   </button>
                 </div>
 
-                <div className="p-5 bg-blue-50 rounded-2xl border border-blue-100">
+                <div className="p-5 bg-blue-50 rounded-2xl border border-blue-100 opacity-60">
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
                       <i className="fa-solid fa-book text-blue-500"></i>
@@ -928,18 +1010,14 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({ config, onUpdate, onCha
                   </div>
                   <p className="text-[10px] text-gray-500 font-medium mb-3">自动清理 180 天前的练习进度</p>
                   <button 
-                    onClick={() => {
-                      if (confirm('确定清理 180 天前的练习记录吗？')) {
-                        alert('清理功能开发中，将在后续版本实现');
-                      }
-                    }}
-                    className="w-full bg-white text-blue-600 py-2 rounded-xl text-xs font-black hover:bg-blue-100 transition-all border border-blue-200"
+                    disabled
+                    className="w-full bg-gray-200 text-gray-400 py-2 rounded-xl text-xs font-black cursor-not-allowed"
                   >
-                    立即清理
+                    功能开发中
                   </button>
                 </div>
 
-                <div className="p-5 bg-gray-50 rounded-2xl border border-gray-200">
+                <div className="p-5 bg-gray-50 rounded-2xl border border-gray-200 opacity-60">
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
                       <i className="fa-solid fa-trash text-gray-500"></i>
@@ -949,15 +1027,24 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({ config, onUpdate, onCha
                   </div>
                   <p className="text-[10px] text-gray-500 font-medium mb-3">清理缓存、临时文件等</p>
                   <button 
-                    onClick={() => {
-                      if (confirm('确定清理所有临时数据吗？')) {
-                        alert('清理功能开发中，将在后续版本实现');
-                      }
-                    }}
-                    className="w-full bg-white text-gray-600 py-2 rounded-xl text-xs font-black hover:bg-gray-100 transition-all border border-gray-300"
+                    disabled
+                    className="w-full bg-gray-200 text-gray-400 py-2 rounded-xl text-xs font-black cursor-not-allowed"
                   >
-                    立即清理
+                    功能开发中
                   </button>
+                </div>
+              </div>
+
+              <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100">
+                <div className="flex items-start gap-3">
+                  <i className="fa-solid fa-info-circle text-blue-500 mt-0.5"></i>
+                  <div className="flex-1">
+                    <p className="text-xs text-blue-700 font-bold mb-1">功能说明</p>
+                    <p className="text-[10px] text-blue-600 font-medium leading-relaxed">
+                      数据清理功能将在后续版本中实现。目前系统会自动管理数据，无需手动清理。
+                      如需释放存储空间，建议定期导出重要数据后，通过数据库管理工具进行清理。
+                    </p>
+                  </div>
                 </div>
               </div>
 
@@ -1334,6 +1421,13 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({ config, onUpdate, onCha
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* 缓存管理 */}
+      {activeCategory === 'cache' && (
+        <div className="animate-in fade-in duration-300">
+          <CacheManager />
         </div>
       )}
     </div>

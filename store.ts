@@ -6,7 +6,7 @@ import {
   AuditLog, QuestionNote, DailyProgress, StudentPermission, PracticeMode,
   PracticalTask, PracticalTaskRecord, SrsRecord
 } from './types';
-import { getCachedData, setCachedData, CACHE_KEYS, clearAllCache } from './utils/cache';
+import { getCachedData, setCachedData, CACHE_KEYS, clearAllCache, removeCachedData, removeCachedDataByPrefix } from './utils/cache';
 
 const API_BASE = '/api';
 
@@ -97,9 +97,14 @@ const fetchApi = async (endpoint: string, options: any = {}, retries: number = 2
   }
 };
 
+// 内存缓存层：避免重复加载同一题库
+const questionsMemoryCache = new Map<string, { data: Question[], timestamp: number }>();
+const MEMORY_CACHE_DURATION = 5 * 60 * 1000; // 5分钟内存缓存
+
 export const useAppStore = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingQuestions, setIsLoadingQuestions] = useState(false);  // 题目加载状态
   const [banks, setBanks] = useState<QuestionBank[]>([]);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [exams, setExams] = useState<Exam[]>([]);
@@ -110,17 +115,6 @@ export const useAppStore = () => {
   const [favorites, setFavorites] = useState<Question[]>([]);
   const [activeBank, setActiveBank] = useState<QuestionBank | null>(null);
   const [srsRecords, setSrsRecords] = useState<SrsRecord[]>([]);
-
-  // 缓存：讨论和标签数据（5分钟有效期）
-  const [discussionsCache, setDiscussionsCache] = useState<{
-    data: any[];
-    timestamp: number;
-    params: string;
-  } | null>(null);
-  const [tagsCache, setTagsCache] = useState<{
-    data: any[];
-    timestamp: number;
-  } | null>(null);
 
   // Added missing states for administrative and functional features
   const [students, setStudents] = useState<User[]>([]);
@@ -227,21 +221,20 @@ export const useAppStore = () => {
         // 尝试从缓存加载
         const cachedPractice = getCachedData<PracticeRecord[]>(CACHE_KEYS.PRACTICE_RECORDS);
         const cachedFavorites = getCachedData<Question[]>(CACHE_KEYS.FAVORITES);
-        const cachedQuestions = getCachedData<Question[]>(CACHE_KEYS.QUESTIONS);
         const cachedExams = getCachedData<Exam[]>(CACHE_KEYS.EXAMS);
+        // ⚠️ 不再加载所有题目，改为按需加载以避免数据过大问题
         
         // 如果有缓存，立即使用
         if (cachedPractice) setPracticeRecords(cachedPractice);
         if (cachedFavorites) setFavorites(cachedFavorites);
-        if (cachedQuestions) setQuestions(cachedQuestions);
         if (cachedExams) setExams(cachedExams);
         
-        // 从服务器加载最新数据
-        const [practiceData, favoritesData, questionsData, examsData] = await Promise.all([
+        // 从服务器加载最新数据（移除 questions 的全量加载）
+        const [practiceData, favoritesData, examsData] = await Promise.all([
           fetchApi('/practice').catch(() => cachedPractice || []),
           fetchApi('/favorites').catch(() => cachedFavorites || []),
-          fetchApi('/questions').catch(() => cachedQuestions || []),
           fetchApi('/exams').catch(() => cachedExams || []),
+          // ❌ 移除：fetchApi('/questions').catch(() => [])  // 数据过大（8MB+），导致 HTTP/2 错误
         ]);
 
         // 解析 practice_records
@@ -255,14 +248,14 @@ export const useAppStore = () => {
         
         setPracticeRecords(parsedPracticeRecords);
         setFavorites(favoritesData || []);
-        setQuestions(questionsData || []);
         setExams(examsData || []);
+        // ✅ 题目数据将在切换题库或进入练习时按需加载
         
         // 缓存次要数据（10分钟）
         setCachedData(CACHE_KEYS.PRACTICE_RECORDS, parsedPracticeRecords, 10 * 60 * 1000);
         setCachedData(CACHE_KEYS.FAVORITES, favoritesData, 10 * 60 * 1000);
-        setCachedData(CACHE_KEYS.QUESTIONS, questionsData, 30 * 60 * 1000);
         setCachedData(CACHE_KEYS.EXAMS, examsData, 10 * 60 * 1000);
+        // ❌ 不再缓存所有题目
         
         console.log('[refreshAll] 阶段2完成');
       }, 100);
@@ -338,6 +331,68 @@ export const useAppStore = () => {
     }
   }, [activeBank]);
 
+  // 按需加载题库题目（三层缓存：内存 -> localStorage -> 服务器）
+  const loadBankQuestions = useCallback(async (bankId: string) => {
+    try {
+      const cacheKey = `questions_bank_${bankId}`;
+      
+      // 立即设置加载状态
+      setIsLoadingQuestions(true);
+      
+      // 第一层：检查内存缓存（最快，< 1ms）
+      const memoryCache = questionsMemoryCache.get(bankId);
+      if (memoryCache && Date.now() - memoryCache.timestamp < MEMORY_CACHE_DURATION) {
+        console.log(`[loadBankQuestions] 内存缓存命中: ${bankId} (${memoryCache.data.length} 题)`);
+        setQuestions(memoryCache.data);
+        setIsLoadingQuestions(false);
+        return memoryCache.data;
+      }
+      
+      // 第二层：检查 localStorage 缓存（快，< 100ms）
+      const cached = getCachedData<Question[]>(cacheKey);
+      if (cached && cached.length > 0) {
+        console.log(`[loadBankQuestions] localStorage 缓存命中: ${bankId} (${cached.length} 题)`);
+        setQuestions(cached);
+        // 更新内存缓存
+        questionsMemoryCache.set(bankId, { data: cached, timestamp: Date.now() });
+        setIsLoadingQuestions(false);
+        return cached;
+      }
+      
+      // 第三层：从服务器加载（慢，可能需要几秒）
+      console.log(`[loadBankQuestions] 从服务器加载: ${bankId}`);
+      const questions = await fetchApi(`/questions?bankId=${bankId}`);
+      
+      console.log(`[loadBankQuestions] 加载成功: ${bankId} (${questions.length} 题)`);
+      
+      // 更新所有缓存层
+      setCachedData(cacheKey, questions, 30 * 60 * 1000); // localStorage: 30分钟
+      questionsMemoryCache.set(bankId, { data: questions, timestamp: Date.now() }); // 内存: 5分钟
+      
+      setQuestions(questions);
+      
+      return questions;
+    } catch (error) {
+      console.error('[loadBankQuestions] 加载失败:', error);
+      return [];
+    } finally {
+      setIsLoadingQuestions(false);
+    }
+  }, []);
+
+  // 修改 setActiveBank 以支持按需加载
+  const handleSetActiveBank = useCallback(async (bank: QuestionBank | null) => {
+    setActiveBank(bank);
+    
+    // 切换题库时加载该题库的题目
+    if (bank && bank.id) {
+      await loadBankQuestions(bank.id);
+    } else {
+      // 未选择题库时，清空题目列表
+      setQuestions([]);
+    }
+  }, [loadBankQuestions]);
+
   useEffect(() => { refreshAll(); }, [refreshAll]);
 
   // Heartbeat interval - send heartbeat every 2 minutes to update online status
@@ -408,9 +463,13 @@ export const useAppStore = () => {
   }, [refreshPracticeRecords]);
 
   const storeValue = useMemo(() => ({
-    isLoading, currentUser, banks, questions, exams, practiceRecords, examHistory, systemConfig, mistakes, favorites, srsRecords,
+    isLoading, 
+    isLoadingQuestions,  // 导出题目加载状态
+    currentUser, banks, questions, exams, practiceRecords, examHistory, systemConfig, mistakes, favorites, srsRecords,
     students, admins, loginLogs, auditLogs, practicalTasks, practicalRecords, customFieldSchema, allProgress,
-    activeBank: activeBank || banks[0], setActiveBank,
+    activeBank: activeBank || banks[0], 
+    setActiveBank: handleSetActiveBank,  // 使用新的处理函数，支持按需加载题目
+    loadBankQuestions,  // 导出按需加载函数
     
     login: async (phone: string, pass: string, role: UserRole) => {
       try {
@@ -463,8 +522,6 @@ export const useAppStore = () => {
       setPracticalRecords([]);
       setCustomFieldSchema([]);
       setAllProgress([]);
-      setDiscussionsCache(null);
-      setTagsCache(null);
       
       // 通知其他标签页退出登录
       localStorage.setItem('edu_logout_event', Date.now().toString());
@@ -814,13 +871,13 @@ export const useAppStore = () => {
     
     // 获取所有标签（带缓存）
     fetchTags: async (forceRefresh = false) => {
-      const now = Date.now();
-      const CACHE_DURATION = 5 * 60 * 1000; // 5分钟
-      
-      // 如果有缓存且未过期，直接返回缓存
-      if (!forceRefresh && tagsCache && (now - tagsCache.timestamp < CACHE_DURATION)) {
-        console.log('[fetchTags] 使用缓存数据');
-        return tagsCache.data;
+      // 优先使用 localStorage 缓存（30分钟）
+      if (!forceRefresh) {
+        const cached = getCachedData<any[]>(CACHE_KEYS.TAGS);
+        if (cached && cached.length >= 0) {
+          console.log('[fetchTags] 使用 localStorage 缓存');
+          return cached;
+        }
       }
       
       try {
@@ -828,19 +885,17 @@ export const useAppStore = () => {
         const result = await fetchApi('/tags');
         const tags = result.tags || [];
         
-        // 更新缓存
-        setTagsCache({
-          data: tags,
-          timestamp: now
-        });
+        // 缓存到 localStorage（30分钟）
+        setCachedData(CACHE_KEYS.TAGS, tags, 30 * 60 * 1000);
         
         return tags;
       } catch (e: any) {
         console.error('[fetchTags] Failed:', e);
-        // 如果请求失败但有缓存，返回缓存数据
-        if (tagsCache) {
+        // 如果请求失败，尝试使用过期的缓存
+        const cached = getCachedData<any[]>(CACHE_KEYS.TAGS);
+        if (cached) {
           console.log('[fetchTags] 请求失败，使用缓存数据');
-          return tagsCache.data;
+          return cached;
         }
         throw e;
       }
@@ -854,7 +909,7 @@ export const useAppStore = () => {
           body: JSON.stringify({ name, color })
         });
         // 清除标签缓存
-        setTagsCache(null);
+        removeCachedData(CACHE_KEYS.TAGS);
         return result.tag;
       } catch (e: any) {
         console.error('[createTag] Failed:', e);
@@ -870,7 +925,7 @@ export const useAppStore = () => {
           body: JSON.stringify({ name, color })
         });
         // 清除标签缓存
-        setTagsCache(null);
+        removeCachedData(CACHE_KEYS.TAGS);
         return result.tag;
       } catch (e: any) {
         console.error('[updateTag] Failed:', e);
@@ -883,7 +938,7 @@ export const useAppStore = () => {
       try {
         await fetchApi(`/tags/${id}`, { method: 'DELETE' });
         // 清除标签缓存
-        setTagsCache(null);
+        removeCachedData(CACHE_KEYS.TAGS);
       } catch (e: any) {
         console.error('[deleteTag] Failed:', e);
         throw e;
@@ -898,7 +953,7 @@ export const useAppStore = () => {
           body: JSON.stringify({ sourceTagId, targetTagId })
         });
         // 清除标签缓存
-        setTagsCache(null);
+        removeCachedData(CACHE_KEYS.TAGS);
       } catch (e: any) {
         console.error('[mergeTags] Failed:', e);
         throw e;
@@ -941,16 +996,15 @@ export const useAppStore = () => {
       sortBy?: 'latest' | 'hot' | 'mostCommented';
       includeHidden?: boolean;
     }, forceRefresh = false) => {
-      const now = Date.now();
-      const CACHE_DURATION = 5 * 60 * 1000; // 5分钟
-      const cacheKey = JSON.stringify(params || {});
+      const cacheKey = `${CACHE_KEYS.DISCUSSIONS}_${JSON.stringify(params || {})}`;
       
-      // 如果有缓存且未过期，直接返回缓存
-      if (!forceRefresh && discussionsCache && 
-          discussionsCache.params === cacheKey && 
-          (now - discussionsCache.timestamp < CACHE_DURATION)) {
-        console.log('[fetchDiscussions] 使用缓存数据');
-        return discussionsCache.data;
+      // 优先使用 localStorage 缓存（30分钟）
+      if (!forceRefresh) {
+        const cached = getCachedData<any[]>(cacheKey);
+        if (cached && cached.length >= 0) {
+          console.log('[fetchDiscussions] 使用 localStorage 缓存');
+          return cached;
+        }
       }
       
       try {
@@ -964,20 +1018,17 @@ export const useAppStore = () => {
         const result = await fetchApi(`/discussions${query ? '?' + query : ''}`);
         const discussions = result.discussions || [];
         
-        // 更新缓存
-        setDiscussionsCache({
-          data: discussions,
-          timestamp: now,
-          params: cacheKey
-        });
+        // 缓存到 localStorage（30分钟）
+        setCachedData(cacheKey, discussions, 30 * 60 * 1000);
         
         return discussions;
       } catch (e: any) {
         console.error('[fetchDiscussions] Failed:', e);
-        // 如果请求失败但有缓存，返回缓存数据
-        if (discussionsCache && discussionsCache.params === cacheKey) {
+        // 如果请求失败，尝试使用过期的缓存
+        const cached = getCachedData<any[]>(cacheKey);
+        if (cached) {
           console.log('[fetchDiscussions] 请求失败，使用缓存数据');
-          return discussionsCache.data;
+          return cached;
         }
         throw e;
       }
@@ -1005,8 +1056,8 @@ export const useAppStore = () => {
           method: 'POST',
           body: JSON.stringify(data)
         });
-        // 清除讨论缓存
-        setDiscussionsCache(null);
+        // 清除所有讨论缓存
+        removeCachedDataByPrefix(CACHE_KEYS.DISCUSSIONS);
         return result.discussion;
       } catch (e: any) {
         console.error('[createDiscussion] Failed:', e);
@@ -1024,8 +1075,8 @@ export const useAppStore = () => {
           method: 'PUT',
           body: JSON.stringify(data)
         });
-        // 清除讨论缓存
-        setDiscussionsCache(null);
+        // 清除所有讨论缓存
+        removeCachedDataByPrefix(CACHE_KEYS.DISCUSSIONS);
         return result.discussion;
       } catch (e: any) {
         console.error('[updateDiscussion] Failed:', e);
@@ -1037,8 +1088,8 @@ export const useAppStore = () => {
     deleteDiscussion: async (id: string) => {
       try {
         await fetchApi(`/discussions/${id}`, { method: 'DELETE' });
-        // 清除讨论缓存
-        setDiscussionsCache(null);
+        // 清除所有讨论缓存
+        removeCachedDataByPrefix(CACHE_KEYS.DISCUSSIONS);
       } catch (e: any) {
         console.error('[deleteDiscussion] Failed:', e);
         throw e;
@@ -1051,8 +1102,8 @@ export const useAppStore = () => {
         const result = await fetchApi(`/discussions/${id}/toggle-visibility`, {
           method: 'POST'
         });
-        // 清除讨论缓存
-        setDiscussionsCache(null);
+        // 清除所有讨论缓存
+        removeCachedDataByPrefix(CACHE_KEYS.DISCUSSIONS);
         return result.discussion;
       } catch (e: any) {
         console.error('[toggleDiscussionVisibility] Failed:', e);
@@ -1066,8 +1117,8 @@ export const useAppStore = () => {
         const result = await fetchApi(`/discussions/${id}/toggle-pin`, {
           method: 'POST'
         });
-        // 清除讨论缓存
-        setDiscussionsCache(null);
+        // 清除所有讨论缓存
+        removeCachedDataByPrefix(CACHE_KEYS.DISCUSSIONS);
         return result.discussion;
       } catch (e: any) {
         console.error('[toggleDiscussionPin] Failed:', e);
@@ -1200,7 +1251,7 @@ export const useAppStore = () => {
         throw e;
       }
     }
-  }), [isLoading, currentUser, banks, questions, exams, practiceRecords, examHistory, systemConfig, mistakes, favorites, srsRecords, students, admins, loginLogs, auditLogs, practicalTasks, practicalRecords, customFieldSchema, refreshAll]);
+  }), [isLoading, currentUser, banks, questions, exams, practiceRecords, examHistory, systemConfig, mistakes, favorites, srsRecords, students, admins, loginLogs, auditLogs, practicalTasks, practicalRecords, customFieldSchema, refreshAll, handleSetActiveBank, loadBankQuestions]);
 
   return storeValue;
 };

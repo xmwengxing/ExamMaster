@@ -111,6 +111,60 @@ const App: React.FC = () => {
     return () => window.removeEventListener('storage', handleStorageChange);
   }, [store]);
 
+  // 自动加载题目：当切换到需要题目的页面时
+  useEffect(() => {
+    // 学员端页面：按需加载当前题库的题目
+    const studentNeedsQuestions = ['practice', 'practice-mode', 'favorites', 'mistakes'];
+    
+    if (studentNeedsQuestions.includes(activeTab) && store.activeBank?.id) {
+      // 检查是否已加载该题库的题目
+      const hasQuestions = store.questions.some(q => q.bankId === store.activeBank?.id);
+      
+      if (!hasQuestions) {
+        console.log('[App] 学员端自动加载题库题目:', store.activeBank.name, store.activeBank.id);
+        store.loadBankQuestions(store.activeBank.id).catch(err => {
+          console.error('[App] 加载题目失败:', err);
+        });
+      }
+    }
+    
+    // 管理员页面：需要加载所有题目
+    const adminNeedsAllQuestions = ['banks', 'admin-exams'];
+    
+    if (adminNeedsAllQuestions.includes(activeTab) && store.currentUser?.role === UserRole.ADMIN) {
+      // 检查是否已加载所有题目
+      if (store.questions.length === 0) {
+        console.log('[App] 管理员页面加载所有题目');
+        // 加载所有题库的题目
+        Promise.all(
+          store.banks.map(bank => store.loadBankQuestions(bank.id))
+        ).then(() => {
+          console.log('[App] 所有题目加载完成，共', store.questions.length, '题');
+        }).catch(err => {
+          console.error('[App] 加载所有题目失败:', err);
+        });
+      }
+    }
+  }, [activeTab, store.activeBank?.id, store.questions.length, store.currentUser?.role, store.banks.length]);
+
+  // 预加载机制：在练习页面时预加载题目（提升响应速度）
+  useEffect(() => {
+    if (activeTab === 'practice' && store.activeBank?.id) {
+      // 延迟 500ms 预加载，避免阻塞主线程
+      const timer = setTimeout(() => {
+        const hasQuestions = store.questions.some(q => q.bankId === store.activeBank?.id);
+        if (!hasQuestions && !store.isLoadingQuestions) {
+          console.log('[App] 预加载题库题目:', store.activeBank.name);
+          store.loadBankQuestions(store.activeBank.id).catch(err => {
+            console.debug('[App] 预加载失败（不影响使用）:', err);
+          });
+        }
+      }, 500);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [activeTab, store.activeBank?.id, store.isLoadingQuestions]);
+
   const handleNavigate = (tab: string, params: any = null) => {
     setActiveTab(tab);
     setActiveParams(params);
@@ -229,6 +283,7 @@ const App: React.FC = () => {
     const logoIcon = themeConfig.logoIcon || 'fa-graduation-cap';
     const logoText = themeConfig.logoText || 'EduMaster';
     const logoImage = themeConfig.logoImage || '';
+    const loginTitle = themeConfig.loginTitle || logoText; // 登录页标题，默认使用 Logo 文字
     const loginSlogan = themeConfig.loginSlogan || '一站式智能学习与模拟考试管理平台';
     const loginSloganMobile = themeConfig.loginSloganMobile || '智能学习，轻松备考';
     
@@ -239,7 +294,7 @@ const App: React.FC = () => {
             <div className="absolute top-0 left-0 w-96 h-96 bg-white rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2"></div>
           </div>
           <div className="max-w-md relative z-10 text-center md:text-left">
-            <h1 className="text-6xl font-black mb-6 tracking-tight">{logoText}</h1>
+            <h1 className="text-6xl font-black mb-6 tracking-tight">{loginTitle}</h1>
             <p className="text-xl text-indigo-100 mb-8 font-light leading-relaxed">{loginSlogan}</p>
           </div>
         </div>
@@ -316,14 +371,42 @@ const App: React.FC = () => {
       case 'favorites': return <Favorites favorites={store.favorites} banks={studentBanks} onStart={(qs) => handleNavigate('practice-mode', { questions: qs, mode: PracticeMode.SEQUENTIAL })} onToggleFavorite={store.toggleFavorite} onBack={() => setActiveTab('practice')} />;
       case 'mistakes': return <Mistakes mistakes={store.mistakes} banks={studentBanks} onStart={(m, p) => checkPracticeSession(m, p)} />;
       case 'profile': return <Profile user={store.currentUser!} customFieldSchema={store.customFieldSchema} onUpdate={store.updateProfile} onBack={() => setActiveTab('home')} />;
-      case 'exams': return <Exams initialView={activeParams?.view} exams={store.exams.filter(e => store.currentUser?.allowedBankIds?.includes(e.bankId))} history={store.examHistory} banks={studentBanks} allQuestions={store.questions} hasPermission={store.currentUser?.studentPerms?.includes('EXAM')} onStartExam={(e) => {
+      case 'exams': return <Exams initialView={activeParams?.view} exams={store.exams.filter(e => store.currentUser?.allowedBankIds?.includes(e.bankId))} history={store.examHistory} banks={studentBanks} allQuestions={store.questions} hasPermission={store.currentUser?.studentPerms?.includes('EXAM')} onStartExam={async (e) => {
         // 检查是否已经交卷
         const existingRecord = store.examHistory.find(h => h.examId === e.id && h.userId === store.currentUser?.id && h.isFinished);
-        if (existingRecord) {
+        if (existingRecord && !e.initialIndex) {
           alert('您已经交卷完成此考试，无法再次参加。如需重新考试，请联系管理员。');
           return;
         }
-        handleNavigate('practice-mode', { mode: PracticeMode.MOCK, exam: e });
+        
+        // 如果已经传递了 questions，直接使用
+        if (e.questions && e.questions.length > 0) {
+          console.log('[App] 系统考试使用传递的题目:', e.questions.length);
+          handleNavigate('practice-mode', { mode: PracticeMode.MOCK, exam: e, questions: e.questions, initialIndex: e.initialIndex, existingAnswers: e.existingAnswers, orderedQuestionIds: e.orderedQuestionIds, recordId: e.recordId });
+          return;
+        }
+        
+        // 否则加载题目
+        console.log('[App] 系统考试加载题目，bankId:', e.bankId);
+        const bankQuestions = await store.loadBankQuestions(e.bankId);
+        console.log('[App] 题目加载完成:', bankQuestions.length);
+        
+        // 根据考试配置生成题目列表
+        let finalQuestions = [];
+        if (e.questionIds && e.questionIds.length > 0) {
+          finalQuestions = e.questionIds
+            .map((id: string) => bankQuestions.find(q => q.id === id))
+            .filter(Boolean) as Question[];
+          console.log('[App] 根据 questionIds 生成题目:', finalQuestions.length);
+        } else {
+          const singles = bankQuestions.filter(q => q.type === QuestionType.SINGLE).sort(() => Math.random() - 0.5).slice(0, e.singleCount || 0);
+          const multiples = bankQuestions.filter(q => q.type === QuestionType.MULTIPLE).sort(() => Math.random() - 0.5).slice(0, e.multipleCount || 0);
+          const judges = bankQuestions.filter(q => q.type === QuestionType.JUDGE).sort(() => Math.random() - 0.5).slice(0, e.judgeCount || 0);
+          finalQuestions = [...singles, ...multiples, ...judges];
+          console.log('[App] 随机生成题目:', finalQuestions.length);
+        }
+        
+        handleNavigate('practice-mode', { mode: PracticeMode.MOCK, exam: e, questions: finalQuestions });
       }} onStartMock={(c) => handleNavigate('practice-mode', { mode: PracticeMode.MOCK, ...c })} onDeleteHistory={store.deleteExamHistory} />;
       case 'videos': return <VideoList videos={store.currentUser!.studentPerms?.includes('VIDEO') ? (store.systemConfig?.videos || []) : []} onBack={() => setActiveTab('home')} />;
       case 'discussions': return <Discussions questionId={activeParams?.questionId} />;
@@ -346,13 +429,16 @@ const App: React.FC = () => {
           if (activeParams?.type) {
             questionsToLoad = questionsToLoad.filter(q => q.type === activeParams.type);
           }
-        } else if (customCounts) {
-          // 处理自定义练习的题数配置
+        } else if (!questionsToLoad && customCounts) {
+          // 只有在没有传递 questions 时才根据 customCounts 生成题目
+          console.log('[App] 处理自定义练习:', { customCounts, selectedChapters, bankId: activeBank.id });
           let bankQs = store.questions.filter(q => q.bankId === activeBank.id);
+          console.log('[App] 题库题目总数:', bankQs.length);
           
           // 如果选择了章节，先按章节过滤
           if (selectedChapters && selectedChapters.length > 0) {
             bankQs = bankQs.filter(q => q.chapter && selectedChapters.includes(q.chapter));
+            console.log('[App] 章节过滤后题目数:', bankQs.length);
           }
           
           const singles = bankQs.filter(q => q.type === QuestionType.SINGLE).sort(() => Math.random() - 0.5).slice(0, customCounts[QuestionType.SINGLE] || 0);
@@ -361,8 +447,18 @@ const App: React.FC = () => {
           const fillInBlanks = bankQs.filter(q => q.type === QuestionType.FILL_IN_BLANK).sort(() => Math.random() - 0.5).slice(0, customCounts[QuestionType.FILL_IN_BLANK] || 0);
           const shortAnswers = bankQs.filter(q => q.type === QuestionType.SHORT_ANSWER).sort(() => Math.random() - 0.5).slice(0, customCounts[QuestionType.SHORT_ANSWER] || 0);
           questionsToLoad = [...singles, ...multiples, ...judges, ...fillInBlanks, ...shortAnswers];
-        } else if (isMock && mockConfig) {
+          console.log('[App] 最终生成题目数:', questionsToLoad.length, {
+            单选: singles.length,
+            多选: multiples.length,
+            判断: judges.length,
+            填空: fillInBlanks.length,
+            简答: shortAnswers.length
+          });
+        } else if (!questionsToLoad && isMock && mockConfig) {
+          // 只有在没有传递 questions 时才根据 mockConfig 生成题目
           let bankQs = store.questions.filter(q => q.bankId === (mockConfig.bankId || activeBank.id));
+          
+          console.log('[App] 处理模拟考试，bankQs 数量:', bankQs.length);
           
           // 如果选择了章节，先按章节过滤
           if (selectedChapters && selectedChapters.length > 0) {
@@ -371,6 +467,7 @@ const App: React.FC = () => {
           
           if (orderedQuestionIds) {
             questionsToLoad = orderedQuestionIds.map((id: string) => bankQs.find(q => q.id === id)).filter(Boolean) as Question[];
+            console.log('[App] 根据 orderedQuestionIds 生成题目:', questionsToLoad.length, '/ 期望:', orderedQuestionIds.length);
           } else if (mockConfig.strategy === 'MANUAL' && mockConfig.selectedQuestionIds) {
             questionsToLoad = bankQs.filter(q => mockConfig.selectedQuestionIds.includes(q.id));
           } else {
@@ -412,9 +509,14 @@ const App: React.FC = () => {
             initialIndex={activeParams?.initialIndex || 0} initialAnswers={activeParams?.existingAnswers || {}}
             onFinish={(result) => {
               if (isMock && result && typeof result.score === 'number') {
+                // 判断是系统考试还是模拟考试
+                const isSystemExam = mockConfig?.id && !mockConfig.id.startsWith('mock-');
+                const recordId = activeParams?.recordId || (isSystemExam ? `exam-${Date.now()}` : `mock-${Date.now()}`);
+                const examId = mockConfig?.id || `mock-${Date.now()}`;
+                
                 store.addExamHistory({
-                  id: activeParams?.recordId || `mock-${Date.now()}`,
-                  examId: mockConfig?.id || `mock-${Date.now()}`,
+                  id: recordId,
+                  examId: examId,
                   examTitle: mockConfig?.title || '自主模拟考试',
                   score: result.isFinished ? result.score : -1,
                   totalScore: result.totalScore,
@@ -430,7 +532,7 @@ const App: React.FC = () => {
                   examConfig: mockConfig,
                   orderedQuestionIds: result.orderedQuestionIds
                 });
-                handleNavigate('exams', { view: 'history' });
+                handleNavigate('exams', { view: isSystemExam ? 'system' : 'history' });
               } else if (result && result.returnToMistakes) {
                 // 从错题本或智能复习退出，返回到错题本页面
                 setActiveTab('mistakes');

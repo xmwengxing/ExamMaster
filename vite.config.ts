@@ -33,20 +33,20 @@ export default defineConfig(({ mode }) => {
             manualChunks: {
               // React 相关库单独打包
               'react-vendor': ['react', 'react-dom'],
-              // 图表库单独打包（如果使用）
+              // 图表库单独打包
               'chart-vendor': ['recharts'],
-              // 其他大型库
-              'utils': ['marked'],
+              // Markdown 库
+              'markdown-vendor': ['marked'],
             }
           }
         },
-        // 提高 chunk 大小警告阈值到 1000KB
+        // 提高 chunk 大小警告阈值
         chunkSizeWarningLimit: 1000,
         // 启用 CSS 代码分割
         cssCodeSplit: true,
-        // 生成 sourcemap（可选，用于调试）
+        // 不生成 sourcemap
         sourcemap: false,
-        // 使用默认的 esbuild 压缩（更快）
+        // 使用 esbuild 压缩
         minify: 'esbuild',
       }
     };

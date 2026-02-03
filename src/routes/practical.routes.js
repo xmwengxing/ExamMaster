@@ -10,9 +10,10 @@ const router = express.Router();
 
 // 实操任务路由
 router.get('/tasks', auth, practicalController.getPracticalTasks);
-router.post('/tasks', adminAuth, practicalController.createPracticalTask);
-router.put('/tasks/:id', adminAuth, practicalController.updatePracticalTask);
-router.delete('/tasks/:id', adminAuth, practicalController.deletePracticalTask);
+// 实操任务管理需要先验证 JWT token，再验证管理员权限
+router.post('/tasks', auth, adminAuth, practicalController.createPracticalTask);
+router.put('/tasks/:id', auth, adminAuth, practicalController.updatePracticalTask);
+router.delete('/tasks/:id', auth, adminAuth, practicalController.deletePracticalTask);
 
 // 实操记录路由
 router.get('/records', auth, practicalController.getPracticalRecords);

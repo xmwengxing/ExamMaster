@@ -125,10 +125,11 @@ export async function updateStudent(dbConn, studentId, updates) {
   
   values.push(studentId);
   
-  await dbConn.query(
-    `UPDATE users SET ${updateFields.join(', ')} WHERE id = $${paramIndex}`,
-    values
-  );
+  const sql = `UPDATE users SET ${updateFields.join(', ')} WHERE id = $${paramIndex}`;
+  console.log('[Admin] updateStudent SQL:', sql);
+  console.log('[Admin] updateStudent values:', values);
+  
+  await dbConn.query(sql, values);
   
   console.log(`[Admin] Updated student: ${studentId}`);
   

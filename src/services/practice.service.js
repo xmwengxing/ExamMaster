@@ -49,8 +49,9 @@ export async function createPracticeRecord(db, userId, practiceData) {
   
   const sql = `INSERT INTO practice_records (
     id, user_id, bank_id, bank_name, type, question_type_filter, 
-    mode, count, date, current_index, user_answers, is_custom
-  ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12)`;
+    mode, count, date, current_index, user_answers, is_custom,
+    custom_counts, selected_chapters, strategy
+  ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13::jsonb, $14::jsonb, $15)`;
   
   await db.execute(sql, [
     id,
@@ -64,7 +65,10 @@ export async function createPracticeRecord(db, userId, practiceData) {
     practiceData.date,
     practiceData.currentIndex || 0,
     JSON.stringify(practiceData.userAnswers || {}),
-    practiceData.isCustom || false
+    practiceData.isCustom || false,
+    practiceData.customCounts ? JSON.stringify(practiceData.customCounts) : null,
+    practiceData.selectedChapters ? JSON.stringify(practiceData.selectedChapters) : null,
+    practiceData.strategy || null
   ]);
   
   return id;
@@ -137,7 +141,10 @@ function formatPracticeRecord(record) {
     date: record.date,
     currentIndex: record.current_index,
     userAnswers: record.user_answers || {},
-    isCustom: record.is_custom || false
+    isCustom: record.is_custom || false,
+    customCounts: record.custom_counts,
+    selectedChapters: record.selected_chapters,
+    strategy: record.strategy
   };
 }
 

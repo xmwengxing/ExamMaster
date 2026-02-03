@@ -20,18 +20,23 @@ const DiscussionManager: React.FC = () => {
   }, [sortBy]);
 
   const loadDiscussions = async () => {
-    setIsLoading(true);
     try {
+      // 先尝试从缓存加载（不显示 loading）
       const result = await store.fetchDiscussions({
         sortBy,
         includeHidden: true
       });
-      setDiscussions(result);
+      
+      if (result && result.length >= 0) {
+        setDiscussions(result);
+        setIsLoading(false);
+      } else {
+        setIsLoading(false);
+      }
     } catch (error: any) {
       console.error('[DiscussionManager] 加载讨论失败:', error);
-      alert('加载讨论失败：' + (error.message || '未知错误'));
-    } finally {
       setIsLoading(false);
+      alert('加载讨论失败：' + (error.message || '未知错误'));
     }
   };
 
