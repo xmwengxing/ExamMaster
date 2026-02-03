@@ -112,12 +112,18 @@ function setCachedDataChunked<T>(
 ): boolean {
   try {
     const serialized = JSON.stringify(data);
-    const chunkSize = 1024 * 1024; // 1MB per chunk
+    const chunkSize = 512 * 1024; // 减小到 512KB per chunk（更安全）
     const chunks: string[] = [];
     
     // 分块
     for (let i = 0; i < serialized.length; i += chunkSize) {
       chunks.push(serialized.slice(i, i + chunkSize));
+    }
+    
+    // 如果分块数量太多（超过 20 块），放弃缓存
+    if (chunks.length > 20) {
+      console.warn(`[Cache] 数据过大，分块数量 ${chunks.length} 超过限制，放弃缓存: ${key}`);
+      return false;
     }
     
     // 保存元数据
@@ -127,18 +133,41 @@ function setCachedDataChunked<T>(
       timestamp: Date.now(),
       expiry,
     };
-    localStorage.setItem(metaKey, JSON.stringify(meta));
+    
+    try {
+      localStorage.setItem(metaKey, JSON.stringify(meta));
+    } catch (metaError: any) {
+      if (metaError.name === 'QuotaExceededError') {
+        console.warn(`[Cache] 存储空间不足，无法保存元数据: ${key}`);
+        return false;
+      }
+      throw metaError;
+    }
     
     // 保存每个分块
-    chunks.forEach((chunk, index) => {
+    for (let index = 0; index < chunks.length; index++) {
+      const chunk = chunks[index];
       const chunkKey = CACHE_PREFIX + key + '_chunk_' + index;
-      localStorage.setItem(chunkKey, chunk);
-    });
+      
+      try {
+        localStorage.setItem(chunkKey, chunk);
+      } catch (chunkError: any) {
+        if (chunkError.name === 'QuotaExceededError') {
+          console.warn(`[Cache] 存储空间不足，无法保存分块 ${index}/${chunks.length}: ${key}`);
+          // 清理已保存的分块
+          removeCachedDataChunked(key);
+          return false;
+        }
+        throw chunkError;
+      }
+    }
     
     console.log(`[Cache] 分块缓存已保存: ${key} (${chunks.length} 块)`);
     return true;
   } catch (error) {
     console.error(`[Cache] 分块缓存失败: ${key}`, error);
+    // 清理可能已保存的部分数据
+    removeCachedDataChunked(key);
     return false;
   }
 }

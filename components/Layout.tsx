@@ -108,23 +108,26 @@ const Layout: React.FC<LayoutProps> = ({ children, user, activeTab, onTabChange,
       </aside>
 
       <main className="flex-1 flex flex-col min-h-0 relative">
-        <header className="md:hidden bg-white border-b px-4 py-3 flex items-center justify-between sticky top-0 z-40">
-          <div className="flex items-center gap-2">
-            {logoImage ? (
-              <img src={logoImage} alt="Logo" className="w-8 h-8 object-contain" />
-            ) : (
-              <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
-                <i className={`fa-solid ${logoIcon} text-white text-sm`}></i>
-              </div>
-            )}
-            {logoText && <span className="font-bold text-lg">{logoText}</span>}
-          </div>
-          <button onClick={onLogout} className="text-gray-400">
-            <i className="fa-solid fa-power-off"></i>
-          </button>
-        </header>
+        {/* 移动端顶部导航栏 - 仅管理员显示 */}
+        {!isStudent && (
+          <header className="md:hidden bg-white border-b px-4 py-3 flex items-center justify-between sticky top-0 z-40">
+            <div className="flex items-center gap-2">
+              {logoImage ? (
+                <img src={logoImage} alt="Logo" className="w-8 h-8 object-contain" />
+              ) : (
+                <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
+                  <i className={`fa-solid ${logoIcon} text-white text-sm`}></i>
+                </div>
+              )}
+              {logoText && <span className="font-bold text-lg">{logoText}</span>}
+            </div>
+            <button onClick={onLogout} className="text-gray-400">
+              <i className="fa-solid fa-power-off"></i>
+            </button>
+          </header>
+        )}
         
-        <div className="flex-1 p-4 md:p-8 overflow-y-auto overflow-x-hidden pb-24 md:pb-8 w-full max-w-full">
+        <div className={`flex-1 p-4 md:p-8 overflow-y-auto overflow-x-hidden pb-24 md:pb-8 w-full max-w-full ${isStudent ? 'pt-4' : ''}`}>
           <div className="w-full max-w-full">
             {children}
           </div>

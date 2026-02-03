@@ -69,6 +69,16 @@ const BankManager: React.FC<BankManagerProps> = ({
     loadTags();
   }, []);
   
+  // 当进入内容管理时，加载题目
+  useEffect(() => {
+    if (editingBankId && view === 'editor') {
+      console.log('[BankManager] 加载题库题目:', editingBankId);
+      store.loadBankQuestions(editingBankId).catch(err => {
+        console.error('[BankManager] 加载题目失败:', err);
+      });
+    }
+  }, [editingBankId, view, store]);
+  
   // 根据 tagId 查找标签对象
   const getTagById = (tagId: string) => {
     return allTags.find(tag => tag.id === tagId);

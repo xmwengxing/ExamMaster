@@ -15,4 +15,7 @@ router.get('/records', auth, getSRSRecordsController);
 // 更新 SRS 记录
 router.post('/records', auth, updateSRSRecordController);
 
+// 更新 SRS 记录（别名路由，兼容前端调用）
+router.post('/update', auth, updateSRSRecordController);
+
 export default router;

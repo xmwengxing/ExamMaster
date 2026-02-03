@@ -4,7 +4,7 @@
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import request from 'supertest';
-import app from '../../server-new.js';
+import app from '../../server.js'; // 使用 server.js 而不是 server-new.js
 import db from '../../db.js';
 
 describe('管理员 API 集成测试', () => {

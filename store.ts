@@ -365,9 +365,26 @@ export const useAppStore = () => {
       
       console.log(`[loadBankQuestions] 加载成功: ${bankId} (${questions.length} 题)`);
       
-      // 更新所有缓存层
-      setCachedData(cacheKey, questions, 30 * 60 * 1000); // localStorage: 30分钟
-      questionsMemoryCache.set(bankId, { data: questions, timestamp: Date.now() }); // 内存: 5分钟
+      // 计算数据大小
+      const dataSize = new Blob([JSON.stringify(questions)]).size;
+      const sizeInMB = dataSize / (1024 * 1024);
+      
+      console.log(`[loadBankQuestions] 数据大小: ${sizeInMB.toFixed(2)}MB`);
+      
+      // 只有数据小于 3MB 才缓存到 localStorage（避免配额超限）
+      if (sizeInMB < 3) {
+        const cacheSuccess = setCachedData(cacheKey, questions, 30 * 60 * 1000);
+        if (cacheSuccess) {
+          console.log(`[loadBankQuestions] 已缓存到 localStorage: ${bankId}`);
+        } else {
+          console.warn(`[loadBankQuestions] localStorage 缓存失败，仅使用内存缓存: ${bankId}`);
+        }
+      } else {
+        console.warn(`[loadBankQuestions] 数据过大 (${sizeInMB.toFixed(2)}MB)，跳过 localStorage 缓存，仅使用内存缓存`);
+      }
+      
+      // 始终更新内存缓存（内存缓存没有大小限制）
+      questionsMemoryCache.set(bankId, { data: questions, timestamp: Date.now() });
       
       setQuestions(questions);
       
@@ -659,24 +676,106 @@ export const useAppStore = () => {
     // Administrative: Question management methods
     addQuestion: async (q: Question) => {
       const res = await fetchApi('/questions', { method: 'POST', body: JSON.stringify(q) });
-      await refreshAll();
+      // 清理该题库的缓存
+      if (q.bankId) {
+        const cacheKey = `questions_bank_${q.bankId}`;
+        removeCachedData(cacheKey);
+        questionsMemoryCache.delete(q.bankId);
+        console.log(`[addQuestion] 已清理题库 ${q.bankId} 的缓存`);
+        // 重新加载该题库的题目
+        await loadBankQuestions(q.bankId);
+      }
+      // 刷新题库列表（更新题目数量）
+      try {
+        const banksData = await fetchApi('/banks');
+        const normalizedBanks = (banksData || []).map((bank: any) => ({
+          ...bank,
+          scoreConfig: typeof bank.scoreConfig === 'string' ? JSON.parse(bank.scoreConfig) : bank.scoreConfig
+        }));
+        setBanks(normalizedBanks);
+      } catch (err) {
+        console.error('[addQuestion] 刷新题库列表失败:', err);
+      }
       return res;
     },
     updateQuestion: async (id: string, data: Partial<Question>) => {
       await fetchApi(`/questions/${id}`, { method: 'PUT', body: JSON.stringify(data) });
-      await refreshAll();
+      // 清理该题库的缓存
+      if (data.bankId) {
+        const cacheKey = `questions_bank_${data.bankId}`;
+        removeCachedData(cacheKey);
+        questionsMemoryCache.delete(data.bankId);
+        console.log(`[updateQuestion] 已清理题库 ${data.bankId} 的缓存`);
+        // 重新加载该题库的题目
+        await loadBankQuestions(data.bankId);
+      }
     },
     deleteQuestion: async (id: string) => {
+      // 先获取当前题目所属的题库
+      const question = questions.find(q => q.id === id);
       await fetchApi(`/questions/${id}`, { method: 'DELETE' });
-      await refreshAll();
+      // 清理该题库的缓存
+      if (question?.bankId) {
+        const cacheKey = `questions_bank_${question.bankId}`;
+        removeCachedData(cacheKey);
+        questionsMemoryCache.delete(question.bankId);
+        console.log(`[deleteQuestion] 已清理题库 ${question.bankId} 的缓存`);
+        // 重新加载该题库的题目
+        await loadBankQuestions(question.bankId);
+      }
+      // 刷新题库列表（更新题目数量）
+      try {
+        const banksData = await fetchApi('/banks');
+        const normalizedBanks = (banksData || []).map((bank: any) => ({
+          ...bank,
+          scoreConfig: typeof bank.scoreConfig === 'string' ? JSON.parse(bank.scoreConfig) : bank.scoreConfig
+        }));
+        setBanks(normalizedBanks);
+      } catch (err) {
+        console.error('[deleteQuestion] 刷新题库列表失败:', err);
+      }
     },
     deleteQuestions: async (bankId: string, ids: string[]) => {
       await fetchApi('/questions/batch-delete', { method: 'POST', body: JSON.stringify({ bankId, ids }) });
-      await refreshAll();
+      // 清理该题库的缓存
+      const cacheKey = `questions_bank_${bankId}`;
+      removeCachedData(cacheKey);
+      questionsMemoryCache.delete(bankId);
+      console.log(`[deleteQuestions] 已清理题库 ${bankId} 的缓存`);
+      // 重新加载该题库的题目
+      await loadBankQuestions(bankId);
+      // 刷新题库列表（更新题目数量）
+      try {
+        const banksData = await fetchApi('/banks');
+        const normalizedBanks = (banksData || []).map((bank: any) => ({
+          ...bank,
+          scoreConfig: typeof bank.scoreConfig === 'string' ? JSON.parse(bank.scoreConfig) : bank.scoreConfig
+        }));
+        setBanks(normalizedBanks);
+      } catch (err) {
+        console.error('[deleteQuestions] 刷新题库列表失败:', err);
+      }
     },
     importQuestions: async (bankId: string, qs: Question[]) => {
       const res = await fetchApi(`/banks/${bankId}/import`, { method: 'POST', body: JSON.stringify({ questions: qs }) });
-      await refreshAll();
+      // 清理该题库的缓存
+      const cacheKey = `questions_bank_${bankId}`;
+      removeCachedData(cacheKey);
+      questionsMemoryCache.delete(bankId);
+      console.log(`[importQuestions] 已清理题库 ${bankId} 的缓存`);
+      // 重新加载该题库的题目
+      await loadBankQuestions(bankId);
+      // 刷新题库列表（更新题目数量）
+      try {
+        const banksData = await fetchApi('/banks');
+        const normalizedBanks = (banksData || []).map((bank: any) => ({
+          ...bank,
+          scoreConfig: typeof bank.scoreConfig === 'string' ? JSON.parse(bank.scoreConfig) : bank.scoreConfig
+        }));
+        setBanks(normalizedBanks);
+      } catch (err) {
+        console.error('[importQuestions] 刷新题库列表失败:', err);
+      }
       return res;
     },
 
