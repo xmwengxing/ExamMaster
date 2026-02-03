@@ -184,97 +184,25 @@ const PracticeModeView: React.FC<PracticeModeProps> = ({
     currentProgressRef.current = { currentIndex, userAnswers };
   }, [currentIndex, userAnswers]);
 
+  // 防抖保存进度：减少 API 调用频率，提升性能
   useEffect(() => {
     if (isMockMode || isSmartReviewMode || !bank || questions.length === 0) return;
     
-    const saveProgress = async () => {
-      let recordId = exam?.id;
-      if (isCustomSession && recordId) {
-        // 自定义练习：更新现有记录
-        await store.updatePracticeRecord(recordId, { currentIndex, userAnswers, date: new Date().toLocaleString() });
-      } else {
-        // 标准练习：查找或创建记录
-        const record = await store.getPracticeRecord(bank.id, mode, false);
-        if (record) {
-          // 更新现有记录 - 关键：每次都保存 currentIndex，确保进度被记录
-          await store.updatePracticeRecord(record.id, { currentIndex, userAnswers });
+    // 使用防抖：用户停止操作 800ms 后才保存
+    const timeoutId = setTimeout(async () => {
+      try {
+        let recordId = exam?.id;
+        if (isCustomSession && recordId) {
+          // 自定义练习：更新现有记录
+          await store.updatePracticeRecord(recordId, { currentIndex, userAnswers, date: new Date().toLocaleString() });
         } else {
-          // 创建新记录
-          await store.addPracticeRecord({
-            id: Date.now().toString(), 
-            bankId: bank.id, 
-            bankName: bank.name, 
-            mode, 
-            type: '标准练习',
-            count: questions.length, 
-            date: new Date().toLocaleString(), 
-            currentIndex, 
-            userAnswers, 
-            isCustom: false
-          });
-        }
-      }
-    };
-    
-    // 立即保存进度（做到哪记到哪）
-    // 注意：由于 updatePracticeRecord 使用了防抖，快速切换时可能会有延迟
-    // 但 currentIndex 的变化会确保最终状态被保存
-    saveProgress();
-  }, [currentIndex, userAnswers, isMockMode, bank, mode, questions.length, isCustomSession, exam?.id, isSmartReviewMode]);
-
-  // 立即保存进度的函数（不使用防抖）
-  const saveProgressImmediately = async (index: number, answers: Record<string, string[]>) => {
-    if (isMockMode || isSmartReviewMode || !bank || questions.length === 0) return;
-    
-    console.log('[保存进度] 开始保存:', { index, answersCount: Object.keys(answers).length, currentQuestionId: currentQuestion?.id });
-    
-    try {
-      const token = localStorage.getItem('edu_token');
-      const headers = {
-        'Content-Type': 'application/json',
-        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-      };
-      
-      let recordId = exam?.id;
-      if (isCustomSession && recordId) {
-        // 自定义练习：直接调用 API，不经过防抖
-        const response = await fetch(`/api/practice/${recordId}`, { 
-          method: 'PUT',
-          headers,
-          body: JSON.stringify({ currentIndex: index, userAnswers: answers, date: new Date().toLocaleString() })
-        });
-        const result = await response.json();
-        if (!response.ok) {
-          throw new Error(`保存失败: ${response.status} ${response.statusText}`);
-        }
-        console.log('[保存进度] 自定义练习保存成功, 响应:', result);
-      } else {
-        // 标准练习：查找或创建记录
-        const record = await store.getPracticeRecord(bank.id, mode, false);
-        console.log('[保存进度] 查询到的记录:', record);
-        
-        if (record) {
-          // 直接调用 API，不经过防抖
-          const url = `/api/practice/${record.id}`;
-          const body = { currentIndex: index, userAnswers: answers };
-          console.log('[保存进度] 准备更新:', { url, body });
-          
-          const response = await fetch(url, { 
-            method: 'PUT',
-            headers,
-            body: JSON.stringify(body)
-          });
-          const result = await response.json();
-          console.log('[保存进度] 更新响应:', result);
-          
-          if (!response.ok) {
-            throw new Error(`保存失败: ${response.status} ${response.statusText}`);
-          }
-          
-          if (result.changes === 0) {
-            console.error('[保存进度] 警告: 没有记录被更新！可能的原因：记录不存在或userId不匹配');
-            console.log('[保存进度] 尝试重新创建记录...');
-            // 如果更新失败，尝试创建新记录
+          // 标准练习：查找或创建记录
+          const record = await store.getPracticeRecord(bank.id, mode, false);
+          if (record) {
+            // 更新现有记录
+            await store.updatePracticeRecord(record.id, { currentIndex, userAnswers });
+          } else {
+            // 创建新记录
             await store.addPracticeRecord({
               id: Date.now().toString(), 
               bankId: bank.id, 
@@ -283,61 +211,54 @@ const PracticeModeView: React.FC<PracticeModeProps> = ({
               type: '标准练习',
               count: questions.length, 
               date: new Date().toLocaleString(), 
-              currentIndex: index, 
-              userAnswers: answers, 
+              currentIndex, 
+              userAnswers, 
               isCustom: false
-            });
-            console.log('[保存进度] 重新创建记录成功');
-          } else {
-            console.log('[保存进度] 标准练习更新成功, recordId:', record.id, '影响行数:', result.changes);
-          }
-        } else {
-          // 创建新记录
-          console.log('[保存进度] 记录不存在，创建新记录');
-          await store.addPracticeRecord({
-            id: Date.now().toString(), 
-            bankId: bank.id, 
-            bankName: bank.name, 
-            mode, 
-            type: '标准练习',
-            count: questions.length, 
-            date: new Date().toLocaleString(), 
-            currentIndex: index, 
-            userAnswers: answers, 
-            isCustom: false
-          });
-          console.log('[保存进度] 创建新记录成功');
-        }
-      }
-    } catch (error) {
-      console.error('[保存进度] 失败:', error);
-    }
-  };
-
-  const handleExit = async () => {
-    // 退出前强制保存当前进度（使用 ref 获取最新值）
-    if (!isMockMode && !isSmartReviewMode && bank && questions.length > 0) {
-      try {
-        const latestProgress = currentProgressRef.current;
-        let recordId = exam?.id;
-        if (isCustomSession && recordId) {
-          await store.updatePracticeRecord(recordId, { 
-            currentIndex: latestProgress.currentIndex, 
-            userAnswers: latestProgress.userAnswers, 
-            date: new Date().toLocaleString() 
-          });
-        } else {
-          const record = await store.getPracticeRecord(bank.id, mode, false);
-          if (record) {
-            await store.updatePracticeRecord(record.id, { 
-              currentIndex: latestProgress.currentIndex, 
-              userAnswers: latestProgress.userAnswers 
             });
           }
         }
       } catch (error) {
-        console.error('保存进度失败:', error);
+        console.error('[自动保存] 失败:', error);
       }
+    }, 800); // 800ms 防抖延迟
+    
+    // 清理函数：组件卸载或依赖变化时取消定时器
+    return () => clearTimeout(timeoutId);
+  }, [currentIndex, userAnswers, isMockMode, bank, mode, questions.length, isCustomSession, exam?.id, isSmartReviewMode]);
+
+  const handleExit = async () => {
+    // 退出前保存进度（后台异步，不阻塞退出）
+    if (!isMockMode && !isSmartReviewMode && bank && questions.length > 0) {
+      const latestProgress = currentProgressRef.current;
+      let recordId = exam?.id;
+      
+      // 后台保存，不等待完成，让用户快速退出
+      const savePromise = (async () => {
+        try {
+          if (isCustomSession && recordId) {
+            await store.updatePracticeRecord(recordId, { 
+              currentIndex: latestProgress.currentIndex, 
+              userAnswers: latestProgress.userAnswers, 
+              date: new Date().toLocaleString() 
+            });
+          } else {
+            const record = await store.getPracticeRecord(bank.id, mode, false);
+            if (record) {
+              await store.updatePracticeRecord(record.id, { 
+                currentIndex: latestProgress.currentIndex, 
+                userAnswers: latestProgress.userAnswers 
+              });
+            }
+          }
+          console.log('[退出保存] 进度保存成功');
+        } catch (error) {
+          console.error('[退出保存] 进度保存失败:', error);
+          // 保存失败不影响退出，但记录错误日志
+        }
+      })();
+      
+      // 不等待保存完成，立即退出（提升响应速度）
+      // 保存会在后台继续进行
     }
     
     if (isMockMode) {
@@ -360,13 +281,12 @@ const PracticeModeView: React.FC<PracticeModeProps> = ({
       setUserAnswers(newAnswers);
       currentProgressRef.current.userAnswers = newAnswers;
       // 注意：这里使用 setTimeout 确保状态更新后再切换题目
-      setTimeout(async () => {
+      setTimeout(() => {
         const newIndex = currentIndex + 1;
         if (currentIndex < questions.length - 1) {
           setCurrentIndex(newIndex);
           currentProgressRef.current.currentIndex = newIndex;
-          // 保存进度
-          await saveProgressImmediately(newIndex, newAnswers);
+          // 防抖保存会自动处理
         } else {
           onFinish();
         }
@@ -378,8 +298,7 @@ const PracticeModeView: React.FC<PracticeModeProps> = ({
       const newIndex = currentIndex + 1;
       setCurrentIndex(newIndex);
       currentProgressRef.current.currentIndex = newIndex;
-      // 点击"下一题"时也保存进度
-      await saveProgressImmediately(newIndex, userAnswers);
+      // 防抖保存会自动处理
     } else {
       if (isMockMode) {
         if (confirm('确定要交卷吗？\n\n⚠️ 注意：交卷后将无法继续作答或修改答案！\n\n点击"确定"提交试卷，点击"取消"继续答题。')) {
@@ -441,8 +360,8 @@ const PracticeModeView: React.FC<PracticeModeProps> = ({
         provideFeedback(isCorrect);
         setShowExplanation(true);
         
-        // 关键：答题后立即保存进度
-        await saveProgressImmediately(currentIndex, newAnswers);
+        // 移除立即保存：依赖 useEffect 的防抖保存机制
+        // 这样可以避免频繁的 API 调用，提升性能
       }
     }
   };
@@ -465,9 +384,8 @@ const PracticeModeView: React.FC<PracticeModeProps> = ({
     else onWrong(currentQuestion);
     provideFeedback(isCorrect);
     
-    // 多选题确认后也要更新 ref 并立即保存
+    // 更新 ref（防抖保存会自动处理）
     currentProgressRef.current.userAnswers = userAnswers;
-    await saveProgressImmediately(currentIndex, userAnswers);
   };
 
   // 填空题提交处理
@@ -514,9 +432,8 @@ const PracticeModeView: React.FC<PracticeModeProps> = ({
         sessionProgressRecorded.current.add(currentQuestion.id);
       }
       
-      // 保存进度
+      // 更新进度引用（防抖保存会自动处理）
       currentProgressRef.current.userAnswers = newAnswers;
-      await saveProgressImmediately(currentIndex, newAnswers);
       
     } catch (error: any) {
       console.error('[填空题评分失败]', error);
@@ -565,9 +482,8 @@ const PracticeModeView: React.FC<PracticeModeProps> = ({
         sessionProgressRecorded.current.add(currentQuestion.id);
       }
       
-      // 保存进度
+      // 更新进度引用（防抖保存会自动处理）
       currentProgressRef.current.userAnswers = newAnswers;
-      await saveProgressImmediately(currentIndex, newAnswers);
       
     } catch (error: any) {
       console.error('[简答题评分失败]', error);

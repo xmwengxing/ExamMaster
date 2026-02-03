@@ -39,15 +39,20 @@ const TagManager: React.FC<TagManagerProps> = ({ onClose }) => {
   }, []);
 
   const loadTags = async () => {
-    setIsLoading(true);
     try {
+      // 先尝试从缓存加载（不显示 loading）
       const result = await store.fetchTags();
-      setTags(result);
+      
+      if (result && result.length >= 0) {
+        setTags(result);
+        setIsLoading(false);
+      } else {
+        setIsLoading(false);
+      }
     } catch (error: any) {
       console.error('[TagManager] 加载标签失败:', error);
-      alert('加载标签失败：' + (error.message || '未知错误'));
-    } finally {
       setIsLoading(false);
+      alert('加载标签失败：' + (error.message || '未知错误'));
     }
   };
 

@@ -29,21 +29,27 @@ const PracticeList: React.FC<PracticeProps> = ({ banks, activeBank, history, onS
     }
   });
 
-  // 确保当前题库的题目已加载
+  // 确保当前题库的题目已加载（使用缓存，不会重复加载）
   const [questionsLoaded, setQuestionsLoaded] = React.useState(false);
   
   React.useEffect(() => {
     if (activeBank && activeBank.id) {
-      console.log('[Practice] 组件加载，当前题库:', activeBank.id, activeBank.name);
-      console.log('[Practice] 当前题目数量:', store.questions.filter(q => q.bankId === activeBank.id).length);
-      console.log('[Practice] 开始加载题库题目...');
-      setQuestionsLoaded(false);
-      store.loadBankQuestions(activeBank.id).then(() => {
-        console.log('[Practice] 题目加载完成，数量:', store.questions.filter(q => q.bankId === activeBank.id).length);
+      console.log('[Practice] 检查题库题目:', activeBank.id, activeBank.name);
+      const hasQuestions = store.questions.some(q => q.bankId === activeBank.id);
+      
+      if (hasQuestions) {
+        console.log('[Practice] 题目已加载，数量:', store.questions.filter(q => q.bankId === activeBank.id).length);
         setQuestionsLoaded(true);
-      });
+      } else if (!store.isLoadingQuestions) {
+        console.log('[Practice] 开始加载题库题目...');
+        setQuestionsLoaded(false);
+        store.loadBankQuestions(activeBank.id).then(() => {
+          console.log('[Practice] 题目加载完成，数量:', store.questions.filter(q => q.bankId === activeBank.id).length);
+          setQuestionsLoaded(true);
+        });
+      }
     }
-  }, [activeBank?.id]);
+  }, [activeBank?.id, store.questions.length, store.isLoadingQuestions]);
 
   // 严格过滤：仅显示 isCustom 为 1 (true) 的记录
   const customHistory = useMemo(() => 

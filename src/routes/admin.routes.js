@@ -5,6 +5,7 @@
 import express from 'express';
 import * as adminController from '../controllers/admin.controller.js';
 import { auth, adminAuth } from '../middleware/auth.js';
+import bankBackupRoutes from './bank-backup.routes.js';
 
 const router = express.Router();
 
@@ -35,5 +36,8 @@ router.post('/repair-student-schema', auth, adminAuth, adminController.repairStu
 router.get('/login-logs', auth, adminAuth, adminController.getLoginLogs);
 router.get('/audit-logs', auth, adminAuth, adminController.getAuditLogs);
 router.post('/audit-logs', auth, adminAuth, adminController.createAuditLog);
+
+// 题库备份路由（需要先通过认证）
+router.use('/banks', auth, adminAuth, bankBackupRoutes);
 
 export default router;

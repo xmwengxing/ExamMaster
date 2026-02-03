@@ -29,19 +29,28 @@ const DiscussionList: React.FC<DiscussionListProps> = ({
   }, [sortBy, filterQuestionId, showHidden]);
 
   const loadDiscussions = async () => {
-    setIsLoading(true);
+    // 优化：先尝试从缓存加载，避免每次都显示 loading
     try {
       const result = await store.fetchDiscussions({
         questionId: filterQuestionId,
         sortBy,
         includeHidden: showHidden
       });
-      setDiscussions(result);
+      
+      // 如果有数据，立即显示（可能是缓存）
+      if (result && result.length > 0) {
+        setDiscussions(result);
+        setIsLoading(false);
+      } else {
+        // 没有数据时才显示 loading
+        setIsLoading(true);
+        setDiscussions(result);
+        setIsLoading(false);
+      }
     } catch (error: any) {
       console.error('[DiscussionList] 加载讨论失败:', error);
-      alert('加载讨论失败：' + (error.message || '未知错误'));
-    } finally {
       setIsLoading(false);
+      alert('加载讨论失败：' + (error.message || '未知错误'));
     }
   };
 

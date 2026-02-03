@@ -99,12 +99,13 @@ async function changePassword(db, userId, oldPassword, newPassword) {
   }
   
   // 验证旧密码
-  if (!bcrypt.compareSync(oldPassword, user.password)) {
+  const isOldPasswordValid = await bcrypt.compare(oldPassword, user.password);
+  if (!isOldPasswordValid) {
     return { success: false, error: '旧密码不正确' };
   }
   
   // 加密新密码
-  const newHash = bcrypt.hashSync(newPassword, 10);
+  const newHash = await bcrypt.hash(newPassword, 10);
   
   // 更新密码
   await db.execute('UPDATE users SET password = $1 WHERE id = $2', [newHash, userId]);

@@ -147,6 +147,24 @@ const App: React.FC = () => {
     }
   }, [activeTab, store.activeBank?.id, store.questions.length, store.currentUser?.role, store.banks.length]);
 
+  // 预加载机制：在练习页面时预加载题目（提升响应速度）
+  useEffect(() => {
+    if (activeTab === 'practice' && store.activeBank?.id) {
+      // 延迟 500ms 预加载，避免阻塞主线程
+      const timer = setTimeout(() => {
+        const hasQuestions = store.questions.some(q => q.bankId === store.activeBank?.id);
+        if (!hasQuestions && !store.isLoadingQuestions) {
+          console.log('[App] 预加载题库题目:', store.activeBank.name);
+          store.loadBankQuestions(store.activeBank.id).catch(err => {
+            console.debug('[App] 预加载失败（不影响使用）:', err);
+          });
+        }
+      }, 500);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [activeTab, store.activeBank?.id, store.isLoadingQuestions]);
+
   const handleNavigate = (tab: string, params: any = null) => {
     setActiveTab(tab);
     setActiveParams(params);
@@ -265,6 +283,7 @@ const App: React.FC = () => {
     const logoIcon = themeConfig.logoIcon || 'fa-graduation-cap';
     const logoText = themeConfig.logoText || 'EduMaster';
     const logoImage = themeConfig.logoImage || '';
+    const loginTitle = themeConfig.loginTitle || logoText; // 登录页标题，默认使用 Logo 文字
     const loginSlogan = themeConfig.loginSlogan || '一站式智能学习与模拟考试管理平台';
     const loginSloganMobile = themeConfig.loginSloganMobile || '智能学习，轻松备考';
     
@@ -275,7 +294,7 @@ const App: React.FC = () => {
             <div className="absolute top-0 left-0 w-96 h-96 bg-white rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2"></div>
           </div>
           <div className="max-w-md relative z-10 text-center md:text-left">
-            <h1 className="text-6xl font-black mb-6 tracking-tight">{logoText}</h1>
+            <h1 className="text-6xl font-black mb-6 tracking-tight">{loginTitle}</h1>
             <p className="text-xl text-indigo-100 mb-8 font-light leading-relaxed">{loginSlogan}</p>
           </div>
         </div>

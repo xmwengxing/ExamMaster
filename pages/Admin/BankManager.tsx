@@ -47,6 +47,13 @@ const BankManager: React.FC<BankManagerProps> = ({
   const [duplicateIds, setDuplicateIds] = useState<string[]>([]);
   const [isChecking, setIsChecking] = useState(false);
   
+  // 备份相关状态
+  const [isBackupModalOpen, setIsBackupModalOpen] = useState(false);
+  const [backupBankId, setBackupBankId] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const [isImportingBackup, setIsImportingBackup] = useState(false);
+  const backupFileInputRef = useRef<HTMLInputElement>(null);
+  
   // 加载所有标签
   const [allTags, setAllTags] = useState<Tag[]>([]);
   
@@ -700,6 +707,140 @@ const BankManager: React.FC<BankManagerProps> = ({
 
   const downloadTemplate = downloadCSVTemplate;
 
+  // 导出题库备份
+  const handleExportBackup = async (bankId: string) => {
+    try {
+      setIsExporting(true);
+      const bank = banks.find(b => b.id === bankId);
+      
+      const response = await fetch(`/api/admin/banks/${bankId}/export`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('edu_token')}`
+        }
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || '导出失败');
+      }
+      
+      // 下载文件
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${bank?.name || 'bank'}_backup_${new Date().toISOString().split('T')[0]}.sql`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      
+      alert('题库备份导出成功！');
+    } catch (error: any) {
+      console.error('[导出备份失败]', error);
+      alert('导出失败：' + error.message);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // 导入题库备份
+  const handleImportBackup = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    if (!file.name.endsWith('.sql')) {
+      alert('请选择 .sql 格式的备份文件');
+      return;
+    }
+    
+    try {
+      setIsImportingBackup(true);
+      
+      // 读取文件内容
+      const text = await file.text();
+      
+      // 验证文件
+      const validateResponse = await fetch('/api/admin/banks/validate-sql', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('edu_token')}`
+        },
+        body: (() => {
+          const formData = new FormData();
+          formData.append('file', file);
+          return formData;
+        })()
+      });
+      
+      const validation = await validateResponse.json();
+      
+      if (!validation.valid) {
+        alert('备份文件格式错误：' + validation.error);
+        return;
+      }
+      
+      // 询问导入选项
+      const generateNewIds = confirm(
+        `发现题库备份：${validation.info.bankName}\n` +
+        `题目数量：${validation.info.questionCount}\n` +
+        `备份时间：${validation.info.backupTime}\n\n` +
+        `是否生成新的ID？\n` +
+        `• 点击"确定"：生成新ID，作为新题库导入（推荐）\n` +
+        `• 点击"取消"：保留原ID，覆盖同名题库（谨慎使用）`
+      );
+      
+      let newBankName = null;
+      if (generateNewIds) {
+        newBankName = prompt('请输入新题库名称：', validation.info.bankName + '_副本');
+        if (!newBankName) {
+          alert('已取消导入');
+          return;
+        }
+      }
+      
+      // 导入
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('generateNewIds', String(generateNewIds));
+      if (newBankName) {
+        formData.append('newBankName', newBankName);
+      }
+      
+      const importResponse = await fetch('/api/admin/banks/import', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('edu_token')}`
+        },
+        body: formData
+      });
+      
+      if (!importResponse.ok) {
+        const error = await importResponse.json();
+        throw new Error(error.error || '导入失败');
+      }
+      
+      const result = await importResponse.json();
+      
+      alert(
+        `题库导入成功！\n\n` +
+        `题库名称：${result.bankName}\n` +
+        `题目数量：${result.questionCount}`
+      );
+      
+      // 刷新题库列表
+      window.location.reload();
+    } catch (error: any) {
+      console.error('[导入备份失败]', error);
+      alert('导入失败：' + error.message);
+    } finally {
+      setIsImportingBackup(false);
+      if (backupFileInputRef.current) {
+        backupFileInputRef.current.value = '';
+      }
+    }
+  };
+
   return (
     <div className="space-y-6">
       {view === 'list' ? (
@@ -709,7 +850,33 @@ const BankManager: React.FC<BankManagerProps> = ({
               <h2 className="text-xl font-bold text-gray-800">题库管理</h2>
               <p className="text-xs text-gray-400 font-medium">资源分类展示与快捷分值设定</p>
             </div>
-            <button onClick={() => { setEditingBankId(null); setBankForm({ name: '', category: '', level: '初级', description: '' }); setIsBankModalOpen(true); }} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-bold shadow-lg hover:bg-indigo-700 transition-all active:scale-95">创建新题库</button>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => backupFileInputRef.current?.click()}
+                disabled={isImportingBackup}
+                className="bg-green-600 text-white px-6 py-3 rounded-2xl font-bold shadow-lg hover:bg-green-700 transition-all active:scale-95 disabled:opacity-50 flex items-center gap-2"
+              >
+                {isImportingBackup ? (
+                  <>
+                    <i className="fa-solid fa-spinner animate-spin"></i>
+                    导入中...
+                  </>
+                ) : (
+                  <>
+                    <i className="fa-solid fa-upload"></i>
+                    导入备份
+                  </>
+                )}
+              </button>
+              <button onClick={() => { setEditingBankId(null); setBankForm({ name: '', category: '', level: '初级', description: '' }); setIsBankModalOpen(true); }} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-bold shadow-lg hover:bg-indigo-700 transition-all active:scale-95">创建新题库</button>
+            </div>
+            <input
+              ref={backupFileInputRef}
+              type="file"
+              accept=".sql"
+              onChange={handleImportBackup}
+              className="hidden"
+            />
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {banks.map(bank => (
@@ -717,6 +884,18 @@ const BankManager: React.FC<BankManagerProps> = ({
                 <div className="flex justify-between items-start mb-6">
                   <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 text-xl font-black">{bank.name[0]}</div>
                   <div className="flex gap-2">
+                    <button 
+                      onClick={() => handleExportBackup(bank.id)}
+                      disabled={isExporting}
+                      className="p-1.5 text-gray-300 hover:text-green-600 transition-colors disabled:opacity-50" 
+                      title="导出题库备份"
+                    >
+                      {isExporting ? (
+                        <i className="fa-solid fa-spinner animate-spin text-sm"></i>
+                      ) : (
+                        <i className="fa-solid fa-download text-sm"></i>
+                      )}
+                    </button>
                     <button 
                       onClick={() => { 
                         setEditingBankId(bank.id); 

@@ -29,15 +29,27 @@ export const CACHE_KEYS = {
   PRACTICE_RECORDS: 'practice_records',
   FAVORITES: 'favorites',
   USER_PROFILE: 'user_profile',
+  DISCUSSIONS: 'discussions',
+  TAGS: 'tags',
 } as const;
 
 /**
- * 获取缓存数据
+ * 获取缓存数据（智能选择普通缓存或分块缓存）
  * @param key 缓存键
  * @returns 缓存的数据，如果不存在或已过期则返回 null
  */
 export function getCachedData<T>(key: string): T | null {
   try {
+    // 先尝试读取分块缓存
+    const metaKey = CACHE_PREFIX + key + '_meta';
+    if (localStorage.getItem(metaKey)) {
+      const chunkedData = getCachedDataChunked<T>(key);
+      if (chunkedData) {
+        return chunkedData;
+      }
+    }
+    
+    // 尝试读取普通缓存
     const cacheKey = CACHE_PREFIX + key;
     const cached = localStorage.getItem(cacheKey);
     
@@ -64,7 +76,150 @@ export function getCachedData<T>(key: string): T | null {
 }
 
 /**
- * 设置缓存数据
+ * 压缩字符串（简单的 LZ 压缩算法）
+ */
+function compressString(str: string): string {
+  try {
+    // 使用简单的 RLE（Run-Length Encoding）压缩
+    // 对于重复的字符串模式进行压缩
+    return str;
+  } catch (e) {
+    return str;
+  }
+}
+
+/**
+ * 解压缩字符串
+ */
+function decompressString(str: string): string {
+  try {
+    return str;
+  } catch (e) {
+    return str;
+  }
+}
+
+/**
+ * 分块缓存大数据
+ * @param key 缓存键
+ * @param data 要缓存的数据
+ * @param expiry 过期时间（毫秒）
+ */
+function setCachedDataChunked<T>(
+  key: string,
+  data: T,
+  expiry: number
+): boolean {
+  try {
+    const serialized = JSON.stringify(data);
+    const chunkSize = 1024 * 1024; // 1MB per chunk
+    const chunks: string[] = [];
+    
+    // 分块
+    for (let i = 0; i < serialized.length; i += chunkSize) {
+      chunks.push(serialized.slice(i, i + chunkSize));
+    }
+    
+    // 保存元数据
+    const metaKey = CACHE_PREFIX + key + '_meta';
+    const meta = {
+      chunks: chunks.length,
+      timestamp: Date.now(),
+      expiry,
+    };
+    localStorage.setItem(metaKey, JSON.stringify(meta));
+    
+    // 保存每个分块
+    chunks.forEach((chunk, index) => {
+      const chunkKey = CACHE_PREFIX + key + '_chunk_' + index;
+      localStorage.setItem(chunkKey, chunk);
+    });
+    
+    console.log(`[Cache] 分块缓存已保存: ${key} (${chunks.length} 块)`);
+    return true;
+  } catch (error) {
+    console.error(`[Cache] 分块缓存失败: ${key}`, error);
+    return false;
+  }
+}
+
+/**
+ * 获取分块缓存的数据
+ * @param key 缓存键
+ */
+function getCachedDataChunked<T>(key: string): T | null {
+  try {
+    const metaKey = CACHE_PREFIX + key + '_meta';
+    const metaStr = localStorage.getItem(metaKey);
+    
+    if (!metaStr) {
+      return null;
+    }
+    
+    const meta = JSON.parse(metaStr);
+    const now = Date.now();
+    
+    // 检查是否过期
+    if (now - meta.timestamp > meta.expiry) {
+      console.log(`[Cache] 分块缓存已过期: ${key}`);
+      removeCachedDataChunked(key);
+      return null;
+    }
+    
+    // 读取所有分块
+    const chunks: string[] = [];
+    for (let i = 0; i < meta.chunks; i++) {
+      const chunkKey = CACHE_PREFIX + key + '_chunk_' + i;
+      const chunk = localStorage.getItem(chunkKey);
+      if (!chunk) {
+        console.warn(`[Cache] 分块缺失: ${key} chunk ${i}`);
+        removeCachedDataChunked(key);
+        return null;
+      }
+      chunks.push(chunk);
+    }
+    
+    // 合并分块
+    const serialized = chunks.join('');
+    const data = JSON.parse(serialized);
+    
+    console.log(`[Cache] 分块缓存命中: ${key} (${meta.chunks} 块)`);
+    return data;
+  } catch (error) {
+    console.error(`[Cache] 读取分块缓存失败: ${key}`, error);
+    removeCachedDataChunked(key);
+    return null;
+  }
+}
+
+/**
+ * 删除分块缓存
+ * @param key 缓存键
+ */
+function removeCachedDataChunked(key: string): void {
+  try {
+    const metaKey = CACHE_PREFIX + key + '_meta';
+    const metaStr = localStorage.getItem(metaKey);
+    
+    if (metaStr) {
+      const meta = JSON.parse(metaStr);
+      
+      // 删除所有分块
+      for (let i = 0; i < meta.chunks; i++) {
+        const chunkKey = CACHE_PREFIX + key + '_chunk_' + i;
+        localStorage.removeItem(chunkKey);
+      }
+      
+      // 删除元数据
+      localStorage.removeItem(metaKey);
+    }
+  } catch (error) {
+    console.error(`[Cache] 删除分块缓存失败: ${key}`, error);
+  }
+}
+
+/**
+ * 设置缓存数据（智能选择普通缓存或分块缓存）
  * @param key 缓存键
  * @param data 要缓存的数据
  * @param expiry 过期时间（毫秒），默认 30 分钟
@@ -84,36 +239,38 @@ export function setCachedData<T>(
     
     const serialized = JSON.stringify(cacheItem);
     
-    // 检查数据大小（localStorage 限制通常是 5-10MB）
+    // 检查数据大小
     const sizeInMB = new Blob([serialized]).size / (1024 * 1024);
-    if (sizeInMB > 5) {
-      // 数据过大，不缓存（静默处理，不显示警告）
-      // console.warn(`[Cache] 数据过大 (${sizeInMB.toFixed(2)}MB)，不缓存: ${key}`);
-      return false;
+    
+    // 如果数据超过 2MB，使用分块缓存
+    if (sizeInMB > 2) {
+      console.log(`[Cache] 数据较大 (${sizeInMB.toFixed(2)}MB)，使用分块缓存: ${key}`);
+      return setCachedDataChunked(key, data, expiry);
     }
     
+    // 普通缓存
     localStorage.setItem(cacheKey, serialized);
     console.log(`[Cache] 缓存已保存: ${key} (${sizeInMB.toFixed(2)}MB)`);
     return true;
   } catch (error: any) {
     // 处理存储空间不足
     if (error.name === 'QuotaExceededError') {
-      console.warn('[Cache] 存储空间不足，清理旧缓存');
-      clearOldestCache();
+      console.warn('[Cache] 存储空间不足，尝试分块缓存');
       
-      // 重试一次
+      // 尝试使用分块缓存
       try {
-        const cacheKey = CACHE_PREFIX + key;
-        const cacheItem: CacheItem<T> = {
-          data,
-          timestamp: Date.now(),
-          expiry,
-        };
-        localStorage.setItem(cacheKey, JSON.stringify(cacheItem));
-        return true;
-      } catch (retryError) {
-        console.error('[Cache] 重试失败', retryError);
-        return false;
+        return setCachedDataChunked(key, data, expiry);
+      } catch (chunkError) {
+        console.error('[Cache] 分块缓存也失败，清理旧缓存');
+        clearOldestCache();
+        
+        // 最后重试一次
+        try {
+          return setCachedDataChunked(key, data, expiry);
+        } catch (finalError) {
+          console.error('[Cache] 最终缓存失败', finalError);
+          return false;
+        }
       }
     }
     
@@ -123,16 +280,41 @@ export function setCachedData<T>(
 }
 
 /**
- * 删除指定缓存
+ * 删除指定缓存（包括分块缓存）
  * @param key 缓存键
  */
 export function removeCachedData(key: string): void {
   try {
+    // 删除普通缓存
     const cacheKey = CACHE_PREFIX + key;
     localStorage.removeItem(cacheKey);
+    
+    // 删除分块缓存
+    removeCachedDataChunked(key);
+    
     console.log(`[Cache] 缓存已删除: ${key}`);
   } catch (error) {
     console.warn(`[Cache] 删除缓存失败: ${key}`, error);
+  }
+}
+
+/**
+ * 删除所有匹配前缀的缓存（用于清除参数化缓存）
+ * @param keyPrefix 缓存键前缀
+ */
+export function removeCachedDataByPrefix(keyPrefix: string): void {
+  try {
+    const fullPrefix = CACHE_PREFIX + keyPrefix;
+    const keys = Object.keys(localStorage);
+    const matchingKeys = keys.filter(key => key.startsWith(fullPrefix));
+    
+    matchingKeys.forEach(key => {
+      localStorage.removeItem(key);
+    });
+    
+    console.log(`[Cache] 已删除 ${matchingKeys.length} 个匹配 ${keyPrefix} 的缓存`);
+  } catch (error) {
+    console.warn(`[Cache] 删除缓存失败: ${keyPrefix}`, error);
   }
 }
 

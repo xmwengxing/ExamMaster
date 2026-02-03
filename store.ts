@@ -6,7 +6,7 @@ import {
   AuditLog, QuestionNote, DailyProgress, StudentPermission, PracticeMode,
   PracticalTask, PracticalTaskRecord, SrsRecord
 } from './types';
-import { getCachedData, setCachedData, CACHE_KEYS, clearAllCache } from './utils/cache';
+import { getCachedData, setCachedData, CACHE_KEYS, clearAllCache, removeCachedData, removeCachedDataByPrefix } from './utils/cache';
 
 const API_BASE = '/api';
 
@@ -97,6 +97,10 @@ const fetchApi = async (endpoint: string, options: any = {}, retries: number = 2
   }
 };
 
+// 内存缓存层：避免重复加载同一题库
+const questionsMemoryCache = new Map<string, { data: Question[], timestamp: number }>();
+const MEMORY_CACHE_DURATION = 5 * 60 * 1000; // 5分钟内存缓存
+
 export const useAppStore = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -111,17 +115,6 @@ export const useAppStore = () => {
   const [favorites, setFavorites] = useState<Question[]>([]);
   const [activeBank, setActiveBank] = useState<QuestionBank | null>(null);
   const [srsRecords, setSrsRecords] = useState<SrsRecord[]>([]);
-
-  // 缓存：讨论和标签数据（5分钟有效期）
-  const [discussionsCache, setDiscussionsCache] = useState<{
-    data: any[];
-    timestamp: number;
-    params: string;
-  } | null>(null);
-  const [tagsCache, setTagsCache] = useState<{
-    data: any[];
-    timestamp: number;
-  } | null>(null);
 
   // Added missing states for administrative and functional features
   const [students, setStudents] = useState<User[]>([]);
@@ -338,42 +331,45 @@ export const useAppStore = () => {
     }
   }, [activeBank]);
 
-  // 按需加载题库题目（避免一次性加载所有题目导致数据过大）
+  // 按需加载题库题目（三层缓存：内存 -> localStorage -> 服务器）
   const loadBankQuestions = useCallback(async (bankId: string) => {
     try {
       const cacheKey = `questions_bank_${bankId}`;
       
-      // 检查缓存
+      // 立即设置加载状态
+      setIsLoadingQuestions(true);
+      
+      // 第一层：检查内存缓存（最快，< 1ms）
+      const memoryCache = questionsMemoryCache.get(bankId);
+      if (memoryCache && Date.now() - memoryCache.timestamp < MEMORY_CACHE_DURATION) {
+        console.log(`[loadBankQuestions] 内存缓存命中: ${bankId} (${memoryCache.data.length} 题)`);
+        setQuestions(memoryCache.data);
+        setIsLoadingQuestions(false);
+        return memoryCache.data;
+      }
+      
+      // 第二层：检查 localStorage 缓存（快，< 100ms）
       const cached = getCachedData<Question[]>(cacheKey);
       if (cached && cached.length > 0) {
-        console.log(`[loadBankQuestions] 使用缓存: ${bankId} (${cached.length} 题)`);
-        setQuestions(prev => {
-          // 合并缓存数据，避免重复
-          const existingIds = new Set(prev.map(q => q.id));
-          const newQuestions = cached.filter(q => !existingIds.has(q.id));
-          return [...prev, ...newQuestions];
-        });
+        console.log(`[loadBankQuestions] localStorage 缓存命中: ${bankId} (${cached.length} 题)`);
+        setQuestions(cached);
+        // 更新内存缓存
+        questionsMemoryCache.set(bankId, { data: cached, timestamp: Date.now() });
+        setIsLoadingQuestions(false);
         return cached;
       }
       
-      // 设置加载状态
-      setIsLoadingQuestions(true);
-      
-      // 从服务器加载
-      console.log(`[loadBankQuestions] 加载题库: ${bankId}`);
+      // 第三层：从服务器加载（慢，可能需要几秒）
+      console.log(`[loadBankQuestions] 从服务器加载: ${bankId}`);
       const questions = await fetchApi(`/questions?bankId=${bankId}`);
       
       console.log(`[loadBankQuestions] 加载成功: ${bankId} (${questions.length} 题)`);
       
-      // 缓存单个题库（30分钟）
-      setCachedData(cacheKey, questions, 30 * 60 * 1000);
+      // 更新所有缓存层
+      setCachedData(cacheKey, questions, 30 * 60 * 1000); // localStorage: 30分钟
+      questionsMemoryCache.set(bankId, { data: questions, timestamp: Date.now() }); // 内存: 5分钟
       
-      // 合并到现有题目列表
-      setQuestions(prev => {
-        const existingIds = new Set(prev.map(q => q.id));
-        const newQuestions = questions.filter((q: Question) => !existingIds.has(q.id));
-        return [...prev, ...newQuestions];
-      });
+      setQuestions(questions);
       
       return questions;
     } catch (error) {
@@ -526,8 +522,6 @@ export const useAppStore = () => {
       setPracticalRecords([]);
       setCustomFieldSchema([]);
       setAllProgress([]);
-      setDiscussionsCache(null);
-      setTagsCache(null);
       
       // 通知其他标签页退出登录
       localStorage.setItem('edu_logout_event', Date.now().toString());
@@ -877,13 +871,13 @@ export const useAppStore = () => {
     
     // 获取所有标签（带缓存）
     fetchTags: async (forceRefresh = false) => {
-      const now = Date.now();
-      const CACHE_DURATION = 5 * 60 * 1000; // 5分钟
-      
-      // 如果有缓存且未过期，直接返回缓存
-      if (!forceRefresh && tagsCache && (now - tagsCache.timestamp < CACHE_DURATION)) {
-        console.log('[fetchTags] 使用缓存数据');
-        return tagsCache.data;
+      // 优先使用 localStorage 缓存（30分钟）
+      if (!forceRefresh) {
+        const cached = getCachedData<any[]>(CACHE_KEYS.TAGS);
+        if (cached && cached.length >= 0) {
+          console.log('[fetchTags] 使用 localStorage 缓存');
+          return cached;
+        }
       }
       
       try {
@@ -891,19 +885,17 @@ export const useAppStore = () => {
         const result = await fetchApi('/tags');
         const tags = result.tags || [];
         
-        // 更新缓存
-        setTagsCache({
-          data: tags,
-          timestamp: now
-        });
+        // 缓存到 localStorage（30分钟）
+        setCachedData(CACHE_KEYS.TAGS, tags, 30 * 60 * 1000);
         
         return tags;
       } catch (e: any) {
         console.error('[fetchTags] Failed:', e);
-        // 如果请求失败但有缓存，返回缓存数据
-        if (tagsCache) {
+        // 如果请求失败，尝试使用过期的缓存
+        const cached = getCachedData<any[]>(CACHE_KEYS.TAGS);
+        if (cached) {
           console.log('[fetchTags] 请求失败，使用缓存数据');
-          return tagsCache.data;
+          return cached;
         }
         throw e;
       }
@@ -917,7 +909,7 @@ export const useAppStore = () => {
           body: JSON.stringify({ name, color })
         });
         // 清除标签缓存
-        setTagsCache(null);
+        removeCachedData(CACHE_KEYS.TAGS);
         return result.tag;
       } catch (e: any) {
         console.error('[createTag] Failed:', e);
@@ -933,7 +925,7 @@ export const useAppStore = () => {
           body: JSON.stringify({ name, color })
         });
         // 清除标签缓存
-        setTagsCache(null);
+        removeCachedData(CACHE_KEYS.TAGS);
         return result.tag;
       } catch (e: any) {
         console.error('[updateTag] Failed:', e);
@@ -946,7 +938,7 @@ export const useAppStore = () => {
       try {
         await fetchApi(`/tags/${id}`, { method: 'DELETE' });
         // 清除标签缓存
-        setTagsCache(null);
+        removeCachedData(CACHE_KEYS.TAGS);
       } catch (e: any) {
         console.error('[deleteTag] Failed:', e);
         throw e;
@@ -961,7 +953,7 @@ export const useAppStore = () => {
           body: JSON.stringify({ sourceTagId, targetTagId })
         });
         // 清除标签缓存
-        setTagsCache(null);
+        removeCachedData(CACHE_KEYS.TAGS);
       } catch (e: any) {
         console.error('[mergeTags] Failed:', e);
         throw e;
@@ -1004,16 +996,15 @@ export const useAppStore = () => {
       sortBy?: 'latest' | 'hot' | 'mostCommented';
       includeHidden?: boolean;
     }, forceRefresh = false) => {
-      const now = Date.now();
-      const CACHE_DURATION = 5 * 60 * 1000; // 5分钟
-      const cacheKey = JSON.stringify(params || {});
+      const cacheKey = `${CACHE_KEYS.DISCUSSIONS}_${JSON.stringify(params || {})}`;
       
-      // 如果有缓存且未过期，直接返回缓存
-      if (!forceRefresh && discussionsCache && 
-          discussionsCache.params === cacheKey && 
-          (now - discussionsCache.timestamp < CACHE_DURATION)) {
-        console.log('[fetchDiscussions] 使用缓存数据');
-        return discussionsCache.data;
+      // 优先使用 localStorage 缓存（30分钟）
+      if (!forceRefresh) {
+        const cached = getCachedData<any[]>(cacheKey);
+        if (cached && cached.length >= 0) {
+          console.log('[fetchDiscussions] 使用 localStorage 缓存');
+          return cached;
+        }
       }
       
       try {
@@ -1027,20 +1018,17 @@ export const useAppStore = () => {
         const result = await fetchApi(`/discussions${query ? '?' + query : ''}`);
         const discussions = result.discussions || [];
         
-        // 更新缓存
-        setDiscussionsCache({
-          data: discussions,
-          timestamp: now,
-          params: cacheKey
-        });
+        // 缓存到 localStorage（30分钟）
+        setCachedData(cacheKey, discussions, 30 * 60 * 1000);
         
         return discussions;
       } catch (e: any) {
         console.error('[fetchDiscussions] Failed:', e);
-        // 如果请求失败但有缓存，返回缓存数据
-        if (discussionsCache && discussionsCache.params === cacheKey) {
+        // 如果请求失败，尝试使用过期的缓存
+        const cached = getCachedData<any[]>(cacheKey);
+        if (cached) {
           console.log('[fetchDiscussions] 请求失败，使用缓存数据');
-          return discussionsCache.data;
+          return cached;
         }
         throw e;
       }
@@ -1068,8 +1056,8 @@ export const useAppStore = () => {
           method: 'POST',
           body: JSON.stringify(data)
         });
-        // 清除讨论缓存
-        setDiscussionsCache(null);
+        // 清除所有讨论缓存
+        removeCachedDataByPrefix(CACHE_KEYS.DISCUSSIONS);
         return result.discussion;
       } catch (e: any) {
         console.error('[createDiscussion] Failed:', e);
@@ -1087,8 +1075,8 @@ export const useAppStore = () => {
           method: 'PUT',
           body: JSON.stringify(data)
         });
-        // 清除讨论缓存
-        setDiscussionsCache(null);
+        // 清除所有讨论缓存
+        removeCachedDataByPrefix(CACHE_KEYS.DISCUSSIONS);
         return result.discussion;
       } catch (e: any) {
         console.error('[updateDiscussion] Failed:', e);
@@ -1100,8 +1088,8 @@ export const useAppStore = () => {
     deleteDiscussion: async (id: string) => {
       try {
         await fetchApi(`/discussions/${id}`, { method: 'DELETE' });
-        // 清除讨论缓存
-        setDiscussionsCache(null);
+        // 清除所有讨论缓存
+        removeCachedDataByPrefix(CACHE_KEYS.DISCUSSIONS);
       } catch (e: any) {
         console.error('[deleteDiscussion] Failed:', e);
         throw e;
@@ -1114,8 +1102,8 @@ export const useAppStore = () => {
         const result = await fetchApi(`/discussions/${id}/toggle-visibility`, {
           method: 'POST'
         });
-        // 清除讨论缓存
-        setDiscussionsCache(null);
+        // 清除所有讨论缓存
+        removeCachedDataByPrefix(CACHE_KEYS.DISCUSSIONS);
         return result.discussion;
       } catch (e: any) {
         console.error('[toggleDiscussionVisibility] Failed:', e);
@@ -1129,8 +1117,8 @@ export const useAppStore = () => {
         const result = await fetchApi(`/discussions/${id}/toggle-pin`, {
           method: 'POST'
         });
-        // 清除讨论缓存
-        setDiscussionsCache(null);
+        // 清除所有讨论缓存
+        removeCachedDataByPrefix(CACHE_KEYS.DISCUSSIONS);
         return result.discussion;
       } catch (e: any) {
         console.error('[toggleDiscussionPin] Failed:', e);

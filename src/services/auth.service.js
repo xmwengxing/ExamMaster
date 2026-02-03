@@ -31,8 +31,14 @@ export async function login(phone, password, role, ip = 'unknown') {
   );
   
   // 验证用户和密码
-  if (!user || !bcrypt.compareSync(password, user.password)) {
-    logger.warn('登录失败：账号或密码错误', { phone, role, ip });
+  if (!user) {
+    logger.warn('登录失败：用户不存在', { phone, role, ip });
+    throw new UnauthorizedError('账号或密码错误');
+  }
+  
+  const isPasswordValid = await bcrypt.compare(password, user.password);
+  if (!isPasswordValid) {
+    logger.warn('登录失败：密码错误', { phone, role, ip });
     throw new UnauthorizedError('账号或密码错误');
   }
   
@@ -131,13 +137,14 @@ export async function changePassword(userId, oldPassword, newPassword) {
   }
   
   // 验证旧密码
-  if (!bcrypt.compareSync(oldPassword, user.password)) {
+  const isOldPasswordValid = await bcrypt.compare(oldPassword, user.password);
+  if (!isOldPasswordValid) {
     logger.warn('修改密码失败：旧密码不正确', { userId });
     throw new UnauthorizedError('旧密码不正确');
   }
   
   // 加密新密码
-  const newHash = bcrypt.hashSync(newPassword, 10);
+  const newHash = await bcrypt.hash(newPassword, 10);
   
   // 更新密码
   await db.execute('UPDATE users SET password = $1 WHERE id = $2', [newHash, userId]);
