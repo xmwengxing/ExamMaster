@@ -175,8 +175,17 @@ function generateInsertSQL(tableName, data) {
     }
     
     // JSON 对象或数组
-    if (typeof value === 'object') {
+    if (typeof value === 'object' && !(value instanceof Date)) {
       return `'${escapeSQLString(JSON.stringify(value))}'::jsonb`;
+    }
+    
+    // 时间戳字段（created_at, updated_at 等）
+    if (col.endsWith('_at') || col.includes('date') || col.includes('time')) {
+      // 检查是否是有效的日期字符串
+      const dateValue = new Date(value);
+      if (!isNaN(dateValue.getTime())) {
+        return `'${dateValue.toISOString()}'::timestamp`;
+      }
     }
     
     // 字符串
