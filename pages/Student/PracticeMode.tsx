@@ -363,19 +363,25 @@ const PracticeModeView: React.FC<PracticeModeProps> = ({
         
         provideFeedback(isCorrect);
         
-        // 答对：自动跳转下一题；答错：显示解析，保持当前题
+        // 智能复习模式：答对后不自动跳转，让用户查看解析后手动切换
+        // 其他模式：答对自动跳转下一题；答错显示解析，保持当前题
         if (isCorrect) {
-          // 答对了，延迟跳转到下一题
-          setTimeout(() => {
-            if (currentIndex < questions.length - 1) {
-              const newIndex = currentIndex + 1;
-              setCurrentIndex(newIndex);
-              currentProgressRef.current.currentIndex = newIndex;
-            } else {
-              // 最后一题答对了，完成练习
-              onFinish();
-            }
-          }, 600); // 给用户看到正确反馈的时间
+          if (mode === PracticeMode.SMART_REVIEW) {
+            // 智能复习模式：答对后显示解析，不自动跳转
+            setShowExplanation(true);
+          } else {
+            // 其他模式：答对了，延迟跳转到下一题
+            setTimeout(() => {
+              if (currentIndex < questions.length - 1) {
+                const newIndex = currentIndex + 1;
+                setCurrentIndex(newIndex);
+                currentProgressRef.current.currentIndex = newIndex;
+              } else {
+                // 最后一题答对了，完成练习
+                onFinish();
+              }
+            }, 600); // 给用户看到正确反馈的时间
+          }
         } else {
           // 答错了，显示解析让用户学习
           setShowExplanation(true);
@@ -407,19 +413,25 @@ const PracticeModeView: React.FC<PracticeModeProps> = ({
     // 更新 ref（防抖保存会自动处理）
     currentProgressRef.current.userAnswers = userAnswers;
     
-    // 答对：自动跳转下一题；答错：显示解析，保持当前题
+    // 智能复习模式：答对后不自动跳转，让用户查看解析后手动切换
+    // 其他模式：答对自动跳转下一题；答错显示解析，保持当前题
     if (isCorrect) {
-      // 答对了，延迟跳转到下一题
-      setTimeout(() => {
-        if (currentIndex < questions.length - 1) {
-          const newIndex = currentIndex + 1;
-          setCurrentIndex(newIndex);
-          currentProgressRef.current.currentIndex = newIndex;
-        } else {
-          // 最后一题答对了，完成练习
-          onFinish();
-        }
-      }, 600); // 给用户看到正确反馈的时间
+      if (mode === PracticeMode.SMART_REVIEW) {
+        // 智能复习模式：答对后显示解析，不自动跳转
+        setShowExplanation(true);
+      } else {
+        // 其他模式：答对了，延迟跳转到下一题
+        setTimeout(() => {
+          if (currentIndex < questions.length - 1) {
+            const newIndex = currentIndex + 1;
+            setCurrentIndex(newIndex);
+            currentProgressRef.current.currentIndex = newIndex;
+          } else {
+            // 最后一题答对了，完成练习
+            onFinish();
+          }
+        }, 600); // 给用户看到正确反馈的时间
+      }
     } else {
       // 答错了，显示解析让用户学习
       setShowExplanation(true);
@@ -459,16 +471,22 @@ const PracticeModeView: React.FC<PracticeModeProps> = ({
         onCorrect(currentQuestion);
         provideFeedback(true);
         
-        // 答对了，延迟跳转到下一题
-        setTimeout(() => {
-          if (currentIndex < questions.length - 1) {
-            const newIndex = currentIndex + 1;
-            setCurrentIndex(newIndex);
-            currentProgressRef.current.currentIndex = newIndex;
-          } else {
-            onFinish();
-          }
-        }, 600);
+        // 智能复习模式：答对后不自动跳转，让用户查看解析后手动切换
+        if (mode === PracticeMode.SMART_REVIEW) {
+          // 智能复习模式：答对后显示解析，不自动跳转
+          setShowExplanation(true);
+        } else {
+          // 其他模式：答对了，延迟跳转到下一题
+          setTimeout(() => {
+            if (currentIndex < questions.length - 1) {
+              const newIndex = currentIndex + 1;
+              setCurrentIndex(newIndex);
+              currentProgressRef.current.currentIndex = newIndex;
+            } else {
+              onFinish();
+            }
+          }, 600);
+        }
       } else {
         onWrong(currentQuestion);
         provideFeedback(false);
@@ -533,16 +551,22 @@ const PracticeModeView: React.FC<PracticeModeProps> = ({
         onCorrect(currentQuestion);
         provideFeedback(true);
         
-        // 答对了，延迟跳转到下一题
-        setTimeout(() => {
-          if (currentIndex < questions.length - 1) {
-            const newIndex = currentIndex + 1;
-            setCurrentIndex(newIndex);
-            currentProgressRef.current.currentIndex = newIndex;
-          } else {
-            onFinish();
-          }
-        }, 800); // 简答题给更多时间看评分结果
+        // 智能复习模式：答对后不自动跳转，让用户查看解析后手动切换
+        if (mode === PracticeMode.SMART_REVIEW) {
+          // 智能复习模式：答对后显示解析，不自动跳转
+          setShowExplanation(true);
+        } else {
+          // 其他模式：答对了，延迟跳转到下一题
+          setTimeout(() => {
+            if (currentIndex < questions.length - 1) {
+              const newIndex = currentIndex + 1;
+              setCurrentIndex(newIndex);
+              currentProgressRef.current.currentIndex = newIndex;
+            } else {
+              onFinish();
+            }
+          }, 800); // 简答题给更多时间看评分结果
+        }
       } else {
         // 答错或未启用AI评分，显示解析
         setShowExplanation(true);
