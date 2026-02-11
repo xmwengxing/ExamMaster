@@ -52,23 +52,53 @@ async function getUserProfile(db, userId) {
  * 更新用户资料
  * @param {Object} db - 数据库实例
  * @param {number} userId - 用户ID
- * @param {Object} updates - 要更新的字段（snake_case格式）
+ * @param {Object} updates - 要更新的字段（camelCase 或 snake_case 格式）
  * @returns {Promise<void>}
  */
 async function updateUserProfile(db, userId, updates) {
-  const fields = Object.keys(updates).filter(k => k !== 'id');
+  // camelCase 到 snake_case 的映射
+  const fieldMapping = {
+    realName: 'real_name',
+    idCard: 'id_card',
+    educationType: 'education_type',
+    educationLevel: 'education_level',
+    className: 'class_name',
+    studentPerms: 'student_perms',
+    allowedBankIds: 'allowed_bank_ids',
+    lastLogin: 'last_login',
+    lastActivity: 'last_activity',
+    loginHistory: 'login_history',
+    deepseekApiKey: 'deepseek_api_key',
+    totalOnlineTime: 'total_online_time',
+    customFields: 'custom_fields',
+    mistakeCount: 'mistake_count',
+    dailyGoal: 'daily_goal'
+  };
   
-  if (fields.length === 0) {
+  // 转换字段名并过滤掉 id
+  const dbFields = [];
+  const values = [];
+  
+  Object.keys(updates).forEach(key => {
+    if (key === 'id') return;
+    
+    // 转换为数据库字段名
+    const dbField = fieldMapping[key] || key;
+    dbFields.push(dbField);
+    
+    // 处理值：对象类型转为 JSON 字符串
+    const value = typeof updates[key] === 'object' ? JSON.stringify(updates[key]) : updates[key];
+    values.push(value);
+  });
+  
+  if (dbFields.length === 0) {
     return;
   }
   
-  const setClause = fields.map((k, i) => `${k} = $${i + 1}`).join(', ');
-  const values = fields.map(k => {
-    return typeof updates[k] === 'object' ? JSON.stringify(updates[k]) : updates[k];
-  });
+  const setClause = dbFields.map((field, i) => `${field} = $${i + 1}`).join(', ');
   
   await db.execute(
-    `UPDATE users SET ${setClause} WHERE id = $${fields.length + 1}`,
+    `UPDATE users SET ${setClause} WHERE id = $${dbFields.length + 1}`,
     [...values, userId]
   );
 }

@@ -27,7 +27,7 @@ export default defineConfig(({ mode }) => {
         }
       },
       build: {
-        // 代码分割优化
+        // 代码分割优化（保守策略，避免模块依赖问题）
         rollupOptions: {
           output: {
             manualChunks: {
@@ -40,14 +40,16 @@ export default defineConfig(({ mode }) => {
             }
           }
         },
-        // 提高 chunk 大小警告阈值
-        chunkSizeWarningLimit: 1000,
+        // 提高 chunk 大小警告阈值到 3000 KB（消除警告）
+        chunkSizeWarningLimit: 3000,
         // 启用 CSS 代码分割
         cssCodeSplit: true,
-        // 不生成 sourcemap
+        // 不生成 sourcemap（减小文件大小）
         sourcemap: false,
-        // 使用 esbuild 压缩
+        // 使用 esbuild 压缩（更快）
         minify: 'esbuild',
+        // 目标浏览器（支持现代浏览器，生成更小的代码）
+        target: 'es2015',
       }
     };
 });

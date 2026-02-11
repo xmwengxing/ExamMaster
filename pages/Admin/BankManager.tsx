@@ -46,6 +46,7 @@ const BankManager: React.FC<BankManagerProps> = ({
 
   const [duplicateIds, setDuplicateIds] = useState<string[]>([]);
   const [isChecking, setIsChecking] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false); // 刷新状态
   
   // 备份相关状态
   const [isBackupModalOpen, setIsBackupModalOpen] = useState(false);
@@ -53,6 +54,9 @@ const BankManager: React.FC<BankManagerProps> = ({
   const [isExporting, setIsExporting] = useState(false);
   const [isImportingBackup, setIsImportingBackup] = useState(false);
   const backupFileInputRef = useRef<HTMLInputElement>(null);
+  
+  // 当前题库的题目（组件内部状态，不依赖store.questions）
+  const [currentBankQuestions, setCurrentBankQuestions] = useState<Question[]>([]);
   
   // 加载所有标签
   const [allTags, setAllTags] = useState<Tag[]>([]);
@@ -73,11 +77,21 @@ const BankManager: React.FC<BankManagerProps> = ({
   useEffect(() => {
     if (editingBankId && view === 'editor') {
       console.log('[BankManager] 加载题库题目:', editingBankId);
-      store.loadBankQuestions(editingBankId).catch(err => {
-        console.error('[BankManager] 加载题目失败:', err);
-      });
+      
+      // 清空当前题目，显示加载状态
+      setCurrentBankQuestions([]);
+      
+      store.loadBankQuestions(editingBankId)
+        .then(questions => {
+          console.log('[BankManager] 题目加载完成:', questions.length);
+          setCurrentBankQuestions(questions || []);
+        })
+        .catch(err => {
+          console.error('[BankManager] 加载题目失败:', err);
+          setCurrentBankQuestions([]);
+        });
     }
-  }, [editingBankId, view, store]);
+  }, [editingBankId, view, store.loadBankQuestions]);
   
   // 根据 tagId 查找标签对象
   const getTagById = (tagId: string) => {
@@ -85,7 +99,8 @@ const BankManager: React.FC<BankManagerProps> = ({
   };
 
   const editingBank = useMemo(() => banks.find(b => b.id === editingBankId) || null, [banks, editingBankId]);
-  const bankQuestions = useMemo(() => editingBankId ? allQuestions.filter(q => q.bankId === editingBankId) : [], [allQuestions, editingBankId]);
+  // 使用组件内部状态，不依赖allQuestions prop
+  const bankQuestions = useMemo(() => currentBankQuestions, [currentBankQuestions]);
   
   // 获取当前题库的所有章节（去重）
   const availableChapters = useMemo(() => {
@@ -172,18 +187,24 @@ const BankManager: React.FC<BankManagerProps> = ({
     try {
       if (finalQuestion.id) {
         await onUpdateQuestion(finalQuestion.id, finalQuestion);
+        // 更新本地状态
+        setCurrentBankQuestions(prev => 
+          prev.map(q => q.id === finalQuestion.id ? { ...q, ...finalQuestion } as Question : q)
+        );
       } else {
-        const res = await onAddQuestion({ 
+        const newId = 'q-' + Date.now();
+        const newQuestion = { 
           ...finalQuestion,
-          id: 'q-' + Date.now(), 
+          id: newId, 
           bankId: editingBankId,
-        } as Question);
-        // Optionally we could do something with res.question or res.id here
+        } as Question;
+        await onAddQuestion(newQuestion);
+        // 添加到本地状态
+        setCurrentBankQuestions(prev => [...prev, newQuestion]);
       }
-      // wait a tick for store refresh to propagate
-      await new Promise(r => setTimeout(r, 100));
     } catch (err: any) {
       alert('保存题目失败：' + (err?.message || err));
+      return;
     }
 
     setIsQuestionModalOpen(false);
@@ -209,6 +230,24 @@ const BankManager: React.FC<BankManagerProps> = ({
       setIsChecking(false);
       if (toDelete.length === 0) alert('当前题库未发现重复题目！');
     }, 800);
+  };
+
+  // 刷新题目列表
+  const handleRefreshQuestions = async () => {
+    if (!editingBankId) return;
+    
+    setIsRefreshing(true);
+    try {
+      console.log('[BankManager] 手动刷新题目列表...');
+      const questions = await store.loadBankQuestions(editingBankId);
+      setCurrentBankQuestions(questions || []);
+      console.log('[BankManager] 刷新完成，共', questions?.length || 0, '道题目');
+    } catch (error) {
+      console.error('[BankManager] 刷新失败:', error);
+      alert('刷新失败，请重试');
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   const handleClearDuplicates = async () => {
@@ -433,6 +472,13 @@ const BankManager: React.FC<BankManagerProps> = ({
         alert(message);
         setIsImportModalOpen(false);
         
+        // 重新加载题目
+        if (inserted > 0) {
+          console.log('[BankManager] 重新加载题目...');
+          const questions = await store.loadBankQuestions(editingBankId!);
+          setCurrentBankQuestions(questions || []);
+        }
+        
       } catch (err: any) {
         console.error('[BankManager] Import error:', err);
         alert('导入失败：' + (err?.message || err));
@@ -602,6 +648,253 @@ const BankManager: React.FC<BankManagerProps> = ({
     reader.readAsText(file, 'UTF-8');
   };
   
+  // 处理JSON导入（支持题库转换工具生成的格式）
+  const handleJSONImport = async (file: File) => {
+    if (!editingBankId) return;
+    
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      try {
+        const text = ev.target?.result as string;
+        const jsonData = JSON.parse(text);
+        
+        // 验证JSON格式
+        if (!jsonData || typeof jsonData !== 'object') {
+          alert('JSON文件格式错误：文件内容无效');
+          return;
+        }
+        
+        // 支持两种JSON格式：
+        // 1. 题库转换工具格式：{ metadata: {...}, questions: [...] }
+        // 2. 简单数组格式：[{...}, {...}]
+        let questions: any[] = [];
+        
+        if (Array.isArray(jsonData)) {
+          // 简单数组格式
+          questions = jsonData;
+        } else if (jsonData.questions && Array.isArray(jsonData.questions)) {
+          // 题库转换工具格式
+          questions = jsonData.questions;
+          
+          // 显示元数据信息
+          if (jsonData.metadata) {
+            const meta = jsonData.metadata;
+            console.log('[JSON导入] 文件信息:', {
+              版本: meta.version,
+              创建时间: meta.createdAt,
+              题目总数: meta.totalQuestions,
+              来源文件: meta.sourceFile
+            });
+          }
+        } else {
+          alert('JSON文件格式错误：未找到题目数据\n\n支持的格式：\n1. { "questions": [...] }\n2. [{...}, {...}]');
+          return;
+        }
+        
+        if (questions.length === 0) {
+          alert('JSON文件中没有题目数据');
+          return;
+        }
+        
+        // 转换JSON题目格式为系统格式
+        const convertedQuestions: any[] = [];
+        const errors: string[] = [];
+        
+        // 按题型分类统计
+        const questionsByType: Record<string, any[]> = {
+          'SINGLE': [],
+          'MULTIPLE': [],
+          'JUDGE': [],
+          'FILL_IN_BLANK': [],
+          'SHORT_ANSWER': []
+        };
+        
+        for (let i = 0; i < questions.length; i++) {
+          const q = questions[i];
+          const rowNum = i + 1;
+          
+          try {
+            // 验证必填字段
+            if (!q.content || !q.content.trim()) {
+              errors.push(`第 ${rowNum} 题：题目内容不能为空`);
+              continue;
+            }
+            
+            if (!q.type) {
+              errors.push(`第 ${rowNum} 题：题型不能为空`);
+              continue;
+            }
+            
+            // 标准化题型
+            const typeMap: Record<string, string> = {
+              'single': 'SINGLE',
+              'multiple': 'MULTIPLE',
+              'judge': 'JUDGE',
+              'fill': 'FILL_IN_BLANK',
+              'fill_in_blank': 'FILL_IN_BLANK',
+              'essay': 'SHORT_ANSWER',
+              'short_answer': 'SHORT_ANSWER'
+            };
+            
+            const normalizedType = typeMap[q.type.toLowerCase()] || q.type.toUpperCase();
+            
+            // 验证题型
+            if (!['SINGLE', 'MULTIPLE', 'JUDGE', 'FILL_IN_BLANK', 'SHORT_ANSWER'].includes(normalizedType)) {
+              errors.push(`第 ${rowNum} 题：不支持的题型 "${q.type}"`);
+              continue;
+            }
+            
+            // 构建题目对象
+            const question: any = {
+              type: normalizedType,
+              content: q.content.trim(),
+              answer: q.answer || '',
+              explanation: q.explanation || '',
+              unit: q.unit || q.chapter || '',
+              difficulty: q.difficulty || 1,
+              tags: Array.isArray(q.tags) ? q.tags : []
+            };
+            
+            // 处理选项
+            if (normalizedType === 'SINGLE' || normalizedType === 'MULTIPLE') {
+              if (!q.options || !Array.isArray(q.options) || q.options.length < 2) {
+                errors.push(`第 ${rowNum} 题：选择题至少需要2个选项`);
+                continue;
+              }
+              question.options = q.options.join('|');
+            } else if (normalizedType === 'JUDGE') {
+              // 判断题使用默认选项
+              question.options = '';
+            }
+            
+            // 处理填空题配置
+            if (normalizedType === 'FILL_IN_BLANK' && q.fillConfig) {
+              question.fillConfig = typeof q.fillConfig === 'string' 
+                ? q.fillConfig 
+                : JSON.stringify(q.fillConfig);
+            }
+            
+            // 处理简答题参考答案
+            if (normalizedType === 'SHORT_ANSWER' && q.referenceAnswer) {
+              question.referenceAnswer = q.referenceAnswer;
+            }
+            
+            // 验证答案
+            if (!question.answer && normalizedType !== 'FILL_IN_BLANK' && normalizedType !== 'SHORT_ANSWER') {
+              errors.push(`第 ${rowNum} 题：答案不能为空`);
+              continue;
+            }
+            
+            convertedQuestions.push(question);
+            
+            // 按题型分类
+            if (questionsByType[normalizedType]) {
+              questionsByType[normalizedType].push(question);
+            }
+            
+          } catch (error: any) {
+            errors.push(`第 ${rowNum} 题：解析失败 - ${error.message}`);
+          }
+        }
+        
+        // 显示导入结果
+        if (convertedQuestions.length === 0) {
+          alert(`JSON导入失败\n\n错误信息：\n${errors.slice(0, 10).join('\n')}${errors.length > 10 ? `\n...还有 ${errors.length - 10} 个错误` : ''}`);
+          return;
+        }
+        
+        // 生成题型统计信息（显示所有题型，包括0题的）
+        const typeNames: Record<string, string> = {
+          'SINGLE': '单选题',
+          'MULTIPLE': '多选题',
+          'JUDGE': '判断题',
+          'FILL_IN_BLANK': '填空题',
+          'SHORT_ANSWER': '简答题'
+        };
+        
+        let typeStats = '\n\n题型统计：';
+        // 按固定顺序显示所有题型
+        ['SINGLE', 'MULTIPLE', 'JUDGE', 'FILL_IN_BLANK', 'SHORT_ANSWER'].forEach(type => {
+          const count = questionsByType[type]?.length || 0;
+          typeStats += `\n  ${typeNames[type]}: ${count} 题`;
+        });
+        
+        // 生成预览信息（每种题型各取5题）
+        let previewInfo = '\n\n预览（每种题型最多5题）：';
+        let previewCount = 0;
+        ['SINGLE', 'MULTIPLE', 'JUDGE', 'FILL_IN_BLANK', 'SHORT_ANSWER'].forEach(type => {
+          const list = questionsByType[type] || [];
+          const count = Math.min(5, list.length);
+          if (count > 0) {
+            previewCount += count;
+            previewInfo += `\n  ${typeNames[type]}: 预览 ${count} 题`;
+          }
+        });
+        
+        // 确认导入
+        const confirmMsg = `准备导入 ${convertedQuestions.length} 道题目` +
+          typeStats +
+          (errors.length > 0 ? `\n\n跳过 ${errors.length} 道无效题目` : '') +
+          previewInfo +
+          '\n\n是否继续？';
+        
+        if (!confirm(confirmMsg)) {
+          return;
+        }
+        
+        // 显示错误详情（如果有）
+        if (errors.length > 0 && errors.length <= 20) {
+          console.warn('[JSON导入] 跳过的题目：', errors);
+        }
+        
+        // 执行导入
+        try {
+          console.log('[BankManager] Importing questions from JSON:', convertedQuestions.length);
+          const res = await onImportQuestions(editingBankId!, convertedQuestions as Question[]);
+          
+          const inserted = res?.inserted ?? 0;
+          const skipped = res?.skipped ?? 0;
+          const importErrors = res?.errors ?? [];
+          
+          setIsImportModalOpen(false);
+          
+          let resultMsg = `导入完成！\n\n成功导入：${inserted} 题`;
+          if (skipped > 0) resultMsg += `\n跳过：${skipped} 题`;
+          if (errors.length > 0) resultMsg += `\n格式错误：${errors.length} 题`;
+          if (importErrors.length > 0) {
+            resultMsg += `\n\n部分题目导入失败：\n${importErrors.slice(0, 5).join('\n')}`;
+            if (importErrors.length > 5) {
+              resultMsg += `\n...还有 ${importErrors.length - 5} 个错误`;
+            }
+          }
+          
+          alert(resultMsg);
+          
+          // 重新加载题目
+          if (inserted > 0) {
+            console.log('[BankManager] 重新加载题目...');
+            const questions = await store.loadBankQuestions(editingBankId!);
+            setCurrentBankQuestions(questions || []);
+          }
+          
+        } catch (error: any) {
+          console.error('[JSON导入失败]', error);
+          alert('导入失败：' + (error?.message || '未知错误'));
+        }
+        
+      } catch (error: any) {
+        console.error('JSON解析错误:', error);
+        if (error instanceof SyntaxError) {
+          alert('JSON文件格式错误：文件内容不是有效的JSON格式\n\n' + error.message);
+        } else {
+          alert('JSON文件解析失败：' + (error?.message || '未知错误'));
+        }
+      }
+    };
+    
+    reader.readAsText(file, 'UTF-8');
+  };
+  
   // 统一的文件导入入口
   const handleFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -614,8 +907,10 @@ const BankManager: React.FC<BankManagerProps> = ({
       handleExcelImport(file);
     } else if (fileName.endsWith('.csv')) {
       handleCSVImport(file);
+    } else if (fileName.endsWith('.json')) {
+      handleJSONImport(file);
     } else {
-      alert('不支持的文件格式，请上传 .xlsx、.xls 或 .csv 文件');
+      alert('不支持的文件格式，请上传 .xlsx、.xls、.csv 或 .json 文件');
     }
     
     e.target.value = '';
@@ -929,7 +1224,14 @@ const BankManager: React.FC<BankManagerProps> = ({
                         const message = questionCount > 0 
                           ? `确定要删除题库"${bank.name}"吗？\n\n⚠️ 警告：此操作将同时删除该题库内的 ${questionCount} 道题目，且无法恢复！` 
                           : `确定要删除题库"${bank.name}"吗？`;
-                        if(confirm(message)) onDelete(bank.id); 
+                        if(confirm(message)) {
+                          // 如果正在编辑这个题库，清空编辑状态
+                          if (editingBankId === bank.id) {
+                            setEditingBankId(null);
+                            setView('list');
+                          }
+                          onDelete(bank.id);
+                        }
                       }} 
                       className="p-1.5 text-gray-300 hover:text-rose-500 transition-colors"
                       title="删除题库"
@@ -978,6 +1280,21 @@ const BankManager: React.FC<BankManagerProps> = ({
             
             <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-end">
               <div className="flex items-center gap-2 bg-gray-50 p-1 rounded-2xl border mr-2">
+                 {/* 刷新按钮 */}
+                 <button 
+                   onClick={handleRefreshQuestions} 
+                   disabled={isRefreshing} 
+                   className="text-gray-500 hover:text-indigo-600 px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2"
+                   title="刷新题目列表"
+                 >
+                   {isRefreshing ? (
+                     <i className="fa-solid fa-spinner animate-spin"></i>
+                   ) : (
+                     <i className="fa-solid fa-arrows-rotate"></i>
+                   )}
+                   刷新
+                 </button>
+                 
                  {duplicateIds.length > 0 ? (
                    <div className="flex items-center gap-2 px-3">
                       <span className="text-[10px] font-black text-rose-600 bg-rose-50 px-2 py-1 rounded-lg border border-rose-100 animate-pulse">发现 {duplicateIds.length} 个重复项</span>
@@ -1202,7 +1519,11 @@ const BankManager: React.FC<BankManagerProps> = ({
                       </div>
                       <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity self-start ml-4">
                         <button onClick={() => { setEditingQuestion(q); setIsQuestionModalOpen(true); }} className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg"><i className="fa-solid fa-pen-to-square"></i></button>
-                        <button onClick={() => onDeleteQuestion(q.id)} className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg"><i className="fa-solid fa-trash-can"></i></button>
+                        <button onClick={async () => {
+                          await onDeleteQuestion(q.id);
+                          // 从本地状态中移除
+                          setCurrentBankQuestions(prev => prev.filter(item => item.id !== q.id));
+                        }} className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg"><i className="fa-solid fa-trash-can"></i></button>
                       </div>
                     </div>
                   );
@@ -1577,7 +1898,7 @@ const BankManager: React.FC<BankManagerProps> = ({
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-[2.5rem] w-full max-w-md p-8 shadow-2xl animate-in zoom-in-95 duration-200">
             <h3 className="text-2xl font-black text-gray-900 mb-2 tracking-tight">批量导入题目</h3>
-            <p className="text-xs text-gray-400 mb-8 font-medium">支持 Excel 和 CSV 两种格式，请按照模板格式进行题目编撰后再上传。</p>
+            <p className="text-xs text-gray-400 mb-8 font-medium">支持 Excel、CSV 和 JSON 三种格式，请按照模板格式进行题目编撰后再上传。</p>
             
             <div className="space-y-6">
               <div 
@@ -1586,13 +1907,14 @@ const BankManager: React.FC<BankManagerProps> = ({
               >
                 <i className="fa-solid fa-cloud-arrow-up text-4xl text-indigo-400 mb-4 group-hover:scale-110 transition-transform"></i>
                 <div className="text-sm font-bold text-indigo-600">点击此处上传题目文件</div>
-                <div className="text-[10px] text-gray-400 mt-2">支持 Excel (.xlsx, .xls) 和 CSV 格式</div>
-                <input type="file" ref={fileInputRef} className="hidden" accept=".csv,.xlsx,.xls" onChange={handleFileImport} />
+                <div className="text-[10px] text-gray-400 mt-2">支持 Excel (.xlsx, .xls)、CSV 和 JSON 格式</div>
+                <input type="file" ref={fileInputRef} className="hidden" accept=".csv,.xlsx,.xls,.json" onChange={handleFileImport} />
               </div>
 
               <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100">
                 <h4 className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-3">填写规范说明</h4>
                 <ul className="text-[11px] text-amber-700/80 space-y-1.5 list-disc pl-4 leading-relaxed">
+                  <li><strong>JSON格式</strong>：使用"题库转换工具GUI版"生成的JSON文件可直接导入，支持带图片的题目</li>
                   <li>题型标识符: <strong>SINGLE</strong>(单选), <strong>MULTIPLE</strong>(多选), <strong>JUDGE</strong>(判断), <strong>FILL_IN_BLANK</strong>(填空), <strong>SHORT_ANSWER</strong>(简答)</li>
                   <li>选项分隔符: 使用英文半角 <strong>|</strong> 分隔，支持 <strong>2-8个</strong> 选项</li>
                   <li>答案规范: 单选填A/B/C等，多选填ABC等（无需分隔符）</li>

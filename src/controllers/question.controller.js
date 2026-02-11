@@ -191,7 +191,8 @@ export async function batchImportQuestions(req, res, next) {
       success: true,
       inserted: result.inserted,
       skipped: result.skipped,
-      errors: result.errors
+      errors: result.errors,
+      questionIds: result.questionIds // 返回导入的题目ID列表，用于撤销功能
     });
   } catch (error) {
     logger.error('[Import] 导入失败:', error);

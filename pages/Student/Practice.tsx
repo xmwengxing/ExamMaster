@@ -17,6 +17,7 @@ const PracticeList: React.FC<PracticeProps> = ({ banks, activeBank, history, onS
   const store = useAppStore();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isOperating, setIsOperating] = useState(false);
+  const [isStarting, setIsStarting] = useState(false); // 新增：点击开始练习的加载状态
   const [form, setForm] = useState({
     strategy: 'SEQUENTIAL', // 默认顺序练习
     selectedChapters: [] as string[], // 选中的章节
@@ -29,23 +30,53 @@ const PracticeList: React.FC<PracticeProps> = ({ banks, activeBank, history, onS
     }
   });
 
-  // 确保当前题库的题目已加载（使用缓存，不会重复加载）
+  // 处理开始练习（带防抖和加载状态）
+  const handleStartPractice = async (mode: PracticeMode, params: any) => {
+    if (isStarting) return; // 防止重复点击
+    
+    setIsStarting(true);
+    try {
+      await onStart(mode, params);
+    } finally {
+      // 延迟重置状态，避免页面切换时闪烁
+      setTimeout(() => setIsStarting(false), 1000);
+    }
+  };
+
+  // 确保当前题库的题目已加载
   const [questionsLoaded, setQuestionsLoaded] = React.useState(false);
   
   React.useEffect(() => {
-    if (activeBank && activeBank.id) {
-      console.log('[Practice] 检查题库题目:', activeBank.id, activeBank.name);
-      const hasQuestions = store.questions.some(q => q.bankId === activeBank.id);
-      
-      if (hasQuestions) {
-        console.log('[Practice] 题目已加载，数量:', store.questions.filter(q => q.bankId === activeBank.id).length);
-        setQuestionsLoaded(true);
-      } else if (!store.isLoadingQuestions) {
+    if (!activeBank || !activeBank.id) {
+      setQuestionsLoaded(false);
+      return;
+    }
+    
+    console.log('[Practice] 检查题库题目:', activeBank.id, activeBank.name);
+    
+    // 检查当前题库的题目是否已加载
+    const currentBankQuestions = store.questions.filter(q => q.bankId === activeBank.id);
+    const hasQuestions = currentBankQuestions.length > 0;
+    
+    if (hasQuestions) {
+      console.log('[Practice] 题目已加载，数量:', currentBankQuestions.length);
+      setQuestionsLoaded(true);
+    } else {
+      // 没有题目，检查是否正在加载
+      if (store.isLoadingQuestions) {
+        console.log('[Practice] 题目正在加载中...');
+        setQuestionsLoaded(false);
+      } else {
+        // 没有题目且不在加载中，触发加载
         console.log('[Practice] 开始加载题库题目...');
         setQuestionsLoaded(false);
         store.loadBankQuestions(activeBank.id).then(() => {
-          console.log('[Practice] 题目加载完成，数量:', store.questions.filter(q => q.bankId === activeBank.id).length);
+          const loadedQuestions = store.questions.filter(q => q.bankId === activeBank.id);
+          console.log('[Practice] 题目加载完成，数量:', loadedQuestions.length);
           setQuestionsLoaded(true);
+        }).catch(err => {
+          console.error('[Practice] 题目加载失败:', err);
+          setQuestionsLoaded(false);
         });
       }
     }
@@ -249,6 +280,64 @@ const PracticeList: React.FC<PracticeProps> = ({ banks, activeBank, history, onS
 
   return (
     <div className="space-y-6">
+      {/* 点击开始练习后的加载状态 */}
+      {isStarting && (
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-3xl border-2 border-blue-200 shadow-lg">
+          <div className="flex items-center gap-4">
+            <div className="relative">
+              <i className="fa-solid fa-circle-notch fa-spin text-4xl text-blue-600"></i>
+              <div className="absolute inset-0 bg-blue-600/10 rounded-full animate-ping"></div>
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-blue-900 mb-1">正在准备练习...</h3>
+              <p className="text-sm text-blue-600">
+                正在检查进度并加载题目，请稍候
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 加载状态指示器 */}
+      {store.isLoadingQuestions && (
+        <div className="bg-gradient-to-r from-indigo-50 to-purple-50 p-6 rounded-3xl border-2 border-indigo-100 shadow-sm">
+          <div className="flex items-center gap-4">
+            <div className="relative">
+              <i className="fa-solid fa-spinner fa-spin text-4xl text-indigo-600"></i>
+              <div className="absolute inset-0 bg-indigo-600/10 rounded-full animate-ping"></div>
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-indigo-900 mb-1">正在加载题目...</h3>
+              <p className="text-sm text-indigo-600">
+                题库：{activeBank.name} · 首次加载可能需要5-10秒，请稍候
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 题目未加载完成时的提示 */}
+      {!store.isLoadingQuestions && !questionsLoaded && (
+        <div className="bg-yellow-50 p-6 rounded-3xl border-2 border-yellow-200 shadow-sm">
+          <div className="flex items-center gap-4">
+            <i className="fa-solid fa-circle-exclamation text-4xl text-yellow-600"></i>
+            <div>
+              <h3 className="text-lg font-bold text-yellow-900 mb-1">题目尚未加载</h3>
+              <p className="text-sm text-yellow-700 mb-3">
+                请稍等片刻，系统正在准备题库数据...
+              </p>
+              <button
+                onClick={() => store.loadBankQuestions(activeBank.id)}
+                className="px-4 py-2 bg-yellow-600 text-white rounded-lg text-sm font-bold hover:bg-yellow-700 transition-colors"
+              >
+                <i className="fa-solid fa-rotate-right mr-2"></i>
+                手动重新加载
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="bg-white p-6 rounded-3xl border shadow-sm">
         <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
            <i className="fa-solid fa-rocket text-indigo-500"></i>
@@ -256,11 +345,16 @@ const PracticeList: React.FC<PracticeProps> = ({ banks, activeBank, history, onS
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <button 
-            onClick={() => onStart(PracticeMode.SEQUENTIAL, { isCustom: false, bankId: activeBank.id })}
-            className="flex items-center gap-4 p-5 rounded-2xl bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 transition-all text-left group"
+            onClick={() => handleStartPractice(PracticeMode.SEQUENTIAL, { isCustom: false, bankId: activeBank.id })}
+            disabled={store.isLoadingQuestions || !questionsLoaded || isStarting}
+            className="flex items-center gap-4 p-5 rounded-2xl bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 transition-all text-left group disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <div className="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center text-white group-hover:scale-110 transition-transform">
-              <i className="fa-solid fa-arrow-down-1-9 text-xl"></i>
+              {isStarting ? (
+                <i className="fa-solid fa-spinner fa-spin text-xl"></i>
+              ) : (
+                <i className="fa-solid fa-arrow-down-1-9 text-xl"></i>
+              )}
             </div>
             <div>
               <div className="font-bold text-indigo-900">顺序练习</div>
@@ -268,11 +362,16 @@ const PracticeList: React.FC<PracticeProps> = ({ banks, activeBank, history, onS
             </div>
           </button>
           <button 
-            onClick={() => onStart(PracticeMode.MEMORY, { isCustom: false, bankId: activeBank.id })}
-            className="flex items-center gap-4 p-5 rounded-2xl bg-emerald-50 border border-emerald-100 hover:bg-emerald-100 transition-all text-left group"
+            onClick={() => handleStartPractice(PracticeMode.MEMORY, { isCustom: false, bankId: activeBank.id })}
+            disabled={store.isLoadingQuestions || !questionsLoaded || isStarting}
+            className="flex items-center gap-4 p-5 rounded-2xl bg-emerald-50 border border-emerald-100 hover:bg-emerald-100 transition-all text-left group disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <div className="w-12 h-12 bg-emerald-600 rounded-xl flex items-center justify-center text-white group-hover:scale-110 transition-transform">
-              <i className="fa-solid fa-brain text-xl"></i>
+              {isStarting ? (
+                <i className="fa-solid fa-spinner fa-spin text-xl"></i>
+              ) : (
+                <i className="fa-solid fa-brain text-xl"></i>
+              )}
             </div>
             <div>
               <div className="font-bold text-emerald-900">背题模式</div>
@@ -319,7 +418,8 @@ const PracticeList: React.FC<PracticeProps> = ({ banks, activeBank, history, onS
               console.log('[Practice] 题型统计:', typeStats);
               setIsModalOpen(true);
             }}
-            className="text-indigo-600 text-sm font-bold bg-indigo-50 px-4 py-2 rounded-xl hover:bg-indigo-100 transition-colors"
+            disabled={store.isLoadingQuestions || !questionsLoaded}
+            className="text-indigo-600 text-sm font-bold bg-indigo-50 px-4 py-2 rounded-xl hover:bg-indigo-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <i className="fa-solid fa-plus mr-1"></i> 新建个性化练习
           </button>
@@ -442,9 +542,48 @@ const PracticeList: React.FC<PracticeProps> = ({ banks, activeBank, history, onS
             <div className="space-y-6">
               <div>
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2 ml-1">当前题库</label>
-                <div className="w-full bg-gray-50 border-2 border-dashed border-gray-100 rounded-2xl px-5 py-4 font-bold text-gray-700">
-                  {activeBank.name}
+                <div className="relative">
+                  <div className="w-full bg-gray-50 border-2 border-dashed border-gray-100 rounded-2xl px-5 py-4 font-bold text-gray-700 flex items-center justify-between">
+                    <span>{activeBank.name}</span>
+                    <button
+                      onClick={async () => {
+                        const success = await store.refreshBank(activeBank.id);
+                        if (success) {
+                          alert('题库已更新！');
+                        } else {
+                          alert('更新失败，请稍后重试');
+                        }
+                      }}
+                      className="ml-4 px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-700 transition-colors flex items-center gap-1"
+                      title="手动刷新题库，获取最新题目"
+                    >
+                      <i className="fa-solid fa-rotate-right"></i>
+                      刷新
+                    </button>
+                  </div>
+                  
+                  {/* 更新提示 */}
+                  {store.bankUpdates[activeBank.id] && (
+                    <div className="absolute -top-2 -right-2 bg-rose-500 text-white text-xs font-bold px-2 py-1 rounded-full animate-pulse shadow-lg">
+                      有更新
+                    </div>
+                  )}
                 </div>
+                
+                {/* 更新说明 */}
+                {store.bankUpdates[activeBank.id] && (
+                  <div className="mt-2 bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs">
+                    <div className="flex items-start gap-2">
+                      <i className="fa-solid fa-circle-exclamation text-amber-600 mt-0.5"></i>
+                      <div>
+                        <div className="font-bold text-amber-900 mb-1">题库已更新</div>
+                        <div className="text-amber-700">
+                          管理员已更新此题库，点击"刷新"按钮获取最新题目
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* 章节选择器 */}

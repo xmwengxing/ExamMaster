@@ -27,6 +27,9 @@ import TagManager from './components/TagManager';
 import Discussions from './pages/Student/Discussions';
 import DiscussionManager from './pages/Admin/DiscussionManager';
 import AiAnalysisViewer from './pages/Admin/AiAnalysisViewer';
+import QuestionBankConverter from './pages/Admin/QuestionBankConverter';
+import ImportManager from './pages/Admin/ImportManager';
+import SimpleImportManager from './pages/Admin/SimpleImportManager';
 
 const App: React.FC = () => {
   const store = useAppStore();
@@ -113,20 +116,8 @@ const App: React.FC = () => {
 
   // 自动加载题目：当切换到需要题目的页面时
   useEffect(() => {
-    // 学员端页面：按需加载当前题库的题目
-    const studentNeedsQuestions = ['practice', 'practice-mode', 'favorites', 'mistakes'];
-    
-    if (studentNeedsQuestions.includes(activeTab) && store.activeBank?.id) {
-      // 检查是否已加载该题库的题目
-      const hasQuestions = store.questions.some(q => q.bankId === store.activeBank?.id);
-      
-      if (!hasQuestions) {
-        console.log('[App] 学员端自动加载题库题目:', store.activeBank.name, store.activeBank.id);
-        store.loadBankQuestions(store.activeBank.id).catch(err => {
-          console.error('[App] 加载题目失败:', err);
-        });
-      }
-    }
+    // 移除学员端自动加载逻辑，由各页面自己控制加载时机
+    // 这样可以避免与 Practice.tsx 的加载逻辑冲突
     
     // 管理员页面：需要加载所有题目
     const adminNeedsAllQuestions = ['banks', 'admin-exams'];
@@ -147,23 +138,9 @@ const App: React.FC = () => {
     }
   }, [activeTab, store.activeBank?.id, store.questions.length, store.currentUser?.role, store.banks.length]);
 
-  // 预加载机制：在练习页面时预加载题目（提升响应速度）
-  useEffect(() => {
-    if (activeTab === 'practice' && store.activeBank?.id) {
-      // 延迟 500ms 预加载，避免阻塞主线程
-      const timer = setTimeout(() => {
-        const hasQuestions = store.questions.some(q => q.bankId === store.activeBank?.id);
-        if (!hasQuestions && !store.isLoadingQuestions) {
-          console.log('[App] 预加载题库题目:', store.activeBank.name);
-          store.loadBankQuestions(store.activeBank.id).catch(err => {
-            console.debug('[App] 预加载失败（不影响使用）:', err);
-          });
-        }
-      }, 500);
-      
-      return () => clearTimeout(timer);
-    }
-  }, [activeTab, store.activeBank?.id, store.isLoadingQuestions]);
+  // 预加载机制已移除
+  // 原因：与 Practice.tsx 的加载逻辑冲突，导致重复加载和状态不一致
+  // 现在由 Practice.tsx 统一管理题目加载
 
   const handleNavigate = (tab: string, params: any = null) => {
     setActiveTab(tab);
@@ -182,6 +159,17 @@ const App: React.FC = () => {
 
     // 当前没有明确题库时，直接进入练习
     if (!bankId) return handleNavigate('practice-mode', { mode, ...params });
+
+    // 关键修复：在检查进度前，先确保题目已加载
+    console.log('[继续练习检查] 开始加载题目:', bankId);
+    try {
+      const questions = await store.loadBankQuestions(bankId);
+      console.log('[继续练习检查] 题目加载完成:', questions.length, '题');
+    } catch (error) {
+      console.error('[继续练习检查] 题目加载失败:', error);
+      alert('题目加载失败，请重试');
+      return;
+    }
 
     // 规范化参数：始终带上 bankId，避免后续切换题库导致进度与题库不匹配
     const normalizedParams = { ...params, bankId };
@@ -348,6 +336,8 @@ const App: React.FC = () => {
             onAddQuestion={store.addQuestion} onUpdateQuestion={store.updateQuestion} onDeleteQuestion={store.deleteQuestion} onDeleteQuestions={store.deleteQuestions} onImportQuestions={store.importQuestions}
           />
         );
+        case 'question-bank-converter': return <QuestionBankConverter />;
+        case 'import-manager': return <SimpleImportManager />;
         case 'admin-exams': return <ExamPublisher banks={store.banks} exams={store.exams} allQuestions={store.questions} examHistory={store.examHistory} students={store.students} onPublish={store.publishExam} onUpdate={store.updateExam} onDelete={store.deleteExam} onToggleVisibility={store.toggleExamVisibility} />;
         case 'practical-center': return <PracticalManager />;
         case 'tags': return <TagManager />;

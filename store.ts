@@ -195,6 +195,29 @@ export const useAppStore = () => {
           }
         })() : (bank.scoreConfig || { SINGLE: 1, MULTIPLE: 2, JUDGE: 1 })
       }));
+      
+      // 检测题库权限是否变更
+      const oldBankIds = (cachedBanks || []).map(b => b.id).sort().join(',');
+      const newBankIds = normalizedBanks.map(b => b.id).sort().join(',');
+      
+      if (oldBankIds !== newBankIds && oldBankIds !== '') {
+        console.log('[refreshAll] 检测到题库权限变更，清理题库缓存');
+        console.log('[refreshAll] 旧题库:', oldBankIds);
+        console.log('[refreshAll] 新题库:', newBankIds);
+        
+        // 清理所有题库缓存
+        removeCachedDataByPrefix('questions_bank_');
+        
+        // 清空内存缓存
+        questionsMemoryCache.clear();
+        
+        // 清空当前题目
+        setQuestions([]);
+        
+        // 重置 activeBank（会在后面重新设置）
+        setActiveBank(null);
+      }
+      
       setBanks(normalizedBanks);
       setSystemConfig(configData);
       setCustomFieldSchema(configData?.customFieldSchema || []);
@@ -329,84 +352,75 @@ export const useAppStore = () => {
       console.error("Refresh failed", err);
       setIsLoading(false);
     }
-  }, [activeBank]);
+  }, []); // 移除 activeBank 依赖，避免无限循环
 
-  // 按需加载题库题目（三层缓存：内存 -> localStorage -> 服务器）
-  const loadBankQuestions = useCallback(async (bankId: string) => {
+  // 按需加载题库题目（简化版：仅使用内存缓存）
+  const loadBankQuestions = useCallback(async (bankId: string, forceReload: boolean = false) => {
     try {
-      const cacheKey = `questions_bank_${bankId}`;
-      
       // 立即设置加载状态
       setIsLoadingQuestions(true);
       
-      // 第一层：检查内存缓存（最快，< 1ms）
-      const memoryCache = questionsMemoryCache.get(bankId);
-      if (memoryCache && Date.now() - memoryCache.timestamp < MEMORY_CACHE_DURATION) {
-        console.log(`[loadBankQuestions] 内存缓存命中: ${bankId} (${memoryCache.data.length} 题)`);
-        setQuestions(memoryCache.data);
-        setIsLoadingQuestions(false);
-        return memoryCache.data;
+      // 检查内存缓存（除非强制重新加载）
+      if (!forceReload) {
+        const memoryCache = questionsMemoryCache.get(bankId);
+        if (memoryCache) {
+          console.log(`[loadBankQuestions] 内存缓存命中: ${bankId} (${memoryCache.data.length} 题)`);
+          setQuestions(memoryCache.data);
+          setIsLoadingQuestions(false);
+          return memoryCache.data;
+        }
       }
       
-      // 第二层：检查 localStorage 缓存（快，< 100ms）
-      const cached = getCachedData<Question[]>(cacheKey);
-      if (cached && cached.length > 0) {
-        console.log(`[loadBankQuestions] localStorage 缓存命中: ${bankId} (${cached.length} 题)`);
-        setQuestions(cached);
-        // 更新内存缓存
-        questionsMemoryCache.set(bankId, { data: cached, timestamp: Date.now() });
-        setIsLoadingQuestions(false);
-        return cached;
-      }
-      
-      // 第三层：从服务器加载（慢，可能需要几秒）
-      console.log(`[loadBankQuestions] 从服务器加载: ${bankId}`);
+      // 从服务器加载
+      console.log(`[loadBankQuestions] 从服务器加载: ${bankId}${forceReload ? ' (强制刷新)' : ''}`);
       const questions = await fetchApi(`/questions?bankId=${bankId}`);
       
       console.log(`[loadBankQuestions] 加载成功: ${bankId} (${questions.length} 题)`);
       
-      // 计算数据大小
-      const dataSize = new Blob([JSON.stringify(questions)]).size;
-      const sizeInMB = dataSize / (1024 * 1024);
-      
-      console.log(`[loadBankQuestions] 数据大小: ${sizeInMB.toFixed(2)}MB`);
-      
-      // 只有数据小于 3MB 才缓存到 localStorage（避免配额超限）
-      if (sizeInMB < 3) {
-        const cacheSuccess = setCachedData(cacheKey, questions, 30 * 60 * 1000);
-        if (cacheSuccess) {
-          console.log(`[loadBankQuestions] 已缓存到 localStorage: ${bankId}`);
-        } else {
-          console.warn(`[loadBankQuestions] localStorage 缓存失败，仅使用内存缓存: ${bankId}`);
-        }
-      } else {
-        console.warn(`[loadBankQuestions] 数据过大 (${sizeInMB.toFixed(2)}MB)，跳过 localStorage 缓存，仅使用内存缓存`);
-      }
-      
-      // 始终更新内存缓存（内存缓存没有大小限制）
+      // 更新内存缓存
       questionsMemoryCache.set(bankId, { data: questions, timestamp: Date.now() });
       
+      // 清理内存缓存（保留最近5个题库）
+      if (questionsMemoryCache.size > 5) {
+        const entries = Array.from(questionsMemoryCache.entries());
+        entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
+        const toDelete = entries.slice(0, entries.length - 5);
+        toDelete.forEach(([key]) => {
+          console.log(`[loadBankQuestions] 清理内存缓存: ${key}`);
+          questionsMemoryCache.delete(key);
+        });
+      }
+      
+      // 关键修复：确保状态更新
       setQuestions(questions);
+      setIsLoadingQuestions(false);
       
       return questions;
     } catch (error) {
       console.error('[loadBankQuestions] 加载失败:', error);
-      return [];
-    } finally {
+      // 加载失败时不清空现有题目，保持UI稳定
       setIsLoadingQuestions(false);
+      throw error; // 抛出错误让调用者处理
     }
   }, []);
 
   // 修改 setActiveBank 以支持按需加载
   const handleSetActiveBank = useCallback(async (bank: QuestionBank | null) => {
+    console.log('[handleSetActiveBank] 切换题库:', bank?.name, bank?.id);
+    
+    // 先清空当前题目，避免显示旧题库的题目
+    setQuestions([]);
     setActiveBank(bank);
     
     // 切换题库时加载该题库的题目
     if (bank && bank.id) {
-      await loadBankQuestions(bank.id);
-    } else {
-      // 未选择题库时，清空题目列表
-      setQuestions([]);
+      try {
+        await loadBankQuestions(bank.id);
+      } catch (error) {
+        console.error('[handleSetActiveBank] 加载题目失败:', error);
+        // 加载失败时保持题目为空数组
+        setQuestions([]);
+      }
     }
   }, [loadBankQuestions]);
 
@@ -479,6 +493,103 @@ export const useAppStore = () => {
     }
   }, [refreshPracticeRecords]);
 
+  // 自动初始化 activeBank（当用户登录且有题库时）
+  useEffect(() => {
+    if (currentUser && banks.length > 0 && !activeBank) {
+      console.log('[Store] 自动初始化 activeBank:', banks[0].name);
+      handleSetActiveBank(banks[0]);
+    }
+  }, [currentUser, banks.length, activeBank]);
+
+  // 题库更新检测状态
+  const [bankUpdates, setBankUpdates] = useState<Record<string, string>>({});  // bankId -> updatedAt
+  const [hasUpdate, setHasUpdate] = useState(false);
+
+  // 检查题库是否有更新
+  const checkBankUpdates = useCallback(async () => {
+    if (!currentUser || currentUser.role !== 'STUDENT') return;
+    
+    try {
+      console.log('[checkBankUpdates] 开始检查题库更新...');
+      const latestBanks = await fetchApi('/banks');
+      
+      const updates: Record<string, string> = {};
+      let hasNewUpdate = false;
+      
+      latestBanks.forEach((bank: QuestionBank & { updatedAt?: string }) => {
+        if (bank.updatedAt) {
+          const cachedBank = banks.find(b => b.id === bank.id);
+          const cachedUpdatedAt = (cachedBank as any)?.updatedAt;
+          
+          // 如果有缓存的更新时间，且服务器的更新时间更新
+          if (cachedUpdatedAt && bank.updatedAt > cachedUpdatedAt) {
+            updates[bank.id] = bank.updatedAt;
+            hasNewUpdate = true;
+            console.log(`[checkBankUpdates] 检测到题库更新: ${bank.name}`);
+          }
+        }
+      });
+      
+      if (hasNewUpdate) {
+        setBankUpdates(updates);
+        setHasUpdate(true);
+      }
+      
+      console.log('[checkBankUpdates] 检查完成，有更新:', hasNewUpdate);
+    } catch (error) {
+      console.error('[checkBankUpdates] 检查失败:', error);
+    }
+  }, [currentUser, banks]);
+
+  // 手动刷新题库
+  const refreshBank = useCallback(async (bankId: string) => {
+    try {
+      console.log(`[refreshBank] 手动刷新题库: ${bankId}`);
+      
+      // 清除内存缓存
+      questionsMemoryCache.delete(bankId);
+      
+      // 强制重新加载
+      await loadBankQuestions(bankId, true);
+      
+      // 清除更新标记
+      setBankUpdates(prev => {
+        const next = { ...prev };
+        delete next[bankId];
+        return next;
+      });
+      
+      // 如果没有其他更新了，清除总标记
+      if (Object.keys(bankUpdates).length === 1 && bankUpdates[bankId]) {
+        setHasUpdate(false);
+      }
+      
+      console.log(`[refreshBank] 刷新完成: ${bankId}`);
+      return true;
+    } catch (error) {
+      console.error(`[refreshBank] 刷新失败:`, error);
+      return false;
+    }
+  }, [loadBankQuestions, bankUpdates]);
+
+  // 登录时检查更新
+  useEffect(() => {
+    if (currentUser && currentUser.role === 'STUDENT' && banks.length > 0) {
+      checkBankUpdates();
+    }
+  }, [currentUser?.id, banks.length]);
+
+  // 每小时检查一次更新
+  useEffect(() => {
+    if (!currentUser || currentUser.role !== 'STUDENT') return;
+    
+    const interval = setInterval(() => {
+      checkBankUpdates();
+    }, 60 * 60 * 1000); // 1小时
+    
+    return () => clearInterval(interval);
+  }, [currentUser, checkBankUpdates]);
+
   const storeValue = useMemo(() => ({
     isLoading, 
     isLoadingQuestions,  // 导出题目加载状态
@@ -487,6 +598,10 @@ export const useAppStore = () => {
     activeBank: activeBank || banks[0], 
     setActiveBank: handleSetActiveBank,  // 使用新的处理函数，支持按需加载题目
     loadBankQuestions,  // 导出按需加载函数
+    bankUpdates,  // 导出题库更新状态
+    hasUpdate,  // 导出是否有更新的标记
+    checkBankUpdates,  // 导出检查更新函数
+    refreshBank,  // 导出手动刷新函数
     
     login: async (phone: string, pass: string, role: UserRole) => {
       try {

@@ -860,6 +860,29 @@ const PracticeModeView: React.FC<PracticeModeProps> = ({
     window.open(`https://www.baidu.com/s?wd=${encodeURIComponent(searchContent)}`, '_blank');
   };
 
+  // 加载状态检查：如果正在加载题目，显示加载指示器
+  if (store.isLoadingQuestions && questions.length === 0) {
+    return (
+      <div className="max-w-4xl mx-auto p-6 flex items-center justify-center min-h-[60vh]">
+        <div className="bg-gradient-to-r from-indigo-50 to-purple-50 p-8 rounded-3xl border-2 border-indigo-100 shadow-lg max-w-md w-full">
+          <div className="flex flex-col items-center gap-4 text-center">
+            <div className="relative">
+              <i className="fa-solid fa-spinner fa-spin text-5xl text-indigo-600"></i>
+              <div className="absolute inset-0 bg-indigo-600/10 rounded-full animate-ping"></div>
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-indigo-900 mb-2">正在加载题目...</h3>
+              <p className="text-sm text-indigo-600">
+                首次加载可能需要5-10秒，请稍候
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 如果没有题目且不在加载中，显示无题目提示
   if (!currentQuestion) return <div className="p-12 text-center text-gray-400 font-bold">无题目内容</div>;
 
   return (

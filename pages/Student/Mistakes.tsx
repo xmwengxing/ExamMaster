@@ -11,7 +11,10 @@ interface MistakesProps {
 
 const Mistakes: React.FC<MistakesProps> = ({ mistakes, banks, onStart }) => {
   const store = useAppStore();
-  const srsRecords = store.srsRecords;
+  const srsRecords = store.srsRecords || [];
+  
+  // 题库选择状态（null 表示"全部题库"）
+  const [selectedBankId, setSelectedBankId] = useState<string | null>(null);
   
   // 分页状态
   const [currentPage, setCurrentPage] = useState(1);
@@ -22,23 +25,54 @@ const Mistakes: React.FC<MistakesProps> = ({ mistakes, banks, onStart }) => {
 
   const today = new Date().toISOString().split('T')[0];
 
-  // 核心逻辑：计算待复习题目
+  // 根据选择的题库过滤错题
+  const filteredMistakes = useMemo(() => {
+    if (!selectedBankId) {
+      return mistakes; // 全部题库
+    }
+    return mistakes.filter(m => m.bankId === selectedBankId);
+  }, [mistakes, selectedBankId]);
+
+  // 按题库统计错题数量
+  const bankStats = useMemo(() => {
+    const stats = new Map<string, number>();
+    mistakes.forEach(m => {
+      stats.set(m.bankId, (stats.get(m.bankId) || 0) + 1);
+    });
+    return stats;
+  }, [mistakes]);
+
+  // 核心逻辑：计算待复习题目（基于当前选择的题库）
   const reviewStats = useMemo(() => {
+    console.log('[Mistakes] 计算 reviewStats', { 
+      mistakesCount: filteredMistakes?.length || 0, 
+      srsRecordsCount: srsRecords?.length || 0,
+      selectedBankId,
+      today 
+    });
+    
+    // 确保数据存在
+    const safeMistakes = filteredMistakes || [];
+    const safeSrsRecords = srsRecords || [];
+    
     // 待复习：在 srsRecords 中 nextReviewDate <= today 的题目，或者是从未在 srsRecords 里的错题
-    const reviewedIds = srsRecords.map(r => r.questionId);
-    const pendingSrs = srsRecords.filter(r => r.nextReviewDate <= today).map(r => r.questionId);
-    const neverReviewed = mistakes.filter(m => !reviewedIds.includes(m.id)).map(m => m.id);
+    const reviewedIds = safeSrsRecords.map(r => r.questionId);
+    const pendingSrs = safeSrsRecords.filter(r => r.nextReviewDate <= today).map(r => r.questionId);
+    const neverReviewed = safeMistakes.filter(m => !reviewedIds.includes(m.id)).map(m => m.id);
     
     const allPendingIds = Array.from(new Set([...pendingSrs, ...neverReviewed]));
-    const pendingQuestions = mistakes.filter(m => allPendingIds.includes(m.id));
+    const pendingQuestions = safeMistakes.filter(m => allPendingIds.includes(m.id));
 
-    return {
+    const stats = {
       pendingQuestions,
       pendingCount: pendingQuestions.length,
-      masteredCount: srsRecords.filter(r => r.status === 'MASTERED').length,
-      totalMistakes: mistakes.length
+      masteredCount: safeSrsRecords.filter(r => r.status === 'MASTERED').length,
+      totalMistakes: safeMistakes.length
     };
-  }, [mistakes, srsRecords, today]);
+    
+    console.log('[Mistakes] reviewStats 计算完成', stats);
+    return stats;
+  }, [filteredMistakes, srsRecords, selectedBankId, today]);
 
   const getBankName = (bankId: string) => {
     return banks.find(b => b.id === bankId)?.name || '未知题库';
@@ -55,11 +89,17 @@ const Mistakes: React.FC<MistakesProps> = ({ mistakes, banks, onStart }) => {
     }
   };
 
-  // 分页计算
-  const totalPages = Math.ceil(mistakes.length / itemsPerPage);
+  // 分页计算（基于过滤后的错题）
+  const totalPages = Math.ceil(filteredMistakes.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
-  const currentMistakes = mistakes.slice(startIndex, endIndex);
+  const currentMistakes = filteredMistakes.slice(startIndex, endIndex);
+
+  // 切换题库时重置分页
+  const handleBankChange = (bankId: string | null) => {
+    setSelectedBankId(bankId);
+    setCurrentPage(1); // 重置到第一页
+  };
 
   const handleStartSmartReview = () => {
     if (reviewStats.pendingCount === 0) {
@@ -73,6 +113,21 @@ const Mistakes: React.FC<MistakesProps> = ({ mistakes, banks, onStart }) => {
     });
   };
 
+  console.log('[Mistakes] 渲染组件', { 
+    reviewStats, 
+    mistakesLength: mistakes?.length || 0,
+    banksLength: banks?.length || 0,
+    srsRecordsLength: srsRecords?.length || 0
+  });
+
+  // 🔍 调试：检查数据是否正常
+  if (!mistakes || !Array.isArray(mistakes)) {
+    console.error('[Mistakes] mistakes 数据异常:', mistakes);
+  }
+  if (!srsRecords || !Array.isArray(srsRecords)) {
+    console.error('[Mistakes] srsRecords 数据异常:', srsRecords);
+  }
+
   return (
     <div className="space-y-4 md:space-y-6 pb-20 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 md:gap-4">
@@ -83,13 +138,73 @@ const Mistakes: React.FC<MistakesProps> = ({ mistakes, banks, onStart }) => {
         <button 
           onClick={handleStartSmartReview}
           className="w-full md:w-auto bg-indigo-600 text-white px-8 md:px-10 py-3 md:py-4 rounded-2xl font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95 flex items-center justify-center gap-3"
+          style={{ display: 'flex !important', visibility: 'visible !important', opacity: '1 !important' }}
         >
           <i className="fa-solid fa-brain"></i> 启动今日智能复习
         </button>
       </div>
 
+      {/* 题库选择器 */}
+      <div className="bg-white p-4 md:p-6 rounded-2xl border shadow-sm">
+        <div className="flex items-center gap-2 mb-3">
+          <i className="fa-solid fa-filter text-indigo-600"></i>
+          <h3 className="text-sm font-black text-gray-700 uppercase tracking-widest">题库筛选</h3>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {/* 全部题库按钮 */}
+          <button
+            onClick={() => handleBankChange(null)}
+            className={`px-4 py-2 rounded-xl font-bold text-sm transition-all ${
+              selectedBankId === null
+                ? 'bg-indigo-600 text-white shadow-lg'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            <i className="fa-solid fa-layer-group mr-2"></i>
+            全部题库
+            <span className="ml-2 px-2 py-0.5 rounded-full bg-white/20 text-xs">
+              {mistakes.length}
+            </span>
+          </button>
+          
+          {/* 各个题库按钮 */}
+          {banks.map(bank => {
+            const count = bankStats.get(bank.id) || 0;
+            if (count === 0) return null; // 没有错题的题库不显示
+            
+            return (
+              <button
+                key={bank.id}
+                onClick={() => handleBankChange(bank.id)}
+                className={`px-4 py-2 rounded-xl font-bold text-sm transition-all ${
+                  selectedBankId === bank.id
+                    ? 'bg-indigo-600 text-white shadow-lg'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                <i className="fa-solid fa-book mr-2"></i>
+                {bank.name}
+                <span className="ml-2 px-2 py-0.5 rounded-full bg-white/20 text-xs">
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        
+        {/* 当前选择提示 */}
+        {selectedBankId && (
+          <div className="mt-3 pt-3 border-t border-gray-100">
+            <p className="text-xs text-gray-500">
+              <i className="fa-solid fa-info-circle mr-1"></i>
+              当前显示：<span className="font-bold text-indigo-600">{getBankName(selectedBankId)}</span> 的错题
+            </p>
+          </div>
+        )}
+      </div>
+
       {/* SRS 概览面板 */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-6">
+      <div className="grid gap-3 md:gap-6" style={{ gridTemplateColumns: 'repeat(3, 1fr)', display: 'grid !important' }}>
         <div className="bg-white p-5 md:p-8 rounded-2xl md:rounded-[2.5rem] border-2 border-indigo-100 shadow-sm relative overflow-hidden group">
           <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:scale-110 transition-transform">
              <i className="fa-solid fa-calendar-day text-4xl md:text-6xl"></i>
@@ -122,10 +237,15 @@ const Mistakes: React.FC<MistakesProps> = ({ mistakes, banks, onStart }) => {
       <div className="space-y-3 md:space-y-4">
         <div className="flex justify-between items-center px-1">
           <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest">
-            最近复习轨迹 
-            {mistakes.length > 0 && (
+            最近复习轨迹
+            {selectedBankId && (
               <span className="ml-2 text-indigo-600">
-                ({startIndex + 1}-{Math.min(endIndex, mistakes.length)} / {mistakes.length})
+                [{getBankName(selectedBankId)}]
+              </span>
+            )}
+            {filteredMistakes.length > 0 && (
+              <span className="ml-2 text-indigo-600">
+                ({startIndex + 1}-{Math.min(endIndex, filteredMistakes.length)} / {filteredMistakes.length})
               </span>
             )}
           </h3>
@@ -136,7 +256,7 @@ const Mistakes: React.FC<MistakesProps> = ({ mistakes, banks, onStart }) => {
         </div>
         
         <div className="space-y-1.5 md:space-y-2">
-          {mistakes.length > 0 ? currentMistakes.map((q) => {
+          {filteredMistakes.length > 0 ? currentMistakes.map((q) => {
             const srs = srsRecords.find(r => r.questionId === q.id);
             return (
               <div 
