@@ -31,6 +31,25 @@ const StudentHome: React.FC<HomeProps> = ({
   const [tempGoal, setTempGoal] = useState(user.dailyGoal || 20);
   const [historyData, setHistoryData] = useState<DailyProgress[]>([]);
 
+  // 从 localStorage 恢复上次选择的题库
+  useEffect(() => {
+    const savedBankId = localStorage.getItem('lastSelectedBankId');
+    if (savedBankId && banks.length > 0) {
+      const savedBank = banks.find(b => b.id === savedBankId);
+      if (savedBank && savedBank.id !== activeBank?.id) {
+        console.log('[Home] 恢复上次选择的题库:', savedBank.name);
+        onBankChange(savedBank);
+      }
+    }
+  }, [banks]); // 仅在 banks 加载完成后执行一次
+
+  // 保存题库选择到 localStorage
+  const handleBankChangeWithMemory = (bank: QuestionBank) => {
+    localStorage.setItem('lastSelectedBankId', bank.id);
+    console.log('[Home] 保存题库选择:', bank.name);
+    onBankChange(bank);
+  };
+
   // 计算当前题库的题目总数
   // 使用题库自带的 questionCount，不再依赖 store.questions
   const currentBankQuestionCount = useMemo(() => {
@@ -105,6 +124,11 @@ const StudentHome: React.FC<HomeProps> = ({
   ].filter(a => a.show !== false);
 
   const handleActionClick = (id: string) => {
+    // 如果题库正在加载，禁止点击顺序练习和背题模式
+    if (store.isLoadingQuestions && (id === PracticeMode.SEQUENTIAL || id === PracticeMode.MEMORY)) {
+      return; // 静默返回，不执行任何操作
+    }
+
     if (id === 'MOCK_EXAM') {
       onNavigate('exams', { view: 'mock' });
     } else if (id === 'mistakes') {
@@ -181,10 +205,35 @@ const StudentHome: React.FC<HomeProps> = ({
         <div className="flex items-center gap-2 text-indigo-600 font-bold text-sm">
           <i className="fa-solid fa-folder-open"></i> 当前题库: {activeBank ? `${activeBank.name} (${currentBankQuestionCount}题)` : '未选择'}
         </div>
-        <select value={activeBank ? activeBank.id : ''} onChange={(e) => { const b = banks.find(x => x.id === e.target.value); if(b) onBankChange(b); }} className="text-xs bg-gray-50 px-2 py-1 rounded-lg outline-none font-bold text-gray-500">
+        <select 
+          value={activeBank ? activeBank.id : ''} 
+          onChange={(e) => { 
+            const b = banks.find(x => x.id === e.target.value); 
+            if(b) handleBankChangeWithMemory(b); 
+          }} 
+          className="text-xs bg-gray-50 px-2 py-1 rounded-lg outline-none font-bold text-gray-500"
+        >
           {banks.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
         </select>
       </div>
+
+      {/* 题库加载状态指示器 */}
+      {store.isLoadingQuestions && (
+        <div className="bg-gradient-to-r from-indigo-50 to-purple-50 p-4 rounded-2xl border-2 border-indigo-100 shadow-sm animate-in fade-in duration-300">
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <i className="fa-solid fa-spinner fa-spin text-2xl text-indigo-600"></i>
+              <div className="absolute inset-0 bg-indigo-600/10 rounded-full animate-ping"></div>
+            </div>
+            <div className="flex-1">
+              <h3 className="text-sm font-bold text-indigo-900">正在加载题库...</h3>
+              <p className="text-xs text-indigo-600 mt-0.5">
+                首次加载可能需要5-10秒，请稍候
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="md:col-span-2 relative h-48 md:h-64 rounded-3xl overflow-hidden shadow-xl group cursor-pointer">
@@ -250,9 +299,25 @@ const StudentHome: React.FC<HomeProps> = ({
             purple: 'bg-purple-50 text-purple-600 group-hover:bg-purple-600'
           };
 
+          // 判断是否需要禁用（顺序练习和背题模式在加载时禁用）
+          const isDisabled = store.isLoadingQuestions && (a.id === PracticeMode.SEQUENTIAL || a.id === PracticeMode.MEMORY);
+
           return (
-            <button key={a.id} onClick={() => handleActionClick(a.id)} className="p-4 md:p-6 bg-white rounded-[2.5rem] border border-gray-100 hover:shadow-xl hover:border-indigo-100 transition-all text-left flex flex-col gap-4 group min-w-0">
-              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all group-hover:text-white ${colorClasses[a.color] || 'bg-gray-50 text-gray-600'}`}>
+            <button 
+              key={a.id} 
+              onClick={() => handleActionClick(a.id)} 
+              disabled={isDisabled}
+              className={`p-4 md:p-6 bg-white rounded-[2.5rem] border border-gray-100 transition-all text-left flex flex-col gap-4 group min-w-0 ${
+                isDisabled 
+                  ? 'opacity-50 cursor-not-allowed' 
+                  : 'hover:shadow-xl hover:border-indigo-100'
+              }`}
+            >
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${
+                isDisabled 
+                  ? 'bg-gray-100 text-gray-400' 
+                  : `group-hover:text-white ${colorClasses[a.color] || 'bg-gray-50 text-gray-600'}`
+              }`}>
                 <i className={`fa-solid ${a.icon} text-xl`}></i>
               </div>
               <div>

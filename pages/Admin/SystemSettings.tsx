@@ -450,6 +450,46 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({ config, onUpdate, onCha
               </div>
             </div>
           </div>
+
+          {/* 学员首页布局配置 */}
+          <div className="bg-white p-8 rounded-[2.5rem] border shadow-sm space-y-6">
+            <h3 className="font-black text-lg text-gray-800 flex items-center gap-2">
+              <i className="fa-solid fa-table-cells-large text-blue-500"></i> 学员首页布局
+            </h3>
+            <p className="text-xs text-gray-400 font-medium">自定义学员首页显示的功能模块</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {[
+                { key: 'showBanner', label: '轮播横幅', icon: 'fa-image', desc: '首页顶部轮播图' },
+                { key: 'showAnnouncement', label: '滚动公告', icon: 'fa-bullhorn', desc: '系统通知公告栏' },
+                { key: 'showProfile', label: '个人资料卡', icon: 'fa-user', desc: '用户信息展示' },
+                { key: 'showDailyGoal', label: '每日目标', icon: 'fa-target', desc: '学习进度追踪' },
+                { key: 'showQuickActions', label: '快捷操作', icon: 'fa-bolt', desc: '练习模式入口' },
+                { key: 'showStats', label: '学习统计', icon: 'fa-chart-line', desc: '数据统计面板' },
+              ].map(module => (
+                <label key={module.key} className="flex items-center gap-4 p-4 bg-gray-50 rounded-2xl border border-gray-100 cursor-pointer hover:bg-indigo-50 hover:border-indigo-100 transition-all group">
+                  <input 
+                    type="checkbox" 
+                    checked={form?.homeLayout?.[module.key] !== false}
+                    onChange={e => setForm(prev => ({
+                      ...(prev || defaultForm),
+                      homeLayout: {
+                        ...(prev?.homeLayout || {}),
+                        [module.key]: e.target.checked
+                      }
+                    }))}
+                    className="w-5 h-5 rounded accent-indigo-600"
+                  />
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <i className={`fa-solid ${module.icon} text-indigo-500 group-hover:text-indigo-600`}></i>
+                      <span className="font-bold text-gray-800">{module.label}</span>
+                    </div>
+                    <p className="text-[10px] text-gray-400 font-medium">{module.desc}</p>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
         </div>
       )}
 
@@ -758,43 +798,107 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({ config, onUpdate, onCha
             </div>
           </div>
 
-          {/* 首页布局配置 */}
+          {/* 题目字体样式设置 */}
           <div className="bg-white p-8 rounded-[2.5rem] border shadow-sm space-y-6">
             <h3 className="font-black text-lg text-gray-800 flex items-center gap-2">
-              <i className="fa-solid fa-table-cells-large text-blue-500"></i> 学员首页布局
+              <i className="fa-solid fa-font text-teal-500"></i> 题目字体样式
             </h3>
-            <p className="text-xs text-gray-400 font-medium">自定义学员首页显示的功能模块</p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {[
-                { key: 'showBanner', label: '轮播横幅', icon: 'fa-image', desc: '首页顶部轮播图' },
-                { key: 'showAnnouncement', label: '滚动公告', icon: 'fa-bullhorn', desc: '系统通知公告栏' },
-                { key: 'showProfile', label: '个人资料卡', icon: 'fa-user', desc: '用户信息展示' },
-                { key: 'showDailyGoal', label: '每日目标', icon: 'fa-target', desc: '学习进度追踪' },
-                { key: 'showQuickActions', label: '快捷操作', icon: 'fa-bolt', desc: '练习模式入口' },
-                { key: 'showStats', label: '学习统计', icon: 'fa-chart-line', desc: '数据统计面板' },
-              ].map(module => (
-                <label key={module.key} className="flex items-center gap-4 p-4 bg-gray-50 rounded-2xl border border-gray-100 cursor-pointer hover:bg-indigo-50 hover:border-indigo-100 transition-all group">
+            <p className="text-xs text-gray-400 font-medium">自定义题干和题目内容的字体显示效果</p>
+
+            <div className="space-y-6">
+              {/* 字体大小 */}
+              <div className="space-y-3">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">字体大小</label>
+                <div className="flex items-center gap-4">
                   <input 
-                    type="checkbox" 
-                    checked={form?.homeLayout?.[module.key] !== false}
-                    onChange={e => setForm(prev => ({
-                      ...(prev || defaultForm),
-                      homeLayout: {
-                        ...(prev?.homeLayout || {}),
-                        [module.key]: e.target.checked
-                      }
-                    }))}
-                    className="w-5 h-5 rounded accent-indigo-600"
+                    type="range" 
+                    min="12" 
+                    max="24" 
+                    step="1"
+                    value={form?.questionFontSize || 16}
+                    onChange={e => setForm(prev => ({ ...(prev || defaultForm), questionFontSize: Number(e.target.value) }))}
+                    className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-teal-600"
                   />
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <i className={`fa-solid ${module.icon} text-indigo-500 group-hover:text-indigo-600`}></i>
-                      <span className="font-bold text-gray-800">{module.label}</span>
+                  <span className="text-sm font-black text-teal-600 min-w-[60px] text-right">{form?.questionFontSize || 16}px</span>
+                </div>
+                <div className="flex justify-between text-[9px] text-gray-400 font-medium">
+                  <span>12px 小号</span>
+                  <span>16px 标准</span>
+                  <span>24px 大号</span>
+                </div>
+              </div>
+
+              {/* 字体样式 */}
+              <div className="space-y-3">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">字体样式</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="flex items-center gap-3 p-4 bg-gray-50 rounded-2xl border border-gray-100 cursor-pointer hover:bg-teal-50 hover:border-teal-100 transition-all">
+                    <input 
+                      type="checkbox" 
+                      checked={form?.questionFontBold !== false}
+                      onChange={e => setForm(prev => ({ ...(prev || defaultForm), questionFontBold: e.target.checked }))}
+                      className="w-5 h-5 rounded accent-teal-600"
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <i className="fa-solid fa-bold text-teal-500"></i>
+                        <span className="font-bold text-gray-800">加粗</span>
+                      </div>
+                      <p className="text-[10px] text-gray-400 font-medium">题干文字加粗显示</p>
                     </div>
-                    <p className="text-[10px] text-gray-400 font-medium">{module.desc}</p>
+                  </label>
+
+                  <label className="flex items-center gap-3 p-4 bg-gray-50 rounded-2xl border border-gray-100 cursor-pointer hover:bg-teal-50 hover:border-teal-100 transition-all">
+                    <input 
+                      type="checkbox" 
+                      checked={form?.questionFontItalic === true}
+                      onChange={e => setForm(prev => ({ ...(prev || defaultForm), questionFontItalic: e.target.checked }))}
+                      className="w-5 h-5 rounded accent-teal-600"
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <i className="fa-solid fa-italic text-teal-500"></i>
+                        <span className="font-bold text-gray-800">倾斜</span>
+                      </div>
+                      <p className="text-[10px] text-gray-400 font-medium">题干文字倾斜显示</p>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              {/* 预览效果 */}
+              <div className="bg-teal-50 p-6 rounded-2xl border border-teal-100">
+                <p className="text-xs font-bold text-teal-700 mb-3 flex items-center gap-2">
+                  <i className="fa-solid fa-eye"></i> 预览效果
+                </p>
+                <div className="bg-white rounded-xl p-6">
+                  <div 
+                    className="text-gray-800"
+                    style={{
+                      fontSize: `${form?.questionFontSize || 16}px`,
+                      fontWeight: form?.questionFontBold !== false ? 'bold' : 'normal',
+                      fontStyle: form?.questionFontItalic === true ? 'italic' : 'normal'
+                    }}
+                  >
+                    这是题目内容的预览效果，您可以调整字体大小、加粗和倾斜样式。
                   </div>
-                </label>
-              ))}
+                </div>
+              </div>
+
+              <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
+                <div className="flex items-start gap-3">
+                  <i className="fa-solid fa-circle-info text-blue-500 mt-0.5"></i>
+                  <div className="flex-1">
+                    <p className="text-xs text-blue-700 font-bold mb-1">使用说明</p>
+                    <ul className="text-[10px] text-blue-600 font-medium space-y-1 leading-relaxed">
+                      <li>• 字体设置将应用到所有题目的题干和内容</li>
+                      <li>• 建议字体大小设置在 14-18px 之间，便于阅读</li>
+                      <li>• 加粗可以让题目更醒目，但不建议同时使用加粗和倾斜</li>
+                      <li>• 修改后需要刷新做题页面才能看到效果</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 

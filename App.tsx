@@ -114,6 +114,32 @@ const App: React.FC = () => {
     return () => window.removeEventListener('storage', handleStorageChange);
   }, [store]);
 
+  // 页面关闭或刷新时记录登出
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      const token = localStorage.getItem('edu_token');
+      if (token && store.currentUser) {
+        // 使用 sendBeacon 发送登出请求（即使页面关闭也能发送）
+        const blob = new Blob([JSON.stringify({})], { type: 'application/json' });
+        navigator.sendBeacon('/api/auth/logout', blob);
+        
+        // 备用方案：使用同步 XMLHttpRequest（某些浏览器可能不支持 sendBeacon）
+        try {
+          const xhr = new XMLHttpRequest();
+          xhr.open('POST', '/api/auth/logout', false); // false = 同步请求
+          xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+          xhr.setRequestHeader('Content-Type', 'application/json');
+          xhr.send();
+        } catch (e) {
+          console.debug('[App] 同步登出请求失败:', e);
+        }
+      }
+    };
+    
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [store.currentUser]);
+
   // 自动加载题目：当切换到需要题目的页面时
   useEffect(() => {
     // 移除学员端自动加载逻辑，由各页面自己控制加载时机

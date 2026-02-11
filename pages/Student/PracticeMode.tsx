@@ -173,6 +173,8 @@ const PracticeModeView: React.FC<PracticeModeProps> = ({
       [QuestionType.SINGLE]: { label: '单选题', items: [] },
       [QuestionType.MULTIPLE]: { label: '多选题', items: [] },
       [QuestionType.JUDGE]: { label: '判断题', items: [] },
+      [QuestionType.FILL_IN_BLANK]: { label: '填空题', items: [] },
+      [QuestionType.SHORT_ANSWER]: { label: '简答题', items: [] },
     };
     questions.forEach((q, idx) => {
       if (groups[q.type]) groups[q.type].items.push({ id: q.id, index: idx });
@@ -786,6 +788,8 @@ const PracticeModeView: React.FC<PracticeModeProps> = ({
       case QuestionType.SINGLE: return '单选题';
       case QuestionType.MULTIPLE: return '多选题';
       case QuestionType.JUDGE: return '判断题';
+      case QuestionType.FILL_IN_BLANK: return '填空题';
+      case QuestionType.SHORT_ANSWER: return '简答题';
       default: return '未知';
     }
   };
@@ -989,7 +993,12 @@ const PracticeModeView: React.FC<PracticeModeProps> = ({
           <div className="mb-6 md:mb-12">
             <RichTextDisplay 
               content={currentQuestion.content} 
-              className="text-xl md:text-3xl font-black text-gray-900 leading-tight"
+              className="text-gray-900 leading-tight"
+              style={{
+                fontSize: `${store.systemConfig?.questionFontSize || 16}px`,
+                fontWeight: store.systemConfig?.questionFontBold !== false ? 'bold' : 'normal',
+                fontStyle: store.systemConfig?.questionFontItalic === true ? 'italic' : 'normal'
+              }}
             />
           </div>
 
@@ -1154,7 +1163,14 @@ const PracticeModeView: React.FC<PracticeModeProps> = ({
             return (
               <button key={idx} onClick={(e) => { e.stopPropagation(); handleOptionClick(label); }} className={`p-3 md:p-5 text-left rounded-3xl border-2 transition-all flex items-center gap-4 ${style}`}>
                 <div className="w-10 h-10 rounded-2xl bg-white border-2 flex items-center justify-center font-black shrink-0">{label}</div>
-                <span className="font-bold text-sm md:text-base">{opt}</span>
+                <span 
+                  className="text-sm md:text-base"
+                  style={{
+                    fontSize: `${store.systemConfig?.questionFontSize || 16}px`,
+                    fontWeight: store.systemConfig?.questionFontBold !== false ? 'bold' : 'normal',
+                    fontStyle: store.systemConfig?.questionFontItalic === true ? 'italic' : 'normal'
+                  }}
+                >{opt}</span>
               </button>
             );
           })}
@@ -1338,6 +1354,9 @@ const PracticeModeView: React.FC<PracticeModeProps> = ({
                   <i className={`fa-solid ${
                     group.label.includes('单选') ? 'fa-circle-dot' :
                     group.label.includes('多选') ? 'fa-square-check' :
+                    group.label.includes('判断') ? 'fa-circle-question' :
+                    group.label.includes('填空') ? 'fa-pen-to-square' :
+                    group.label.includes('简答') ? 'fa-file-lines' :
                     'fa-circle-question'
                   } mr-1.5`}></i>
                   {group.label} ({group.items.length})
