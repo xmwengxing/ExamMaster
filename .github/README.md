@@ -1,16 +1,15 @@
 # GitHub Actions CI/CD 配置说明
 
-本项目使用 GitHub Actions 实现自动化构建、测试和部署。
+本项目使用 GitHub Actions 实现自动化构建和部署（已简化配置）。
 
 ## 工作流说明
 
-### 1. CI/CD Pipeline (`ci-cd.yml`)
+### CI/CD Pipeline (`ci-cd.yml`)
 
-主要的持续集成和持续部署工作流，包含以下作业：
+简化后的持续集成和持续部署工作流，包含以下作业：
 
-- **测试和代码检查**：运行单元测试和属性测试
 - **构建前端**：构建 React 前端应用
-- **构建 Docker 镜像**：构建并推送 Docker 镜像到 GitHub Container Registry
+- **构建 Docker 镜像**：构建并推送 Docker 镜像到 GitHub Container Registry（仅 main 分支）
 - **部署到生产环境**：自动部署到生产服务器（仅 main 分支）
 - **部署到开发环境**：自动部署到开发服务器（仅 develop 分支）
 
@@ -20,18 +19,18 @@
 - 创建针对 `main` 或 `develop` 分支的 Pull Request
 - 手动触发
 
-### 2. 健康检查和备份验证 (`health-check.yml`)
+#### 简化说明
 
-定期执行的健康检查工作流，包含以下作业：
+为了提高部署效率和减少构建失败，已移除以下功能：
 
-- **生产环境健康检查**：检查 API 和前端可访问性、SSL 证书有效期
-- **验证数据库备份**：检查备份文件是否存在、是否及时更新
-- **性能监控**：监控 API 响应时间和页面加载时间
+- ❌ 自动化测试（需要配置测试数据库）
+- ❌ 代码覆盖率报告
+- ❌ 定期健康检查
+- ❌ 备份验证
+- ❌ 性能监控
+- ❌ 模块化架构验证
 
-#### 触发条件
-
-- 每天 UTC 时间 00:00（北京时间 08:00）自动执行
-- 手动触发
+如需这些功能，可以在项目稳定后逐步添加。
 
 ## 配置 GitHub Secrets
 
@@ -91,38 +90,24 @@ chmod 600 ~/.ssh/authorized_keys
 3. 点击 **New repository secret**
 4. 添加上述所有必需的 Secrets
 
-### 4. 配置 GitHub Environments（可选）
+## 使用说明
 
-为了更好地控制部署流程，可以配置 GitHub Environments：
-
-1. 进入 **Settings** → **Environments**
-2. 创建 `production` 环境
-   - 配置 **Required reviewers**（需要审批才能部署）
-   - 配置 **Wait timer**（延迟部署时间）
-   - 配置 **Deployment branches**（限制可部署的分支）
-3. 创建 `development` 环境（可选）
-
-## 测试工作流
-
-### 本地测试
-
-在推送代码前，可以在本地测试：
+### 自动部署
 
 ```bash
-# 运行测试
-npm test
+# 部署到生产环境
+git add .
+git commit -m "更新功能"
+git push origin main
 
-# 构建前端
-npm run build
-
-# 构建 Docker 镜像
-docker build -t edumaster:test .
+# 部署到开发环境
+git push origin develop
 ```
 
 ### 手动触发工作流
 
 1. 进入 GitHub 仓库的 **Actions** 页面
-2. 选择要运行的工作流
+2. 选择 "CI/CD Pipeline" 工作流
 3. 点击 **Run workflow** 按钮
 4. 选择分支并点击 **Run workflow**
 
@@ -141,9 +126,9 @@ docker build -t edumaster:test .
 **错误信息**：`Permission denied (publickey)`
 
 **解决方法**：
-- 检查 SSH 私钥是否正确配置
-- 检查服务器上的公钥是否正确添加
-- 检查服务器的 SSH 配置（`/etc/ssh/sshd_config`）
+- 检查 SSH 私钥是否正确配置在 GitHub Secrets 中
+- 检查服务器上的公钥是否正确添加到 `~/.ssh/authorized_keys`
+- 确认服务器允许密钥登录（检查 `/etc/ssh/sshd_config`）
 
 #### 2. Docker 镜像构建失败
 
@@ -151,7 +136,7 @@ docker build -t edumaster:test .
 
 **解决方法**：
 - 检查 Dockerfile 语法
-- 检查依赖是否正确安装
+- 本地运行 `docker build -t edumaster:test .` 测试
 - 查看详细的构建日志
 
 #### 3. 部署脚本执行失败
@@ -160,65 +145,37 @@ docker build -t edumaster:test .
 
 **解决方法**：
 - 确保 `scripts/deploy.sh` 文件存在
-- 确保脚本有执行权限（`chmod +x scripts/deploy.sh`）
-- 检查脚本中的命令是否正确
+- 确保脚本有执行权限
+- 检查脚本路径是否正确
+
+#### 4. 前端构建失败
+
+**错误信息**：`npm run build failed`
+
+**解决方法**：
+- 本地运行 `npm run build` 测试
+- 检查 package.json 中的依赖
+- 查看构建日志中的具体错误
 
 ## 安全建议
 
-1. **定期更新 SSH 密钥**：建议每 6 个月更新一次 SSH 密钥
-2. **限制 SSH 访问**：在服务器上配置防火墙，仅允许 GitHub Actions 的 IP 访问
-3. **使用最小权限原则**：为部署用户分配最小必要的权限
-4. **启用双因素认证**：为 GitHub 账户启用 2FA
-5. **定期审查 Secrets**：定期检查和更新 GitHub Secrets
+1. **定期更新 SSH 密钥**：建议每 6 个月更新一次
+2. **使用最小权限原则**：为部署用户分配最小必要的权限
+3. **启用双因素认证**：为 GitHub 账户启用 2FA
+4. **定期审查 Secrets**：定期检查和更新 GitHub Secrets
 
-## 扩展功能
+## 后续优化（可选）
 
-### 添加通知
+如果项目稳定后需要更完善的 CI/CD，可以考虑添加：
 
-可以集成 Slack、钉钉、企业微信等通知服务，在部署成功或失败时发送通知。
-
-示例（Slack）：
-
-```yaml
-- name: 发送 Slack 通知
-  uses: slackapi/slack-github-action@v1
-  with:
-    payload: |
-      {
-        "text": "部署状态: ${{ job.status }}"
-      }
-  env:
-    SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-```
-
-### 添加代码质量检查
-
-可以集成 ESLint、Prettier、SonarQube 等代码质量检查工具。
-
-示例（ESLint）：
-
-```yaml
-- name: 运行 ESLint
-  run: npm run lint
-```
-
-### 添加性能测试
-
-可以集成 Lighthouse、WebPageTest 等性能测试工具。
-
-示例（Lighthouse）：
-
-```yaml
-- name: 运行 Lighthouse
-  uses: treosh/lighthouse-ci-action@v9
-  with:
-    urls: |
-      https://exammaster.zzzjl.com
-    uploadArtifacts: true
-```
+1. **自动化测试**：添加单元测试和集成测试
+2. **代码质量检查**：集成 ESLint、Prettier
+3. **性能监控**：添加 Lighthouse 性能测试
+4. **通知集成**：集成钉钉、企业微信通知
+5. **定期健康检查**：监控生产环境状态
 
 ## 参考资料
 
 - [GitHub Actions 官方文档](https://docs.github.com/en/actions)
 - [Docker 官方文档](https://docs.docker.com/)
-- [PostgreSQL 官方文档](https://www.postgresql.org/docs/)
+- [完整部署指南](../docs/完整部署指南.md)
