@@ -365,6 +365,8 @@ export const useAppStore = () => {
         const memoryCache = questionsMemoryCache.get(bankId);
         if (memoryCache) {
           console.log(`[loadBankQuestions] 内存缓存命中: ${bankId} (${memoryCache.data.length} 题)`);
+          // 从缓存加载时，添加短暂延迟以显示加载状态（提升用户体验）
+          await new Promise(resolve => setTimeout(resolve, 300));
           setQuestions(memoryCache.data);
           setIsLoadingQuestions(false);
           return memoryCache.data;
@@ -414,12 +416,16 @@ export const useAppStore = () => {
     
     // 切换题库时加载该题库的题目
     if (bank && bank.id) {
+      // 立即设置加载状态，确保UI能及时响应
+      setIsLoadingQuestions(true);
       try {
         await loadBankQuestions(bank.id);
       } catch (error) {
         console.error('[handleSetActiveBank] 加载题目失败:', error);
         // 加载失败时保持题目为空数组
         setQuestions([]);
+        // 确保加载状态被清除
+        setIsLoadingQuestions(false);
       }
     }
   }, [loadBankQuestions]);
@@ -627,8 +633,25 @@ export const useAppStore = () => {
       }
     },
 
-    logout: () => {
-      // 先清除 token，这样后续的 API 调用会被阻止
+    logout: async () => {
+      // 先调用后端登出接口，记录登出时间和累加在线时长
+      try {
+        const token = localStorage.getItem('edu_token');
+        if (token) {
+          await fetch('/api/auth/logout', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          });
+        }
+      } catch (e) {
+        console.debug('[Logout] 记录登出失败:', e);
+        // 即使失败也继续登出流程
+      }
+      
+      // 清除 token
       localStorage.removeItem('edu_token');
       
       // 清除所有缓存

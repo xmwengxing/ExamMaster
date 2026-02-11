@@ -4,13 +4,14 @@ import DOMPurify from 'dompurify';
 interface RichTextDisplayProps {
   content: string;
   className?: string;
+  style?: React.CSSProperties;
 }
 
 /**
  * 富文本内容显示组件
  * 用于安全地渲染包含 HTML 和图片的内容
  */
-const RichTextDisplay: React.FC<RichTextDisplayProps> = ({ content, className = '' }) => {
+const RichTextDisplay: React.FC<RichTextDisplayProps> = ({ content, className = '', style }) => {
   // 如果内容为空，返回空
   if (!content || content.trim() === '') {
     return null;
@@ -26,6 +27,7 @@ const RichTextDisplay: React.FC<RichTextDisplayProps> = ({ content, className = 
     <>
       <div 
         className={`rich-text-content ${className}`}
+        style={style}
         dangerouslySetInnerHTML={{ __html: sanitizedContent }}
       />
       <style>{`

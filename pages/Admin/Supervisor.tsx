@@ -30,7 +30,8 @@ const Supervisor: React.FC<SupervisorProps> = ({ students, logs }) => {
     setLoadingStats(true);
     
     try {
-      const token = localStorage.getItem('token');
+      // 修复：使用正确的 token 键名 'edu_token'
+      const token = localStorage.getItem('edu_token');
       const response = await fetch(`/api/admin/students/${student.id}/practice-stats`, {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -41,7 +42,7 @@ const Supervisor: React.FC<SupervisorProps> = ({ students, logs }) => {
         const data = await response.json();
         setPracticeStats(data);
       } else {
-        console.error('获取练习统计失败');
+        console.error('获取练习统计失败:', response.status, response.statusText);
         setPracticeStats([]);
       }
     } catch (error) {

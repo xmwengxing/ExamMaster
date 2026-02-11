@@ -2,6 +2,7 @@
 import React, { useMemo, useState } from 'react';
 import { Question, QuestionType, QuestionBank, PracticeMode, SrsRecord } from '../../types';
 import { useAppStore } from '../../store';
+import RichTextDisplay from '../../components/RichTextDisplay';
 
 interface MistakesProps {
   mistakes: Question[];
@@ -44,8 +45,9 @@ const Mistakes: React.FC<MistakesProps> = ({ mistakes, banks, onStart }) => {
 
   // 核心逻辑：计算待复习题目（基于当前选择的题库）
   const reviewStats = useMemo(() => {
-    console.log('[Mistakes] 计算 reviewStats', { 
-      mistakesCount: filteredMistakes?.length || 0, 
+    console.log('[Mistakes] ========== 开始计算 reviewStats ==========');
+    console.log('[Mistakes] 输入参数:', { 
+      filteredMistakesCount: filteredMistakes?.length || 0, 
       srsRecordsCount: srsRecords?.length || 0,
       selectedBankId,
       today 
@@ -55,10 +57,29 @@ const Mistakes: React.FC<MistakesProps> = ({ mistakes, banks, onStart }) => {
     const safeMistakes = filteredMistakes || [];
     const safeSrsRecords = srsRecords || [];
     
+    console.log('[Mistakes] 安全数据:', {
+      safeMistakesCount: safeMistakes.length,
+      safeSrsRecordsCount: safeSrsRecords.length
+    });
+    
+    // 关键修复：过滤 SRS 记录，只保留当前题库的错题对应的记录
+    const mistakeIds = safeMistakes.map(m => m.id);
+    console.log('[Mistakes] 当前题库错题 IDs:', mistakeIds);
+    
+    const filteredSrsRecords = safeSrsRecords.filter(r => mistakeIds.includes(r.questionId));
+    console.log('[Mistakes] 过滤后的 SRS 记录数:', filteredSrsRecords.length);
+    console.log('[Mistakes] 过滤后的 SRS 记录详情:', filteredSrsRecords);
+    
     // 待复习：在 srsRecords 中 nextReviewDate <= today 的题目，或者是从未在 srsRecords 里的错题
-    const reviewedIds = safeSrsRecords.map(r => r.questionId);
-    const pendingSrs = safeSrsRecords.filter(r => r.nextReviewDate <= today).map(r => r.questionId);
+    const reviewedIds = filteredSrsRecords.map(r => r.questionId);
+    const pendingSrs = filteredSrsRecords.filter(r => r.nextReviewDate <= today).map(r => r.questionId);
     const neverReviewed = safeMistakes.filter(m => !reviewedIds.includes(m.id)).map(m => m.id);
+    
+    console.log('[Mistakes] 复习状态:', {
+      reviewedIds,
+      pendingSrs,
+      neverReviewed
+    });
     
     const allPendingIds = Array.from(new Set([...pendingSrs, ...neverReviewed]));
     const pendingQuestions = safeMistakes.filter(m => allPendingIds.includes(m.id));
@@ -66,11 +87,12 @@ const Mistakes: React.FC<MistakesProps> = ({ mistakes, banks, onStart }) => {
     const stats = {
       pendingQuestions,
       pendingCount: pendingQuestions.length,
-      masteredCount: safeSrsRecords.filter(r => r.status === 'MASTERED').length,
+      masteredCount: filteredSrsRecords.filter(r => r.status === 'MASTERED').length,
       totalMistakes: safeMistakes.length
     };
     
-    console.log('[Mistakes] reviewStats 计算完成', stats);
+    console.log('[Mistakes] ========== reviewStats 计算完成 ==========');
+    console.log('[Mistakes] 最终统计:', stats);
     return stats;
   }, [filteredMistakes, srsRecords, selectedBankId, today]);
 
@@ -135,13 +157,16 @@ const Mistakes: React.FC<MistakesProps> = ({ mistakes, banks, onStart }) => {
           <h2 className="text-2xl md:text-3xl font-black text-gray-900 tracking-tight">智能复习中心</h2>
           <p className="text-xs text-gray-400 mt-1 font-bold italic uppercase tracking-widest">基于艾宾浩斯记忆曲线算法</p>
         </div>
-        <button 
-          onClick={handleStartSmartReview}
-          className="w-full md:w-auto bg-indigo-600 text-white px-8 md:px-10 py-3 md:py-4 rounded-2xl font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95 flex items-center justify-center gap-3"
-          style={{ display: 'flex !important', visibility: 'visible !important', opacity: '1 !important' }}
-        >
-          <i className="fa-solid fa-brain"></i> 启动今日智能复习
-        </button>
+        {/* 只在选择了具体题库时显示复习按钮，"全部题库"不显示 */}
+        {selectedBankId !== null && (
+          <button 
+            onClick={handleStartSmartReview}
+            className="w-full md:w-auto bg-indigo-600 text-white px-8 md:px-10 py-3 md:py-4 rounded-2xl font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95 flex items-center justify-center gap-3"
+            style={{ display: 'flex', visibility: 'visible', opacity: 1 }}
+          >
+            <i className="fa-solid fa-brain"></i> 启动今日智能复习
+          </button>
+        )}
       </div>
 
       {/* 题库选择器 */}
@@ -203,38 +228,92 @@ const Mistakes: React.FC<MistakesProps> = ({ mistakes, banks, onStart }) => {
         )}
       </div>
 
-      {/* SRS 概览面板 */}
-      <div className="grid gap-3 md:gap-6" style={{ gridTemplateColumns: 'repeat(3, 1fr)', display: 'grid !important' }}>
-        <div className="bg-white p-5 md:p-8 rounded-2xl md:rounded-[2.5rem] border-2 border-indigo-100 shadow-sm relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:scale-110 transition-transform">
-             <i className="fa-solid fa-calendar-day text-4xl md:text-6xl"></i>
+      {/* SRS 概览面板 - 始终显示三个卡片 */}
+      <div style={{ 
+        display: 'grid', 
+        gridTemplateColumns: 'repeat(3, 1fr)', 
+        gap: '1.5rem',
+        width: '100%',
+        marginBottom: '2rem'
+      }}>
+        {/* 卡片 1: 今日待巩固 */}
+        <div style={{ 
+          display: 'block', 
+          visibility: 'visible', 
+          opacity: 1,
+          backgroundColor: 'white',
+          padding: '2rem',
+          borderRadius: '1.5rem',
+          border: '2px solid #e0e7ff',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+          position: 'relative',
+          overflow: 'hidden',
+          minWidth: 0
+        }}>
+          <div style={{ fontSize: '2.5rem', fontWeight: 900, color: '#4f46e5', marginBottom: '0.5rem' }}>
+            {reviewStats?.pendingCount ?? 0}
           </div>
-          <div className="text-3xl md:text-4xl font-black text-indigo-600 mb-1">{reviewStats.pendingCount}</div>
-          <div className="text-xs font-black text-gray-400 uppercase tracking-widest">今日待巩固</div>
-          <p className="text-[10px] text-gray-400 mt-2 md:mt-4 leading-relaxed font-medium">包含新发现的错题以及按曲线计算已到复习节点的题目。</p>
+          <div style={{ fontSize: '0.75rem', fontWeight: 900, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+            今日待巩固
+          </div>
+          <p style={{ fontSize: '0.625rem', color: '#9ca3af', marginTop: '1rem', lineHeight: '1.5' }}>
+            包含新发现的错题以及按曲线计算已到复习节点的题目。
+          </p>
         </div>
         
-        <div className="bg-white p-5 md:p-8 rounded-2xl md:rounded-[2.5rem] border border-gray-100 shadow-sm relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:scale-110 transition-transform">
-             <i className="fa-solid fa-graduation-cap text-4xl md:text-6xl"></i>
+        {/* 卡片 2: 已完全掌握 */}
+        <div style={{ 
+          display: 'block', 
+          visibility: 'visible', 
+          opacity: 1,
+          backgroundColor: 'white',
+          padding: '2rem',
+          borderRadius: '1.5rem',
+          border: '1px solid #e5e7eb',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+          position: 'relative',
+          overflow: 'hidden',
+          minWidth: 0
+        }}>
+          <div style={{ fontSize: '2.5rem', fontWeight: 900, color: '#10b981', marginBottom: '0.5rem' }}>
+            {reviewStats?.masteredCount ?? 0}
           </div>
-          <div className="text-3xl md:text-4xl font-black text-emerald-500 mb-1">{reviewStats.masteredCount}</div>
-          <div className="text-xs font-black text-gray-400 uppercase tracking-widest">已完全掌握</div>
-          <p className="text-[10px] text-gray-400 mt-2 md:mt-4 leading-relaxed font-medium">连续通过多轮复习，预测记忆周期已超过 21 天的优质题目。</p>
+          <div style={{ fontSize: '0.75rem', fontWeight: 900, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+            已完全掌握
+          </div>
+          <p style={{ fontSize: '0.625rem', color: '#9ca3af', marginTop: '1rem', lineHeight: '1.5' }}>
+            连续通过多轮复习，预测记忆周期已超过 21 天的优质题目。
+          </p>
         </div>
 
-        <div className="bg-white p-5 md:p-8 rounded-2xl md:rounded-[2.5rem] border border-gray-100 shadow-sm relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:scale-110 transition-transform">
-             <i className="fa-solid fa-fire text-4xl md:text-6xl"></i>
+        {/* 卡片 3: 历史错题总计 */}
+        <div style={{ 
+          display: 'block', 
+          visibility: 'visible', 
+          opacity: 1,
+          backgroundColor: 'white',
+          padding: '2rem',
+          borderRadius: '1.5rem',
+          border: '1px solid #e5e7eb',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+          position: 'relative',
+          overflow: 'hidden',
+          minWidth: 0
+        }}>
+          <div style={{ fontSize: '2.5rem', fontWeight: 900, color: '#f43f5e', marginBottom: '0.5rem' }}>
+            {reviewStats?.totalMistakes ?? 0}
           </div>
-          <div className="text-3xl md:text-4xl font-black text-rose-500 mb-1">{reviewStats.totalMistakes}</div>
-          <div className="text-xs font-black text-gray-400 uppercase tracking-widest">历史错题总计</div>
-          <p className="text-[10px] text-gray-400 mt-2 md:mt-4 leading-relaxed font-medium">所有在系统练习和模拟考试中产生过的错误记录。</p>
+          <div style={{ fontSize: '0.75rem', fontWeight: 900, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+            历史错题总计
+          </div>
+          <p style={{ fontSize: '0.625rem', color: '#9ca3af', marginTop: '1rem', lineHeight: '1.5' }}>
+            所有在系统练习和模拟考试中产生过的错误记录。
+          </p>
         </div>
       </div>
 
       {/* 待复习列表 */}
-      <div className="space-y-3 md:space-y-4">
+      <div className="space-y-3 md:space-y-4" style={{ minWidth: 0, maxWidth: '100%', overflow: 'hidden' }}>
         <div className="flex justify-between items-center px-1">
           <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest">
             最近复习轨迹
@@ -262,8 +341,9 @@ const Mistakes: React.FC<MistakesProps> = ({ mistakes, banks, onStart }) => {
               <div 
                 key={q.id} 
                 className="bg-white p-3 md:p-5 rounded-xl md:rounded-2xl border border-gray-100 shadow-sm flex flex-col md:flex-row gap-3 md:gap-4 transition-all hover:border-indigo-100 group"
+                style={{ minWidth: 0, maxWidth: '100%' }}
               >
-                <div className="flex-1 space-y-1.5 md:space-y-2">
+                <div className="flex-1 space-y-1.5 md:space-y-2" style={{ minWidth: 0, maxWidth: '100%' }}>
                   <div className="flex items-center gap-1.5 md:gap-2 flex-wrap">
                     <span className="text-[9px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 font-black uppercase">{q.type}</span>
                     <span className="text-[9px] bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded font-bold">{getBankName(q.bankId)}</span>
@@ -279,7 +359,18 @@ const Mistakes: React.FC<MistakesProps> = ({ mistakes, banks, onStart }) => {
                       <span className="text-[9px] font-black bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full border border-amber-100 uppercase">等待首轮复习</span>
                     )}
                   </div>
-                  <h4 className="text-gray-800 font-bold leading-relaxed line-clamp-2 group-hover:line-clamp-none transition-all text-sm">{q.content}</h4>
+                  <div 
+                    className="text-gray-800 font-bold leading-relaxed text-sm"
+                    style={{ 
+                      minWidth: 0,
+                      maxWidth: '100%'
+                    }}
+                  >
+                    <RichTextDisplay 
+                      content={q.content} 
+                      className="line-clamp-2 group-hover:line-clamp-none transition-all"
+                    />
+                  </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <button 

@@ -238,6 +238,12 @@ export async function recordLogout(userId) {
         [nowISO, sessionDuration, lastLoginLog.id]
       );
       
+      // 累加到用户的总在线时长
+      await db.execute(
+        'UPDATE users SET total_online_time = COALESCE(total_online_time, 0) + $1 WHERE id = $2',
+        [sessionDuration, userId]
+      );
+      
       logger.info('记录用户登出', { 
         userId, 
         sessionDuration: `${Math.floor(sessionDuration / 60)}分${sessionDuration % 60}秒` 
