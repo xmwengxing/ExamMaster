@@ -1,6 +1,0 @@
-题型,题干,选项,答案,解析,单元/章节,填空配置,简答参考答案
-SINGLE,JavaScript是一种什么类型的语言?,解释型语言|编译型语言|汇编语言|机器语言,A,JavaScript是一种解释型的脚本语言,第一章,,
-MULTIPLE,以下哪些是JavaScript的数据类型?,String|Number|Boolean|Object|Function,A|B|C|D|E,JavaScript有7种基本数据类型和Object类型,第一章,,
-JUDGE,JavaScript是区分大小写的语言,,A,JavaScript对大小写敏感,第一章,,
-SINGLE,以下哪个不是JavaScript的关键字?,var|let|const|define,D,define不是JavaScript的关键字,第二章,,
-SINGLE,如何声明一个常量?,var x = 1|let x = 1|const x = 1|x = 1,C,使用const关键字声明常量,第二章,,
