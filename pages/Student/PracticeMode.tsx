@@ -363,19 +363,25 @@ const PracticeModeView: React.FC<PracticeModeProps> = ({
         
         provideFeedback(isCorrect);
         
-        // 答对：自动跳转下一题；答错：显示解析，保持当前题
+        // 智能复习模式：答对后不自动跳转，让用户查看解析后手动切换
+        // 其他模式：答对自动跳转下一题；答错显示解析，保持当前题
         if (isCorrect) {
-          // 答对了，延迟跳转到下一题
-          setTimeout(() => {
-            if (currentIndex < questions.length - 1) {
-              const newIndex = currentIndex + 1;
-              setCurrentIndex(newIndex);
-              currentProgressRef.current.currentIndex = newIndex;
-            } else {
-              // 最后一题答对了，完成练习
-              onFinish();
-            }
-          }, 600); // 给用户看到正确反馈的时间
+          if (mode === PracticeMode.SMART_REVIEW) {
+            // 智能复习模式：答对后显示解析，不自动跳转
+            setShowExplanation(true);
+          } else {
+            // 其他模式：答对了，延迟跳转到下一题
+            setTimeout(() => {
+              if (currentIndex < questions.length - 1) {
+                const newIndex = currentIndex + 1;
+                setCurrentIndex(newIndex);
+                currentProgressRef.current.currentIndex = newIndex;
+              } else {
+                // 最后一题答对了，完成练习
+                onFinish();
+              }
+            }, 600); // 给用户看到正确反馈的时间
+          }
         } else {
           // 答错了，显示解析让用户学习
           setShowExplanation(true);
@@ -407,19 +413,25 @@ const PracticeModeView: React.FC<PracticeModeProps> = ({
     // 更新 ref（防抖保存会自动处理）
     currentProgressRef.current.userAnswers = userAnswers;
     
-    // 答对：自动跳转下一题；答错：显示解析，保持当前题
+    // 智能复习模式：答对后不自动跳转，让用户查看解析后手动切换
+    // 其他模式：答对自动跳转下一题；答错显示解析，保持当前题
     if (isCorrect) {
-      // 答对了，延迟跳转到下一题
-      setTimeout(() => {
-        if (currentIndex < questions.length - 1) {
-          const newIndex = currentIndex + 1;
-          setCurrentIndex(newIndex);
-          currentProgressRef.current.currentIndex = newIndex;
-        } else {
-          // 最后一题答对了，完成练习
-          onFinish();
-        }
-      }, 600); // 给用户看到正确反馈的时间
+      if (mode === PracticeMode.SMART_REVIEW) {
+        // 智能复习模式：答对后显示解析，不自动跳转
+        setShowExplanation(true);
+      } else {
+        // 其他模式：答对了，延迟跳转到下一题
+        setTimeout(() => {
+          if (currentIndex < questions.length - 1) {
+            const newIndex = currentIndex + 1;
+            setCurrentIndex(newIndex);
+            currentProgressRef.current.currentIndex = newIndex;
+          } else {
+            // 最后一题答对了，完成练习
+            onFinish();
+          }
+        }, 600); // 给用户看到正确反馈的时间
+      }
     } else {
       // 答错了，显示解析让用户学习
       setShowExplanation(true);
@@ -459,16 +471,22 @@ const PracticeModeView: React.FC<PracticeModeProps> = ({
         onCorrect(currentQuestion);
         provideFeedback(true);
         
-        // 答对了，延迟跳转到下一题
-        setTimeout(() => {
-          if (currentIndex < questions.length - 1) {
-            const newIndex = currentIndex + 1;
-            setCurrentIndex(newIndex);
-            currentProgressRef.current.currentIndex = newIndex;
-          } else {
-            onFinish();
-          }
-        }, 600);
+        // 智能复习模式：答对后不自动跳转，让用户查看解析后手动切换
+        if (mode === PracticeMode.SMART_REVIEW) {
+          // 智能复习模式：答对后显示解析，不自动跳转
+          setShowExplanation(true);
+        } else {
+          // 其他模式：答对了，延迟跳转到下一题
+          setTimeout(() => {
+            if (currentIndex < questions.length - 1) {
+              const newIndex = currentIndex + 1;
+              setCurrentIndex(newIndex);
+              currentProgressRef.current.currentIndex = newIndex;
+            } else {
+              onFinish();
+            }
+          }, 600);
+        }
       } else {
         onWrong(currentQuestion);
         provideFeedback(false);
@@ -533,16 +551,22 @@ const PracticeModeView: React.FC<PracticeModeProps> = ({
         onCorrect(currentQuestion);
         provideFeedback(true);
         
-        // 答对了，延迟跳转到下一题
-        setTimeout(() => {
-          if (currentIndex < questions.length - 1) {
-            const newIndex = currentIndex + 1;
-            setCurrentIndex(newIndex);
-            currentProgressRef.current.currentIndex = newIndex;
-          } else {
-            onFinish();
-          }
-        }, 800); // 简答题给更多时间看评分结果
+        // 智能复习模式：答对后不自动跳转，让用户查看解析后手动切换
+        if (mode === PracticeMode.SMART_REVIEW) {
+          // 智能复习模式：答对后显示解析，不自动跳转
+          setShowExplanation(true);
+        } else {
+          // 其他模式：答对了，延迟跳转到下一题
+          setTimeout(() => {
+            if (currentIndex < questions.length - 1) {
+              const newIndex = currentIndex + 1;
+              setCurrentIndex(newIndex);
+              currentProgressRef.current.currentIndex = newIndex;
+            } else {
+              onFinish();
+            }
+          }, 800); // 简答题给更多时间看评分结果
+        }
       } else {
         // 答错或未启用AI评分，显示解析
         setShowExplanation(true);
@@ -836,6 +860,29 @@ const PracticeModeView: React.FC<PracticeModeProps> = ({
     window.open(`https://www.baidu.com/s?wd=${encodeURIComponent(searchContent)}`, '_blank');
   };
 
+  // 加载状态检查：如果正在加载题目，显示加载指示器
+  if (store.isLoadingQuestions && questions.length === 0) {
+    return (
+      <div className="max-w-4xl mx-auto p-6 flex items-center justify-center min-h-[60vh]">
+        <div className="bg-gradient-to-r from-indigo-50 to-purple-50 p-8 rounded-3xl border-2 border-indigo-100 shadow-lg max-w-md w-full">
+          <div className="flex flex-col items-center gap-4 text-center">
+            <div className="relative">
+              <i className="fa-solid fa-spinner fa-spin text-5xl text-indigo-600"></i>
+              <div className="absolute inset-0 bg-indigo-600/10 rounded-full animate-ping"></div>
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-indigo-900 mb-2">正在加载题目...</h3>
+              <p className="text-sm text-indigo-600">
+                首次加载可能需要5-10秒，请稍候
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 如果没有题目且不在加载中，显示无题目提示
   if (!currentQuestion) return <div className="p-12 text-center text-gray-400 font-bold">无题目内容</div>;
 
   return (

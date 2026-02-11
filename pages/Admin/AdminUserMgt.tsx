@@ -223,16 +223,29 @@ const AdminUserMgt: React.FC<AdminUserMgtProps> = ({ currentUser, admins, studen
   const toggleBankPermission = (studentId: string, bankId: string) => {
     setPendingBankIds(prev => {
       const current = prev[studentId] || [];
-      const next = current.includes(bankId) 
-        ? current.filter(id => id !== bankId) 
-        : [...current, bankId];
-      console.log('[toggleBankPermission]', {
-        studentId,
-        bankId,
-        currentBankIds: current,
-        nextBankIds: next
-      });
-      return { ...prev, [studentId]: next };
+      
+      // 检查是否已存在（去重）
+      if (current.includes(bankId)) {
+        // 已存在，移除
+        const next = current.filter(id => id !== bankId);
+        console.log('[toggleBankPermission] 移除题库', {
+          studentId,
+          bankId,
+          currentBankIds: current,
+          nextBankIds: next
+        });
+        return { ...prev, [studentId]: next };
+      } else {
+        // 不存在，添加（确保不重复）
+        const next = [...new Set([...current, bankId])]; // 使用 Set 去重
+        console.log('[toggleBankPermission] 添加题库', {
+          studentId,
+          bankId,
+          currentBankIds: current,
+          nextBankIds: next
+        });
+        return { ...prev, [studentId]: next };
+      }
     });
   };
 

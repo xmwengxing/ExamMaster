@@ -35,8 +35,8 @@ const port = process.env.PORT || 3001;
 // CORS 配置
 app.use(cors(corsOptions));
 
-// JSON 解析（限制 50MB）
-app.use(express.json({ limit: '50mb' }));
+// JSON 解析（限制 100MB，支持大量图片的题库导入）
+app.use(express.json({ limit: '100mb' }));
 
 // 数据库中间件（必须在路由之前）
 app.use(injectDatabase);

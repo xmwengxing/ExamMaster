@@ -17,7 +17,8 @@ export async function getAllBanks(db) {
     description: bank.description,
     questionCount: bank.question_count || 0,
     scoreConfig: bank.score_config || { SINGLE: 1, MULTIPLE: 2, JUDGE: 1 },
-    usageCount: bank.usage_count || 0
+    usageCount: bank.usage_count || 0,
+    updatedAt: bank.updated_at // 添加更新时间戳
   }));
 }
 

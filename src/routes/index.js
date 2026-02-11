@@ -23,6 +23,10 @@ import mistakeRoutes from './mistake.routes.js';
 import favoriteRoutes from './favorite.routes.js';
 import noteRoutes from './note.routes.js';
 import srsRoutes from './srs.routes.js';
+import conversionRoutes from './conversion.routes.js';
+import uploadRoutes from './upload.routes.js';
+import importRoutes from './import.routes.js';
+import logsRoutes from './logs.routes.js';
 
 /**
  * 注册所有路由到主路由器
@@ -83,6 +87,18 @@ export function registerRoutes(app) {
   
   // 管理员配置路由（自定义字段）
   app.use('/api/admin/config', configRoutes);
+  
+  // 题库转换路由
+  app.use('/api/convert', conversionRoutes);
+  
+  // 分片上传路由
+  app.use('/api/upload', uploadRoutes);
+  
+  // 导入任务路由
+  app.use('/api/import', importRoutes);
+  
+  // 错误日志路由
+  app.use('/api/logs', logsRoutes);
   
   console.log('✅ 所有路由已注册');
 }

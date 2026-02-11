@@ -56,7 +56,7 @@ services:
       - ./utils:/app/utils:ro
       - ./src:/app/src:ro
     ports:
-      - "${PORT:-3001}:3001"
+      - "3301:3001"
     depends_on:
       postgres:
         condition: service_healthy

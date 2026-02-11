@@ -157,7 +157,7 @@ describe('请求日志中间件单元测试', () => {
   });
   
   describe('slowRequestLogger 中间件', () => {
-    it('应该记录慢请求', (done) => {
+    it('应该记录慢请求', async () => {
       const middleware = slowRequestLogger(50); // 50ms 阈值
       
       middleware(req, res, next);
@@ -166,19 +166,17 @@ describe('请求日志中间件单元测试', () => {
       res.statusCode = 200;
       
       // 延迟触发，模拟慢请求
-      setTimeout(() => {
-        finishHandler();
-        
-        expect(logger.warn).toHaveBeenCalledWith(
-          '慢请求检测',
-          expect.objectContaining({
-            method: 'GET',
-            url: '/test',
-            threshold: '50ms'
-          })
-        );
-        done();
-      }, 60);
+      await new Promise(resolve => setTimeout(resolve, 60));
+      finishHandler();
+      
+      expect(logger.warn).toHaveBeenCalledWith(
+        '慢请求检测',
+        expect.objectContaining({
+          method: 'GET',
+          url: '/test',
+          threshold: '50ms'
+        })
+      );
     });
     
     it('应该不记录快速请求', () => {

@@ -137,6 +137,21 @@ export async function createQuestion(db, questionData) {
   
   const id = questionData.id || `q-${Date.now()}`;
   
+  // 处理数组和对象字段，确保正确的JSON格式
+  const processField = (field) => {
+    if (field === null || field === undefined) {
+      return null;
+    }
+    if (Array.isArray(field)) {
+      return field.length > 0 ? JSON.stringify(field) : null;
+    }
+    if (typeof field === 'object') {
+      return JSON.stringify(field);
+    }
+    // 对于字符串和其他基本类型，也需要JSON序列化以符合jsonb格式
+    return JSON.stringify(field);
+  };
+  
   // 使用事务确保数据一致性
   await db.transaction(async (client) => {
     // 插入题目
@@ -144,19 +159,19 @@ export async function createQuestion(db, questionData) {
       `INSERT INTO questions (
         id, bank_id, type, content, options, answer, explanation, 
         blanks, reference_answer, ai_grading_enabled, tags, chapter
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+      ) VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, $8::jsonb, $9, $10, $11::jsonb, $12)`,
       [
         id,
         questionData.bankId || '',
         questionData.type || 'SINGLE',
         questionData.content || '',
-        questionData.options || [],
-        questionData.answer || '',
+        processField(questionData.options),
+        processField(questionData.answer), // answer也需要处理为JSON
         questionData.explanation || '',
-        questionData.blanks || null,
+        processField(questionData.blanks),
         questionData.referenceAnswer || null,
         questionData.aiGradingEnabled || false,
-        questionData.tags || null,
+        processField(questionData.tags),
         questionData.chapter || null
       ]
     );
@@ -208,21 +223,52 @@ export async function createQuestion(db, questionData) {
  */
 export async function updateQuestion(db, questionId, updates) {
   const fields = Object.keys(updates);
-  
+
   if (fields.length === 0) {
     return;
   }
-  
-  const setClause = fields.map((k, i) => `${k} = $${i + 1}`).join(', ');
+
+  // 处理数组和对象字段，确保正确的JSON格式
+  const processField = (field, value) => {
+    if (value === null || value === undefined) {
+      return null;
+    }
+    if (Array.isArray(value)) {
+      return value.length > 0 ? JSON.stringify(value) : null;
+    }
+    if (typeof value === 'object') {
+      return JSON.stringify(value);
+    }
+    // 对于字符串和其他基本类型，也需要JSON序列化以符合jsonb格式
+    return JSON.stringify(value);
+  };
+
+  // 需要JSONB类型转换的字段
+  const jsonbFields = ['options', 'blanks', 'tags', 'answer'];
+
+  // 构建SET子句，为JSONB字段添加类型转换
+  const setClause = fields.map((k, i) => {
+    const placeholder = `$${i + 1}`;
+    if (jsonbFields.includes(k)) {
+      return `${k} = ${placeholder}::jsonb`;
+    }
+    return `${k} = ${placeholder}`;
+  }).join(', ');
+
+  // 处理值：只对JSONB字段进行JSON序列化
   const values = fields.map(k => {
-    return typeof updates[k] === 'object' ? JSON.stringify(updates[k]) : updates[k];
+    if (jsonbFields.includes(k)) {
+      return processField(k, updates[k]);
+    }
+    return updates[k]; // 非JSONB字段直接返回原值
   });
-  
+
   await db.execute(
     `UPDATE questions SET ${setClause} WHERE id = $${fields.length + 1}`,
     [...values, questionId]
   );
 }
+
 
 /**
  * 删除题目
@@ -314,12 +360,13 @@ export async function batchDeleteQuestions(db, questionIds) {
  */
 export async function batchImportQuestions(db, bankId, questions) {
   if (!Array.isArray(questions) || questions.length === 0) {
-    return { inserted: 0, skipped: 0, errors: [] };
+    return { inserted: 0, skipped: 0, errors: [], questionIds: [] };
   }
   
   let inserted = 0;
   let skipped = 0;
   const errors = [];
+  const questionIds = []; // 记录成功导入的题目ID
   
   await db.transaction(async (client) => {
     // 获取当前题库中最大的 sort_order 值
@@ -371,6 +418,7 @@ export async function batchImportQuestions(db, bankId, questions) {
             sortOrder
           );
           
+          questionIds.push(id); // 记录题目ID
           inserted++;
         } catch (err) {
           skipped++;
@@ -419,6 +467,7 @@ export async function batchImportQuestions(db, bankId, questions) {
                   sortOrder
                 ]
               );
+              questionIds.push(id); // 记录题目ID
             } catch (rowErr) {
               inserted--;
               skipped++;
@@ -438,7 +487,7 @@ export async function batchImportQuestions(db, bankId, questions) {
     }
   });
   
-  return { inserted, skipped, errors };
+  return { inserted, skipped, errors, questionIds };
 }
 
 /**

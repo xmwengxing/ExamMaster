@@ -6,10 +6,39 @@ import logger from '../../utils/logger.js';
 
 /**
  * 获取所有题库
+ * 学员只能看到授权的题库，管理员可以看到所有题库
  */
 export async function getAllBanks(req, res, next) {
   try {
     const banks = await bankService.getAllBanks(req.db);
+    
+    // 如果是学员，只返回授权的题库
+    if (req.user.role === 'STUDENT') {
+      // 从数据库查询学员的授权题库列表
+      const userRow = await req.db.getOne(
+        'SELECT allowed_bank_ids FROM users WHERE id = $1',
+        [req.user.id]
+      );
+      
+      const allowedBankIds = userRow?.allowed_bank_ids || [];
+      const filteredBanks = banks.filter(bank => allowedBankIds.includes(bank.id));
+      
+      logger.info('[Banks] 学员获取题库列表:', {
+        userId: req.user.id,
+        totalBanks: banks.length,
+        allowedBanks: filteredBanks.length,
+        allowedBankIds: allowedBankIds
+      });
+      
+      return res.json(filteredBanks);
+    }
+    
+    // 管理员返回所有题库
+    logger.info('[Banks] 管理员获取题库列表:', {
+      userId: req.user.id,
+      totalBanks: banks.length
+    });
+    
     res.json(banks);
   } catch (error) {
     logger.error('[Banks] 获取题库列表失败:', error);

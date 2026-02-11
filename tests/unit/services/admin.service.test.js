@@ -171,7 +171,8 @@ describe('管理员服务 - 账号管理', () => {
           nickname: '管理员1',
           real_name: '张三',
           password: 'hashed_password_1',
-          role: 'ADMIN'
+          role: 'ADMIN',
+          permissions: null
         },
         {
           id: 'admin-2',
@@ -179,7 +180,8 @@ describe('管理员服务 - 账号管理', () => {
           nickname: '管理员2',
           real_name: '李四',
           password: 'hashed_password_2',
-          role: 'ADMIN'
+          role: 'ADMIN',
+          permissions: null
         }
       );
 
@@ -190,7 +192,8 @@ describe('管理员服务 - 账号管理', () => {
         id: 'admin-1',
         phone: '13800000001',
         nickname: '管理员1',
-        realName: '张三'
+        realName: '张三',
+        permissions: null
       });
       expect(admins[0]).not.toHaveProperty('password'); // 不应该返回密码
     });
