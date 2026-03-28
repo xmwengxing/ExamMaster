@@ -1,0 +1,197 @@
+name: CI/CD Pipeline
+
+# 触发条件
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+  workflow_dispatch:  # 允许手动触发
+
+# 环境变量
+env:
+  NODE_VERSION: '18'
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # 作业 1：构建前端
+  build-frontend:
+    name: 构建前端
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+      
+      - name: 设置 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+      
+      - name: 安装依赖
+        run: npm ci
+      
+      - name: 构建前端
+        run: npm run build
+      
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: dist/
+          retention-days: 7
+
+  # 作业 2：构建 Docker 镜像（仅在推送到 main 分支时执行）
+  build-docker:
+    name: 构建 Docker 镜像
+    runs-on: ubuntu-latest
+    needs: build-frontend
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    permissions:
+      contents: read
+      packages: write
+    
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+      
+      - name: 设置 Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: 登录到 GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: 提取 Docker 元数据
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+      
+      - name: 构建并推送 Docker 镜像
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      
+      - name: 验证 Docker 镜像
+        run: |
+          echo "✅ Docker 镜像构建成功"
+          echo "镜像标签: ${{ steps.meta.outputs.tags }}"
+
+  # 作业 3：部署到生产环境
+  deploy-production:
+    name: 部署到生产环境
+    runs-on: ubuntu-latest
+    needs: [build-frontend, build-docker]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    environment:
+      name: production
+      url: https://exammaster.zzzjl.com
+    
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+      
+      - name: 下载前端构建产物
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: dist/
+      
+      - name: 设置 SSH 密钥
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+      
+      - name: 添加服务器到 known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+      
+      - name: 部署到服务器
+        env:
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          # 执行部署脚本
+          chmod +x scripts/deploy.sh
+          ./scripts/deploy.sh
+      
+      - name: 验证部署
+        run: |
+          # 等待服务启动
+          sleep 30
+          # 检查健康状态
+          curl -f https://exammaster.zzzjl.com/api/health || exit 1
+      
+      - name: 发送部署通知
+        if: always()
+        run: |
+          if [ ${{ job.status }} == 'success' ]; then
+            echo "✅ 部署成功！"
+          else
+            echo "❌ 部署失败！"
+          fi
+
+  # 作业 4：部署到开发环境
+  deploy-development:
+    name: 部署到开发环境
+    runs-on: ubuntu-latest
+    needs: build-frontend
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    
+    environment:
+      name: development
+    
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+      
+      - name: 下载前端构建产物
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: dist/
+      
+      - name: 设置 SSH 密钥
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY_DEV }}
+      
+      - name: 添加服务器到 known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.SERVER_HOST_DEV }} >> ~/.ssh/known_hosts
+      
+      - name: 部署到开发服务器
+        env:
+          SERVER_HOST: ${{ secrets.SERVER_HOST_DEV }}
+          SERVER_USER: ${{ secrets.SERVER_USER_DEV }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH_DEV }}
+          ENVIRONMENT: development
+        run: |
+          # 执行部署脚本
+          chmod +x scripts/deploy.sh
+          ./scripts/deploy.sh

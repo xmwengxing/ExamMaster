@@ -1,0 +1,117 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+nginx/ssl/*.pem
+nginx/ssl/*.key
+
+# Dependencies
+node_modules
+
+# Build output (前端构建产物需要在服务器上构建，所以排除)
+dist
+dist-ssr
+*.local
+
+# Database files (数据库文件不提交到 Git)
+*.db
+*.db-journal
+edumaster.db
+edumaster.db.backup_*
+backups/
+
+# Environment variables (敏感信息不提交)
+.env
+.env.local
+.env.production
+
+# Editor directories and files
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS files
+.sqlite
+Thumbs.db
+
+# SSL certificates (证书文件不提交，但保留目录结构)
+nginx/ssl/*.pem
+nginx/ssl/*.key
+nginx/ssl/*.crt
+!nginx/ssl/README.md
+
+# Temporary files
+*.tmp
+*.temp
+.cache
+
+# PM2
+.pm2
+
+# Kiro IDE
+.kiro/
+
+# 备忘文档 (开发笔记不提交)
+备忘文件/
+
+# Test files (测试脚本不提交)
+test-*.html
+test-*.js
+check-*.js
+create-*.js
+fix-*.cjs
+test-*.cjs
+
+# Test coverage reports
+coverage/
+.nyc_output/
+
+# Test database files
+*.test.db
+*_test.db
+
+# Test temporary files
+tests/**/*.tmp
+tests/**/*.temp
+
+# Git helper scripts (Windows)
+git-*.bat
+
+# Local deployment scripts (本地部署脚本不提交)
+deploy*.bat
+upload-*.sh
+
+# Documentation (Chinese) - 临时文档
+*.txt
+
+# Config files (特定配置文件)
+metadata.json
+server-status.json
+
+# Migration report (迁移报告不提交)
+migration-report.json
+
+# Question conversion files (local use only)
+convert-questions.bat
+convert-questions-python.bat
+测试-*.csv
+
+# PostgreSQL data directory (数据目录不提交)
+postgres/data/
+
+# git仓库批处理
+快速同步.bat

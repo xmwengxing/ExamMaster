@@ -1,0 +1,71 @@
+# 依赖
+node_modules/
+npm-debug.log*
+
+# 测试（Docker 构建时不需要）
+tests/
+*.test.js
+*.test.ts
+coverage/
+vitest.config.js
+
+# 构建产物
+dist/
+build/
+
+# 环境变量
+.env
+.env.local
+.env.production
+.env.*.local
+
+# 数据库文件
+*.db
+*.db-*
+edumaster.db*
+postgres/data/
+
+# Git
+.git/
+.gitignore
+.github/
+
+# IDE
+.vscode/
+.idea/
+.kiro/
+
+# 文档
+*.md
+docs/
+备忘文件/
+
+# 日志
+logs/
+*.log
+
+# 临时文件
+tmp/
+temp/
+*.tmp
+
+# 脚本
+scripts/
+*.bat
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# 备份
+backups/
+
+# 旧版本文件
+server-old.js
+
+# 其他
+.DS_Store
+*.swp
+*.swo
+*~

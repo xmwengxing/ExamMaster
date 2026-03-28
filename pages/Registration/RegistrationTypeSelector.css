@@ -1,0 +1,90 @@
+/* 报名类型选择页面样式 */
+.registration-type-selector {
+  padding: 40px 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+  min-height: calc(100vh - 64px);
+}
+
+.selector-header {
+  text-align: center;
+  margin-bottom: 48px;
+}
+
+.selector-header h2 {
+  margin-bottom: 8px;
+  color: #262626;
+}
+
+.selector-header p {
+  color: #8c8c8c;
+  font-size: 16px;
+}
+
+.type-card {
+  height: 100%;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.type-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.type-card.disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.type-card.disabled:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.card-content {
+  text-align: center;
+  padding: 24px 0;
+  position: relative;
+}
+
+.card-icon {
+  margin-bottom: 24px;
+}
+
+.card-content h3 {
+  margin-bottom: 12px;
+  color: #262626;
+}
+
+.card-content p {
+  color: #595959;
+  margin-bottom: 0;
+}
+
+.coming-soon {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: #faad14;
+  color: white;
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .registration-type-selector {
+    padding: 24px 16px;
+  }
+
+  .selector-header {
+    margin-bottom: 32px;
+  }
+
+  .card-content {
+    padding: 16px 0;
+  }
+}
