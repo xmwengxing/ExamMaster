@@ -16,7 +16,7 @@ const __dirname = path.dirname(__filename);
 
 // 文档存储目录
 const UPLOAD_DIR = path.join(process.cwd(), 'uploads', 'registrations');
-const TEMPLATE_DIR = path.join(process.cwd(), '报名管理');
+const TEMPLATE_DIR = path.join(process.cwd(), 'registration-templates');
 
 // 确保上传目录存在
 if (!fs.existsSync(UPLOAD_DIR)) {
@@ -120,9 +120,21 @@ export async function generateVocationalDocx(registrationData) {
     // 模板文件路径
     const templatePath = path.join(TEMPLATE_DIR, '福建省职业技能等级认定申报表.docx');
 
-    // 检查模板文件是否存在
+    // 检查模板文件是否存在 - 增加详细日志
+    logger.info('检查模板文件', { templatePath, templateDir: TEMPLATE_DIR, processCwd: process.cwd() });
+    
+    // 列出报名管理目录中的文件，用于调试
+    try {
+      const files = fs.readdirSync(TEMPLATE_DIR);
+      logger.info('报名管理目录文件列表', { files });
+    } catch (err) {
+      logger.error('读取报名管理目录失败', { error: err.message });
+    }
+
     if (!fs.existsSync(templatePath)) {
-      throw new Error('Word 模板文件不存在');
+      logger.warn('Word 模板文件不存在，将生成简单版本的文档', { registrationId: registrationData.id, templatePath });
+      // 生成简单版本的文档（不使用模板）
+      return generateSimpleVocationalDocx(registrationData);
     }
 
     // 读取模板文件
@@ -169,6 +181,106 @@ export async function generateVocationalDocx(registrationData) {
     return `/uploads/registrations/${fileName}`;
   } catch (error) {
     logger.error('生成职业技能 Word 文档失败', { 
+      error: error.message,
+      registrationId: registrationData.id 
+    });
+    throw error;
+  }
+}
+
+/**
+ * 生成简单版本的职业技能文档（当模板文件不存在时使用）
+ * @param {Object} registrationData - 报名数据
+ * @returns {Promise<string>} 文档路径
+ */
+async function generateSimpleVocationalDocx(registrationData) {
+  try {
+    // 创建工作簿
+    const workbook = xlsx.utils.book_new();
+    
+    // 准备数据
+    const data = [
+      ['职业技能等级认定申报表'],
+      [],
+      ['基本信息'],
+      ['姓名', registrationData.name],
+      ['性别', registrationData.gender || ''],
+      ['出生年月', registrationData.birth_date || ''],
+      ['联系电话', registrationData.phone],
+      ['身份证号', registrationData.id_number || ''],
+      ['申报职业', registrationData.occupation || ''],
+      ['申报等级', registrationData.apply_level || ''],
+      ['申报方向', registrationData.direction || ''],
+      [],
+      ['教育经历'],
+      ['起止时间', '学校名称', '专业', '学历'],
+    ];
+    
+    // 处理教育经历
+    let educationHistory = registrationData.education_history || [];
+    try {
+      if (typeof educationHistory === 'string') {
+        educationHistory = JSON.parse(educationHistory);
+      }
+    } catch (error) {
+      educationHistory = [];
+    }
+    
+    educationHistory.forEach(edu => {
+      data.push([
+        edu.start_date && edu.end_date ? `${edu.start_date} - ${edu.end_date}` : '',
+        edu.school || '',
+        edu.major || '',
+        edu.education || ''
+      ]);
+    });
+    
+    // 处理工作经历
+    let workHistory = registrationData.work_history || [];
+    try {
+      if (typeof workHistory === 'string') {
+        workHistory = JSON.parse(workHistory);
+      }
+    } catch (error) {
+      workHistory = [];
+    }
+    
+    data.push([]);
+    data.push(['工作经历']);
+    data.push(['起止时间', '工作单位', '职位', '工作内容']);
+    
+    workHistory.forEach(work => {
+      data.push([
+        work.start_date && work.end_date ? `${work.start_date} - ${work.end_date}` : '',
+        work.company || '',
+        work.position || '',
+        work.description || ''
+      ]);
+    });
+    
+    // 创建工作表
+    const worksheet = xlsx.utils.aoa_to_sheet(data);
+    
+    // 添加到工作簿
+    xlsx.utils.book_append_sheet(workbook, worksheet, '职业技能等级认定申报表');
+    
+    // 生成文件名
+    const timestamp = Date.now();
+    const fileName = `vocational_simple_${registrationData.id}_${timestamp}.xlsx`;
+    const filePath = path.join(UPLOAD_DIR, fileName);
+    
+    // 写入文件
+    xlsx.writeFile(workbook, filePath);
+    
+    logger.info('简单版本职业技能文档生成成功', { 
+      registrationId: registrationData.id,
+      filePath 
+    });
+    
+    // 返回相对路径
+    return `/uploads/registrations/${fileName}`;
+  } catch (error) {
+    logger.error('生成简单版本职业技能文档失败', { 
       error: error.message,
       registrationId: registrationData.id 
     });

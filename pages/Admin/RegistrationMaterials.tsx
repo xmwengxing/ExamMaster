@@ -58,6 +58,12 @@ const RegistrationMaterials: React.FC = () => {
   const [showBatchAccountModal, setShowBatchAccountModal] = useState(false);
   const [batchAccountResults, setBatchAccountResults] = useState<AccountResult[]>([]);
 
+  // 删除状态
+  const [deleting, setDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [recordToDelete, setRecordToDelete] = useState<string | null>(null);
+  const [showBatchDeleteConfirm, setShowBatchDeleteConfirm] = useState(false);
+
   // 加载报名数据
   const loadRegistrations = async () => {
     setLoading(true);
@@ -427,6 +433,96 @@ const RegistrationMaterials: React.FC = () => {
     setBatchAccountResults([]);
   };
 
+  // 单个删除确认
+  const handleDeleteConfirm = (id: string) => {
+    setRecordToDelete(id);
+    setShowDeleteConfirm(true);
+  };
+
+  // 取消单个删除
+  const handleDeleteCancel = () => {
+    setShowDeleteConfirm(false);
+    setRecordToDelete(null);
+  };
+
+  // 执行单个删除
+  const handleDelete = async () => {
+    if (!recordToDelete) return;
+
+    setDeleting(true);
+    try {
+      const token = localStorage.getItem('edu_token');
+      if (!token) throw new Error('未登录');
+
+      const response = await axios.delete(`/api/registrations/${recordToDelete}`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      if (response.data.success) {
+        // 从列表中移除删除的记录
+        setRegistrations(registrations.filter(r => r.id !== recordToDelete));
+        // 从选中集合中移除
+        const newSelectedIds = new Set(selectedIds);
+        newSelectedIds.delete(recordToDelete);
+        setSelectedIds(newSelectedIds);
+      } else {
+        alert(response.data.error || '删除失败');
+      }
+    } catch (err: any) {
+      console.error('删除报名记录失败:', err);
+      alert(err.response?.data?.error || '网络错误，请稍后重试');
+    } finally {
+      setDeleting(false);
+      setShowDeleteConfirm(false);
+      setRecordToDelete(null);
+    }
+  };
+
+  // 批量删除确认
+  const handleBatchDeleteConfirm = () => {
+    setShowBatchDeleteConfirm(true);
+  };
+
+  // 取消批量删除
+  const handleBatchDeleteCancel = () => {
+    setShowBatchDeleteConfirm(false);
+  };
+
+  // 执行批量删除
+  const handleBatchDelete = async () => {
+    if (selectedIds.size === 0) return;
+
+    setDeleting(true);
+    try {
+      const token = localStorage.getItem('edu_token');
+      if (!token) throw new Error('未登录');
+
+      // 批量删除需要逐个调用API（或者如果后端支持批量删除API可以优化）
+      const deletePromises = Array.from(selectedIds).map(id => 
+        axios.delete(`/api/registrations/${id}`, {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        })
+      );
+
+      await Promise.all(deletePromises);
+
+      // 从列表中移除删除的记录
+      setRegistrations(registrations.filter(r => !selectedIds.has(r.id)));
+      // 清空选中状态
+      setSelectedIds(new Set());
+    } catch (err: any) {
+      console.error('批量删除报名记录失败:', err);
+      alert(err.response?.data?.error || '网络错误，请稍后重试');
+    } finally {
+      setDeleting(false);
+      setShowBatchDeleteConfirm(false);
+    }
+  };
+
   return (
     <div className="space-y-6 pb-20 md:pb-0">
       {/* 页面标题 */}
@@ -479,6 +575,14 @@ const RegistrationMaterials: React.FC = () => {
               已选择 <span className="font-bold text-indigo-600">{selectedIds.size}</span> 条记录
             </div>
             <div className="flex gap-2">
+              <button
+                onClick={handleBatchDeleteConfirm}
+                disabled={selectedIds.size === 0 || deleting}
+                className="bg-rose-600 text-white px-6 py-2 rounded-2xl font-bold text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-rose-700 transition-colors flex items-center gap-2"
+              >
+                <i className={`fa-solid ${deleting ? 'fa-spinner fa-spin' : 'fa-trash'}`}></i>
+                批量删除
+              </button>
               <button
                 onClick={handleBatchCreateAccounts}
                 disabled={selectedIds.size === 0 || creatingAccount}
@@ -610,21 +714,31 @@ const RegistrationMaterials: React.FC = () => {
                         </span>
                       </td>
                       <td className="px-6 py-4">
-                        {record.user_id ? (
-                          <span className="inline-block px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold">
-                            <i className="fa-solid fa-check mr-1"></i>
-                            已生成
-                          </span>
-                        ) : (
+                        <div className="flex items-center gap-2">
+                          {record.user_id ? (
+                            <span className="inline-block px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold">
+                              <i className="fa-solid fa-check mr-1"></i>
+                              已生成
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => handleCreateAccount(record.id)}
+                              disabled={creatingAccount}
+                              className="bg-green-600 text-white px-4 py-1.5 rounded-xl font-bold text-xs disabled:opacity-50 disabled:cursor-not-allowed hover:bg-green-700 transition-colors"
+                            >
+                              <i className="fa-solid fa-user-plus mr-1"></i>
+                              生成账户
+                            </button>
+                          )}
                           <button
-                            onClick={() => handleCreateAccount(record.id)}
-                            disabled={creatingAccount}
-                            className="bg-green-600 text-white px-4 py-1.5 rounded-xl font-bold text-xs disabled:opacity-50 disabled:cursor-not-allowed hover:bg-green-700 transition-colors"
+                            onClick={() => handleDeleteConfirm(record.id)}
+                            disabled={deleting}
+                            className="bg-rose-600 text-white px-4 py-1.5 rounded-xl font-bold text-xs disabled:opacity-50 disabled:cursor-not-allowed hover:bg-rose-700 transition-colors flex items-center"
                           >
-                            <i className="fa-solid fa-user-plus mr-1"></i>
-                            生成账户
+                            <i className="fa-solid fa-trash mr-1"></i>
+                            删除
                           </button>
-                        )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -746,6 +860,98 @@ const RegistrationMaterials: React.FC = () => {
             >
               确定
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* 单个删除确认弹窗 */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-bold text-gray-900">删除确认</h2>
+              <button
+                onClick={handleDeleteCancel}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <i className="fa-solid fa-times text-xl"></i>
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex items-start gap-3">
+                <i className="fa-solid fa-exclamation-circle text-yellow-500 text-xl mt-0.5"></i>
+                <div className="flex-1">
+                  <p className="text-sm text-gray-800 font-medium">
+                    确定要删除这条报名记录吗？此操作不可撤销。
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  onClick={handleDeleteCancel}
+                  disabled={deleting}
+                  className="px-6 py-2 rounded-2xl font-bold text-sm border border-gray-300 text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  className="px-6 py-2 rounded-2xl font-bold text-sm bg-rose-600 text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-rose-700 transition-colors flex items-center gap-2"
+                >
+                  <i className={`fa-solid ${deleting ? 'fa-spinner fa-spin' : 'fa-trash'}`}></i>
+                  确认删除
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 批量删除确认弹窗 */}
+      {showBatchDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-bold text-gray-900">批量删除确认</h2>
+              <button
+                onClick={handleBatchDeleteCancel}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <i className="fa-solid fa-times text-xl"></i>
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex items-start gap-3">
+                <i className="fa-solid fa-exclamation-circle text-red-500 text-xl mt-0.5"></i>
+                <div className="flex-1">
+                  <p className="text-sm text-gray-800 font-medium">
+                    确定要删除选中的 <span className="text-rose-600 font-bold">{selectedIds.size}</span> 条报名记录吗？此操作不可撤销。
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  onClick={handleBatchDeleteCancel}
+                  disabled={deleting}
+                  className="px-6 py-2 rounded-2xl font-bold text-sm border border-gray-300 text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleBatchDelete}
+                  disabled={deleting}
+                  className="px-6 py-2 rounded-2xl font-bold text-sm bg-rose-600 text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-rose-700 transition-colors flex items-center gap-2"
+                >
+                  <i className={`fa-solid ${deleting ? 'fa-spinner fa-spin' : 'fa-trash'}`}></i>
+                  确认删除
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

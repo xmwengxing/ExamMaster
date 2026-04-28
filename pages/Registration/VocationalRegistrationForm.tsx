@@ -38,6 +38,17 @@ const VocationalRegistrationForm: React.FC<VocationalRegistrationFormProps> = ({
   const [searchLoading, setSearchLoading] = useState(false);
   const [foundRecord, setFoundRecord] = useState<any>(null);
   const [existingUser, setExistingUser] = useState<{ exists: boolean; message?: string } | null>(null);
+  // 当前选择的职业
+  const [selectedOccupation, setSelectedOccupation] = useState<string>('');
+  // 人工智能训练师的职务选项
+  const aiTrainerPositions = [
+    '人工智能工程技术人员',
+    '呼叫中心服务员',
+    '电子商务师',
+    '人工智能训练师',
+    '数据标注员',
+    '人工智能算法测试员'
+  ];
 
   // 学历选项
   const educationLevels = [
@@ -129,6 +140,9 @@ const VocationalRegistrationForm: React.FC<VocationalRegistrationFormProps> = ({
   const handleOccupationChange = async (value: string) => {
     console.log('[职业选择] 选择的职业:', value);
     
+    // 更新当前选择的职业状态
+    setSelectedOccupation(value);
+    
     // 清空工种方向选择
     form.setFieldsValue({ occupation_direction: undefined });
     setDirections([]);
@@ -190,7 +204,14 @@ const VocationalRegistrationForm: React.FC<VocationalRegistrationFormProps> = ({
 
     console.log('[专业匹配] 检查参数:', { occupation, major, education, applyLevel });
 
+    // 当条件不满足时，重置专业匹配状态和工作经历禁用状态
     if (!occupation || !major || !education) {
+      // 重置专业匹配状态
+      setMajorMatch({ level4Match: false, level3Match: false });
+      // 重置工作年限和工作经历状态
+      if (applyLevel) {
+        calculateWorkYears(applyLevel, { level4Match: false, level3Match: false });
+      }
       return;
     }
 
@@ -208,6 +229,7 @@ const VocationalRegistrationForm: React.FC<VocationalRegistrationFormProps> = ({
         const result = await response.json();
         console.log('[专业匹配] 匹配结果:', result);
         
+        // 更新匹配结果
         setMajorMatch(result);
         
         // 显示匹配提示
@@ -242,7 +264,7 @@ const VocationalRegistrationForm: React.FC<VocationalRegistrationFormProps> = ({
     if (match.level4Match && applyLevel === '四级') {
       years = 0;
       disabled = true;
-      historyDisabled = false;
+      historyDisabled = true; // 四级专业符合时也禁用工作经历
     }
     // 三级专业符合规则
     else if (match.level3Match && applyLevel === '三级') {
@@ -346,7 +368,15 @@ const handleMajorChange = () => {
   };
 
   const handleResetAndSearch = () => {
+    // 重置表单字段
     form.resetFields();
+    // 重置专业匹配状态
+    setMajorMatch({ level4Match: false, level3Match: false });
+    // 重置工作年限和工作经历状态
+    setWorkYearsDisabled(false);
+    setWorkHistoryDisabled(false);
+    setWorkYearsHint('');
+    // 重置其他状态
     setFoundRecord(null);
     setSearchPhone('');
     setSearchId('');
@@ -445,12 +475,12 @@ const handleMajorChange = () => {
         message.info('认定申报表已生成,可在报名管理中下载', 3);
       }
 
-      // 跳转到成功页面或返回
+      // 跳转到成功页面或返回 - 增加时间让用户看到提示
       setTimeout(() => {
         if (onNavigate) {
           onNavigate('registration');
         }
-      }, 1500);
+      }, 3000);
 
     } catch (error: any) {
       console.error('提交失败:', error);
@@ -940,10 +970,23 @@ const handleMajorChange = () => {
                         name={[field.name, 'position']}
                         rules={[{ required: !workHistoryDisabled, message: '请输入职务' }]}
                       >
-                        <Input 
-                          placeholder="请输入职务"
-                          disabled={workHistoryDisabled}
-                        />
+                        {selectedOccupation === '人工智能训练师' ? (
+                          <Select
+                            placeholder="请选择职务"
+                            disabled={workHistoryDisabled}
+                          >
+                            {aiTrainerPositions.map(position => (
+                              <Option key={position} value={position}>
+                                {position}
+                              </Option>
+                            ))}
+                          </Select>
+                        ) : (
+                          <Input 
+                            placeholder="请输入职务"
+                            disabled={workHistoryDisabled}
+                          />
+                        )}
                       </Form.Item>
                     </Col>
 
