@@ -2,56 +2,80 @@
  * AI 模块服务层
  * 处理 AI 生成、解析和评分的业务逻辑
  */
-
 import db from '../../db.js';
 
 /**
- * 获取 API Key（优先使用用户的，否则使用系统的）
+ * 获取 API 配置（支持多种 AI 提供商）
  * @param {string} userId - 用户ID
- * @returns {Promise<string|null>} API Key
+ * @returns {Promise<Object>} API 配置对象
  */
-async function getApiKey(userId) {
-  // 获取用户的 API Key
+async function getApiConfig(userId) {
+  // 1. 优先使用用户自己的 API Key
   const userResult = await db.getOne(
-    'SELECT deepseek_api_key FROM users WHERE id = $1',
+    'SELECT deepseek_api_key as api_key FROM users WHERE id = $1',
     [userId]
   );
   
-  if (userResult && userResult.deepseek_api_key) {
-    return userResult.deepseek_api_key;
-  }
+  // 2. 读取系统配置（aiProvider、aiBaseUrl、aiModelId）
+  const mainConfig = await db.getOne("SELECT data FROM system_config WHERE id = 'main'");
+  const config = mainConfig?.data || {};
+  const provider = config.aiProvider || 'deepseek';
   
-  // 获取系统的全局 API Key
-  const configResult = await db.getOne(
+  // 3. 确定 baseUrl 和 model
+  const defaultUrls = {
+    deepseek: 'https://api.deepseek.com/v1/chat/completions',
+    glm: 'https://open.bigmodel.cn/api/paas/v4/chat/completions',
+    openai: 'https://api.openai.com/v1/chat/completions',
+    claude: 'https://api.anthropic.com/v1/messages',
+    gemini: 'https://generativelanguage.googleapis.com/v1beta/models',
+    qwen: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation',
+    moonshotai: 'https://api.moonshot.cn/v1/chat/completions',
+  };
+  const defaultModels = {
+    deepseek: 'deepseek-chat',
+    glm: 'glm-4',
+    openai: 'gpt-4-turbo-preview',
+    claude: 'claude-3-opus-20240229',
+    qwen: 'qwen-max',
+    moonshotai: 'moonshot-v1-8k',
+  };
+  
+  const baseUrl = config.aiBaseUrl || defaultUrls[provider] || defaultUrls.deepseek;
+  const model = config.aiModelId || defaultModels[provider] || 'deepseek-chat';
+  
+  // 4. API Key 优先级：用户自己的 > 系统全局的（统一存在 deepseekApiKey 字段）
+  const systemKeyResult = await db.getOne(
     "SELECT value FROM system_config_kv WHERE key = 'deepseekApiKey'"
   );
+  const apiKey = (userResult?.api_key) || systemKeyResult?.value || null;
   
-  return configResult?.value || null;
+  return { provider, baseUrl, model, apiKey };
 }
 
 /**
- * 调用 DeepSeek API 生成内容
+ * 调用 AI API 生成内容
  * @param {string} prompt - 提示词
  * @param {string} userId - 用户ID
  * @returns {Promise<Object>} 生成结果
  */
 export async function generateContent(prompt, userId) {
-  const apiKey = await getApiKey(userId);
+  const config = await getApiConfig(userId);
+  const { provider, baseUrl, model } = config;
   
-  if (!apiKey) {
-    throw new Error('未配置 DeepSeek API Key');
+  if (!provider || !baseUrl) {
+    throw new Error('未配置 AI API Key');
   }
   
-  const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+  // 调用 AI API
+  const response = await fetch(config.baseUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`
+      'Authorization': config.apiKey ? `Bearer ${config.apiKey}` : undefined
     },
     body: JSON.stringify({
-      model: 'deepseek-chat',
+      model: config.model,
       messages: [
-        { role: 'system', content: '你是一位专业的教育助手。' },
         { role: 'user', content: prompt }
       ],
       temperature: 0.7,
@@ -61,7 +85,84 @@ export async function generateContent(prompt, userId) {
   
   if (!response.ok) {
     const error = await response.json();
-    throw new Error(error.error?.message || 'DeepSeek API 调用失败');
+    throw new Error(error.error?.message || 'AI API 调用失败');
+  }
+  
+  const data = await response.json();
+  const text = data.choices[0]?.message?.content || '';
+  
+  return { text };
+}
+
+/**
+ * AI 评分简答题
+ * @param {Object} gradeData - 评分数据
+ * @param {string} gradeData.questionId - 题目ID
+ * @param {string} gradeData.userAnswer - 用户答案
+ * @param {string} gradeData.referenceAnswer - 参考答案
+ * @param {string} userId - 用户ID
+ * @returns {Promise<Object>} 评分结果
+ */
+export async function gradeAnswer(gradeData, userId) {
+  const { questionId, userAnswer, referenceAnswer } = gradeData;
+  
+  if (!userAnswer || !referenceAnswer) {
+    throw new Error('缺少必要参数');
+  }
+  
+  // 限制答案长度
+  if (userAnswer.length > 5000) {
+    throw new Error('答案长度超过限制（最多5000字符）');
+  }
+  
+  const config = await getApiConfig(userId);
+  
+  if (!config.apiKey) {
+    throw new Error('未配置 AI API Key');
+  }
+  
+  // 构建评分提示词
+  const prompt = `你是一位专业的教师，请评估学生的简答题答案。
+
+参考答案：
+${referenceAnswer}
+
+学生答案：
+${userAnswer}
+
+请按以下格式返回评分结果（JSON格式）：
+{
+  "score": 85,
+  "feedback": "答案整体正确，要点完整...",
+  "suggestions": ["建议1", "建议2"]
+}
+
+评分标准：
+- 90-100分：答案完整准确，表述清晰
+- 80-89分：答案基本正确，有小瑕疵
+- 70-79分：答案部分正确，遗漏要点
+- 60-69分：答案不够完整，理解有偏差
+- 60分以下：答案错误或严重偏离主题`;
+
+  const response = await fetch(config.baseUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': config.apiKey ? `Bearer ${config.apiKey}` : undefined
+    },
+    body: JSON.stringify({
+      model: config.model,
+      messages: [
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.3,
+      max_tokens: 1000
+    })
+  });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error?.message || 'AI API 调用失败');
   }
   
   const data = await response.json();
@@ -182,91 +283,4 @@ export async function getAllAnalysis(options) {
     pageSize: parseInt(pageSize),
     totalPages: Math.ceil(countResult.total / parseInt(pageSize))
   };
-}
-
-/**
- * AI 评分简答题
- * @param {Object} gradeData - 评分数据
- * @param {string} gradeData.questionId - 题目ID
- * @param {string} gradeData.userAnswer - 用户答案
- * @param {string} gradeData.referenceAnswer - 参考答案
- * @param {string} userId - 用户ID
- * @returns {Promise<Object>} 评分结果
- */
-export async function gradeAnswer(gradeData, userId) {
-  const { questionId, userAnswer, referenceAnswer } = gradeData;
-  
-  if (!userAnswer || !referenceAnswer) {
-    throw new Error('缺少必要参数');
-  }
-  
-  // 限制答案长度
-  if (userAnswer.length > 5000) {
-    throw new Error('答案长度超过限制（最多5000字符）');
-  }
-  
-  const apiKey = await getApiKey(userId);
-  
-  if (!apiKey) {
-    throw new Error('未配置 DeepSeek API Key');
-  }
-  
-  // 构建评分提示词
-  const prompt = `你是一位专业的教师，请评估学生的简答题答案。
-
-参考答案：
-${referenceAnswer}
-
-学生答案：
-${userAnswer}
-
-请按以下格式返回评分结果（JSON格式）：
-{
-  "score": 85,
-  "feedback": "答案整体正确，要点完整...",
-  "suggestions": ["建议1", "建议2"]
-}
-
-评分标准：
-- 90-100分：答案完整准确，表述清晰
-- 80-89分：答案基本正确，有小瑕疵
-- 70-79分：答案部分正确，遗漏要点
-- 60-69分：答案不够完整，理解有偏差
-- 60分以下：答案错误或严重偏离主题`;
-
-  const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`
-    },
-    body: JSON.stringify({
-      model: 'deepseek-chat',
-      messages: [
-        { role: 'user', content: prompt }
-      ],
-      temperature: 0.3,
-      max_tokens: 1000
-    })
-  });
-  
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error?.message || 'DeepSeek API 调用失败');
-  }
-  
-  const data = await response.json();
-  const text = data.choices[0]?.message?.content || '';
-  
-  // 尝试解析JSON结果
-  try {
-    return JSON.parse(text);
-  } catch (e) {
-    // 如果不是JSON格式，返回原始文本
-    return {
-      score: 0,
-      feedback: text,
-      suggestions: []
-    };
-  }
 }

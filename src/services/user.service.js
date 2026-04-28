@@ -74,34 +74,46 @@ async function updateUserProfile(db, userId, updates) {
     mistakeCount: 'mistake_count',
     dailyGoal: 'daily_goal'
   };
-  
+
   // 转换字段名并过滤掉 id
   const dbFields = [];
   const values = [];
-  
+
   Object.keys(updates).forEach(key => {
     if (key === 'id') return;
-    
+
+    let value = updates[key];
+
+    // 过滤掉字符串 "null" 和 "undefined"，将它们转换为真正的 null
+    if (value === 'null' || value === 'undefined' || value === '') {
+      value = null;
+    }
+
     // 转换为数据库字段名
     const dbField = fieldMapping[key] || key;
     dbFields.push(dbField);
-    
+
     // 处理值：对象类型转为 JSON 字符串
-    const value = typeof updates[key] === 'object' ? JSON.stringify(updates[key]) : updates[key];
+    if (value !== null && typeof value === 'object') {
+      value = JSON.stringify(value);
+    }
+
     values.push(value);
   });
-  
+
   if (dbFields.length === 0) {
     return;
   }
-  
+
+  // 修复：使用 $1, $2, $3... 格式的占位符
   const setClause = dbFields.map((field, i) => `${field} = $${i + 1}`).join(', ');
-  
+
   await db.execute(
     `UPDATE users SET ${setClause} WHERE id = $${dbFields.length + 1}`,
     [...values, userId]
   );
 }
+
 
 /**
  * 修改用户密码

@@ -17,6 +17,7 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({ config, onUpdate, onCha
   const store = useAppStore();
   const [form, setForm] = useState<any>(config || defaultForm);
   const [passForm, setPassForm] = useState({ old: '', newP: '', confirm: '' });
+  const [showApiKey, setShowApiKey] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const bannerFileRef = useRef<HTMLInputElement>(null);
   const [activeBannerId, setActiveBannerId] = useState<string | null>(null);
@@ -1272,22 +1273,116 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({ config, onUpdate, onCha
                   <option value="claude">Claude (Anthropic)</option>
                   <option value="gemini">Gemini (Google)</option>
                   <option value="wenxin">文心一言 (百度)</option>
+                  <option value="qwen">通义千问 (阿里云)</option>
+                  <option value="glm">智谱清言 (GLM)</option>
+                  <option value="moonshotai">月之暗面 (Moonshot AI)</option>
+                  <option value="minimaxai">MiniMax AI</option>
+                  <option value="openai-completions">OpenAI Completions（自定义）</option>
                 </select>
               </div>
 
               <div className="bg-white/80 backdrop-blur-sm p-6 rounded-2xl border border-indigo-100 space-y-4">
+                {/* 基础地址配置 */}
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-indigo-600 uppercase tracking-widest ml-1 flex items-center gap-2">
-                    <i className="fa-solid fa-key"></i> 管理员全局 API Key
+                    <i className="fa-solid fa-server"></i> 基础地址（Base URL）
                   </label>
                   <input 
-                    type="password"
+                    type="text"
                     className="w-full bg-white border-2 border-indigo-100 rounded-xl px-5 py-3 font-mono text-sm outline-none focus:ring-2 focus:ring-indigo-200 transition-all" 
-                    value={form?.deepseekApiKey || ''} 
-                    placeholder="sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                    onChange={e => setForm(prev => ({ ...(prev || defaultForm), deepseekApiKey: e.target.value }))} 
+                    value={form?.aiBaseUrl || (() => {
+                      // 根据不同服务商设置默认基础地址
+                      const provider = form?.aiProvider || 'deepseek';
+                      const defaultUrls = {
+                        'deepseek': 'https://api.deepseek.com',
+                        'openai': 'https://api.openai.com/v1',
+                        'claude': 'https://api.anthropic.com',
+                        'gemini': 'https://generativelanguage.googleapis.com',
+                        'wenxin': 'https://aip.baidubce.com',
+                        'qwen': 'https://dashscope.aliyuncs.com/api/v1',
+                        'glm': 'https://open.bigmodel.cn/api/paas/v4',
+                        'moonshotai': 'https://api.moonshot.cn/v1',
+                        'minimaxai': 'https://api.minimax.chat/v1',
+                        'openai-completions': ''
+                      };
+                      return defaultUrls[provider] || '';
+                    })()} 
+                    placeholder={form?.aiProvider === 'openai-completions' ? '请输入自定义基础地址' : '默认基础地址'}
+                    onChange={e => setForm(prev => ({ ...(prev || defaultForm), aiBaseUrl: e.target.value }))} 
                   />
+                  <p className="text-[10px] text-indigo-500 font-medium italic ml-1">
+                    {form?.aiProvider === 'openai-completions' 
+                      ? '自定义模式需要手动填写完整的 API 基础地址' 
+                      : '留空则使用默认地址，可自定义代理地址'}
+                  </p>
                 </div>
+
+                {/* 模型ID配置 */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-indigo-600 uppercase tracking-widest ml-1 flex items-center gap-2">
+                    <i className="fa-solid fa-microchip"></i> 模型 ID（Model ID）
+                  </label>
+                  <input 
+                    type="text"
+                    className="w-full bg-white border-2 border-indigo-100 rounded-xl px-5 py-3 font-mono text-sm outline-none focus:ring-2 focus:ring-indigo-200 transition-all" 
+                    value={form?.aiModelId || (() => {
+                      // 根据不同服务商设置默认模型ID
+                      const provider = form?.aiProvider || 'deepseek';
+                      const defaultModels = {
+                        'deepseek': 'deepseek-chat',
+                        'openai': 'gpt-4-turbo-preview',
+                        'claude': 'claude-3-opus-20240229',
+                        'gemini': 'gemini-pro',
+                        'wenxin': 'ERNIE-Bot-4',
+                        'qwen': 'qwen-max',
+                        'glm': 'glm-4',
+                        'moonshotai': 'moonshot-v1-8k',
+                        'minimaxai': 'abab6-chat',
+                        'openai-completions': ''
+                      };
+                      return defaultModels[provider] || '';
+                    })()} 
+                    placeholder={form?.aiProvider === 'openai-completions' ? '请输入模型ID，如：gpt-3.5-turbo' : '默认模型ID'}
+                    onChange={e => setForm(prev => ({ ...(prev || defaultForm), aiModelId: e.target.value }))} 
+                  />
+                  <p className="text-[10px] text-indigo-500 font-medium italic ml-1">
+                    {form?.aiProvider === 'openai-completions' 
+                      ? '自定义模式需要手动填写模型ID' 
+                      : '留空则使用推荐模型，可根据需要切换其他模型'}
+                  </p>
+                </div>
+
+                {/* API Key配置 */}
+                <div className="space-y-2">
+                   <label className="text-[10px] font-black text-indigo-600 uppercase tracking-widest ml-1 flex items-center gap-2">
+                     <i className="fa-solid fa-key"></i> 管理员全局 API Key
+                   </label>
+                   <div className="flex gap-2">
+                     <input 
+                       type={showApiKey ? 'text' : 'password'}
+                       className="flex-1 bg-white border-2 border-indigo-100 rounded-xl px-5 py-3 font-mono text-sm outline-none focus:ring-2 focus:ring-indigo-200 transition-all" 
+                       value={form?.aiApiKeys?.[form?.aiProvider || 'deepseek'] ?? form?.deepseekApiKey ?? ''} 
+                       placeholder="请输入 API Key"
+                       onChange={e => {
+                         const provider = form?.aiProvider || 'deepseek';
+                         setForm((prev: any) => ({
+                           ...(prev || defaultForm),
+                           aiApiKeys: { ...(prev?.aiApiKeys || {}), [provider]: e.target.value },
+                           // 兼容旧字段：deepseek 服务商同步写入 deepseekApiKey
+                           ...(provider === 'deepseek' ? { deepseekApiKey: e.target.value } : {})
+                         }));
+                       }}
+                     />
+                     <button
+                       type="button"
+                       onClick={() => setShowApiKey(v => !v)}
+                       className="px-4 py-3 bg-indigo-50 border-2 border-indigo-100 rounded-xl text-indigo-600 hover:bg-indigo-100 transition-all text-sm"
+                       title={showApiKey ? '隐藏' : '查看'}
+                     >
+                       <i className={`fa-solid ${showApiKey ? 'fa-eye-slash' : 'fa-eye'}`}></i>
+                     </button>
+                   </div>
+                 </div>
 
                 {/* API Key 获取链接 */}
                 <div className="flex flex-wrap gap-2">
@@ -1316,6 +1411,34 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({ config, onUpdate, onCha
                       <i className="fa-solid fa-external-link-alt"></i> 获取文心一言 API Key
                     </a>
                   )}
+                  {form?.aiProvider === 'qwen' && (
+                    <a href="https://dashscope.console.aliyun.com/apiKey" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-black hover:bg-indigo-700 transition-all shadow-sm">
+                      <i className="fa-solid fa-external-link-alt"></i> 获取通义千问 API Key
+                    </a>
+                  )}
+                  {form?.aiProvider === 'glm' && (
+                    <a href="https://open.bigmodel.cn/usercenter/apikeys" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-black hover:bg-indigo-700 transition-all shadow-sm">
+                      <i className="fa-solid fa-external-link-alt"></i> 获取智谱清言 API Key
+                    </a>
+                  )}
+                  {form?.aiProvider === 'moonshotai' && (
+                    <a href="https://platform.moonshot.cn/console/api-keys" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-black hover:bg-indigo-700 transition-all shadow-sm">
+                      <i className="fa-solid fa-external-link-alt"></i> 获取月之暗面 API Key
+                    </a>
+                  )}
+                  {form?.aiProvider === 'minimaxai' && (
+                    <a href="https://api.minimax.chat/user-center/basic-information/interface-key" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-black hover:bg-indigo-700 transition-all shadow-sm">
+                      <i className="fa-solid fa-external-link-alt"></i> 获取 MiniMax API Key
+                    </a>
+                  )}
+                  {form?.aiProvider === 'openai-completions' && (
+                    <div className="bg-amber-50 px-4 py-2 rounded-xl border border-amber-200">
+                      <p className="text-xs text-amber-700 font-bold">
+                        <i className="fa-solid fa-circle-info mr-1"></i>
+                        自定义模式：请根据您的服务商获取 API Key
+                      </p>
+                    </div>
+                  )}
                 </div>
                 
                 <div className="bg-indigo-50/50 p-4 rounded-xl border border-indigo-100">
@@ -1328,6 +1451,8 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({ config, onUpdate, onCha
                         <li>• 学员可在个人设置中配置自己的 API Key，优先级高于管理员配置</li>
                         <li>• 如果管理员和学员都未配置，AI 功能将无法使用</li>
                         <li>• 推荐使用 DeepSeek，性价比高且响应速度快</li>
+                        <li>• 基础地址和模型ID留空时将使用默认值，可根据需要自定义</li>
+                        <li>• 自定义模式（openai-completions）需要手动填写所有配置项</li>
                       </ul>
                     </div>
                   </div>

@@ -27,6 +27,7 @@ import conversionRoutes from './conversion.routes.js';
 import uploadRoutes from './upload.routes.js';
 import importRoutes from './import.routes.js';
 import logsRoutes from './logs.routes.js';
+import registrationRoutes from './registration.routes.js';
 
 /**
  * 注册所有路由到主路由器
@@ -99,6 +100,9 @@ export function registerRoutes(app) {
   
   // 错误日志路由
   app.use('/api/logs', logsRoutes);
+  
+  // 报名管理路由
+  app.use('/api', registrationRoutes);
   
   console.log('✅ 所有路由已注册');
 }

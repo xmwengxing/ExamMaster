@@ -55,6 +55,8 @@ services:
       - ./db.js:/app/db.js:ro
       - ./utils:/app/utils:ro
       - ./src:/app/src:ro
+      - ./registration-templates:/app/registration-templates:ro
+      - ./uploads:/app/uploads
     ports:
       - "3301:3001"
     depends_on:
@@ -82,7 +84,6 @@ services:
       - ./nginx/ssl:/etc/nginx/ssl:ro
     ports:
       - "80:80"
-      - "443:443"
     depends_on:
       api:
         condition: service_healthy

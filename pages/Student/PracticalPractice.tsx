@@ -31,7 +31,18 @@ const PracticalPractice: React.FC<PracticalPracticeProps> = ({ onBackToPractice 
     
     const initial: Record<string, string> = {};
     task.parts.forEach(p => {
-      if (p.type === PracticalPartType.BLANK) initial[p.id] = '';
+      if (p.type === PracticalPartType.BLANK || p.type === PracticalPartType.CODE_BLANK) {
+        initial[p.id] = '';
+      } else if (p.type === PracticalPartType.CODE) {
+        // 初始化代码片段中的占位符答案
+        const placeholders = p.content.match(/<\d+>/g);
+        if (placeholders) {
+          placeholders.forEach(placeholder => {
+            const placeholderNumber = placeholder.match(/<(\d+)>/)![1];
+            initial[`${p.id}-placeholder-${placeholderNumber}`] = '';
+          });
+        }
+      }
     });
     setUserAnswers(initial);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -94,6 +105,16 @@ const PracticalPractice: React.FC<PracticalPracticeProps> = ({ onBackToPractice 
     }
   };
 
+  // 检查当前任务是否是代码补全题
+  const isCodeCompletionTask = () => {
+    if (!selectedTask) return false;
+    return selectedTask.parts.some(p => 
+      p.type === PracticalPartType.CODE || 
+      p.type === PracticalPartType.CODE_BLANK ||
+      (p.type === PracticalPartType.CODE && /<\d+>/.test(p.content))
+    );
+  };
+
   const handleAiEvaluate = async () => {
     if (!selectedTask || isAiEvaluating) return;
     
@@ -118,9 +139,9 @@ const PracticalPractice: React.FC<PracticalPracticeProps> = ({ onBackToPractice 
       let referenceAnswer = '';
       
       selectedTask.parts.forEach(p => {
-        if (p.type === PracticalPartType.STEM) {
+        if (p.type === PracticalPartType.STEM || p.type === PracticalPartType.CODE) {
           requirements += p.content + '\n\n';
-        } else if (p.type === PracticalPartType.BLANK) {
+        } else if (p.type === PracticalPartType.BLANK || p.type === PracticalPartType.CODE_BLANK) {
           userAnswer += (userAnswers[p.id] || '(未作答)') + '\n\n';
         } else if (p.type === PracticalPartType.ANSWER) {
           referenceAnswer += p.content + '\n\n';
@@ -173,28 +194,67 @@ const PracticalPractice: React.FC<PracticalPracticeProps> = ({ onBackToPractice 
             // 在主练习界面不显示参考答案，仅在提交后的弹窗中显示
             if (part.type === PracticalPartType.ANSWER) return null;
 
+            // 检查是否是包含占位符的代码片段
+            const hasPlaceholders = part.type === PracticalPartType.CODE && /<\d+>/.test(part.content);
+
             return (
               <div 
                 key={part.id} 
                 className={`p-4 md:p-8 rounded-2xl md:rounded-[2.5rem] border shadow-sm transition-all duration-500 ${
-                  part.type === PracticalPartType.STEM ? 'bg-white border-gray-100' : 'bg-white border-indigo-100 ring-2 md:ring-4 ring-indigo-50/30'
+                  part.type === PracticalPartType.STEM ? 'bg-white border-gray-100' :
+                  part.type === PracticalPartType.CODE ? 'bg-gray-50 border-gray-200' :
+                  'bg-white border-indigo-100 ring-2 md:ring-4 ring-indigo-50/30'
                 }`}
               >
                 <div className="flex items-center gap-2 mb-4 md:mb-6">
                   <span className={`text-[9px] md:text-[10px] font-black uppercase px-2 md:px-3 py-0.5 md:py-1 rounded-full ${
-                    part.type === PracticalPartType.STEM ? 'bg-gray-100 text-gray-500' : 'bg-indigo-600 text-white shadow-md'
+                    part.type === PracticalPartType.STEM ? 'bg-gray-100 text-gray-500' :
+                    part.type === PracticalPartType.CODE ? 'bg-blue-100 text-blue-600' :
+                    'bg-indigo-600 text-white shadow-md'
                   }`}>
-                    {part.type === PracticalPartType.STEM ? `任务要求` : '你的作答区'}
+                    {part.type === PracticalPartType.STEM ? `任务要求` :
+                     part.type === PracticalPartType.CODE ? '代码片段' :
+                     '你的作答区'}
                   </span>
                 </div>
 
                 {part.type === PracticalPartType.STEM ? (
                   <div className="text-gray-800 text-sm md:text-lg font-medium leading-relaxed markdown-body whitespace-pre-wrap overflow-x-auto" 
                        dangerouslySetInnerHTML={{ __html: (window as any).marked.parse(part.content) }} />
+                ) : part.type === PracticalPartType.CODE ? (
+                  <div className="bg-gray-800 text-gray-100 p-4 md:p-6 rounded-xl md:rounded-2xl font-mono text-sm overflow-x-auto shadow-inner whitespace-pre-wrap">
+                    {hasPlaceholders ? (
+                      // 渲染带有占位符的代码
+                      <div className="relative">
+                        {part.content.split(/(<\d+>)/).map((segment, i) => {
+                          // 检查是否是占位符
+                          if (/<\d+>/.test(segment)) {
+                            const placeholderNumber = segment.match(/<(\d+)>/)![1];
+                            return (
+                              <span key={i} className="inline-block">
+                                <input
+                                  type="text"
+                                  className="bg-indigo-600 text-white px-2 py-1 rounded text-xs mr-1 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                                  value={userAnswers[`${part.id}-placeholder-${placeholderNumber}`] || ''}
+                                  readOnly={isSubmitted}
+                                  onChange={e => handleUpdateAnswer(`${part.id}-placeholder-${placeholderNumber}`, e.target.value)}
+                                  placeholder={`填写代码`}
+                                />
+                              </span>
+                            );
+                          }
+                          return <span key={i}>{segment}</span>;
+                        })}
+                      </div>
+                    ) : (
+                      // 普通代码片段
+                      part.content
+                    )}
+                  </div>
                 ) : (
                   <div className="space-y-3">
                     <textarea 
-                      className={`w-full rounded-xl md:rounded-2xl p-3 md:p-6 text-sm md:text-base font-medium h-48 md:h-64 outline-none border-2 transition-all ${
+                      className={`w-full rounded-xl md:rounded-2xl p-3 md:p-6 text-sm md:text-base font-mono h-48 md:h-64 outline-none border-2 transition-all ${
                         isSubmitted 
                           ? 'bg-gray-50 border-transparent text-gray-500 cursor-not-allowed shadow-inner' 
                           : 'bg-white border-gray-100 focus:border-indigo-400 shadow-sm'
@@ -202,7 +262,7 @@ const PracticalPractice: React.FC<PracticalPracticeProps> = ({ onBackToPractice 
                       value={userAnswers[part.id] || ''}
                       readOnly={isSubmitted}
                       onChange={e => handleUpdateAnswer(part.id, e.target.value)}
-                      placeholder="请详细录入你的答案、代码实现或操作步骤说明..."
+                      placeholder="请在此处填写代码..."
                     />
                     {isSubmitted && (
                       <p className="text-xs text-indigo-400 font-bold flex items-center gap-2">
@@ -240,7 +300,7 @@ const PracticalPractice: React.FC<PracticalPracticeProps> = ({ onBackToPractice 
                   <p className="text-[9px] md:text-xs text-gray-400 font-bold mt-1 uppercase tracking-widest">对照标准答案，分析作答优劣</p>
                 </div>
                 <div className="flex gap-2 md:gap-4">
-                  {!viewingRecord && (
+                  {!viewingRecord && isCodeCompletionTask() && (
                     <button 
                       onClick={handleAiEvaluate}
                       disabled={isAiEvaluating}
@@ -300,35 +360,71 @@ const PracticalPractice: React.FC<PracticalPracticeProps> = ({ onBackToPractice 
                      part.content.includes('class ') ||
                      part.content.includes('{') && part.content.includes('}'));
                   
-                  const isUserCodeAnswer = part.type === PracticalPartType.BLANK && 
+                  const isUserCodeAnswer = (part.type === PracticalPartType.BLANK || part.type === PracticalPartType.CODE_BLANK) && 
                     (userAnswers[part.id]?.includes('function') ||
                      userAnswers[part.id]?.includes('const ') ||
                      userAnswers[part.id]?.includes('let ') ||
                      userAnswers[part.id]?.includes('{') && userAnswers[part.id]?.includes('}'));
+                  
+                  // 检查是否是包含占位符的代码片段
+                  const hasPlaceholders = part.type === PracticalPartType.CODE && /<\d+>/.test(part.content);
 
                   return (
                     <div key={part.id} className={`p-4 md:p-8 rounded-2xl md:rounded-[2.5rem] border shadow-sm transition-all ${
                       part.type === PracticalPartType.STEM ? 'bg-white' :
-                      part.type === PracticalPartType.BLANK ? 'bg-indigo-50/30 border-indigo-100' :
+                      part.type === PracticalPartType.CODE ? 'bg-gray-50 border-gray-200' :
+                      part.type === PracticalPartType.BLANK || part.type === PracticalPartType.CODE_BLANK ? 'bg-indigo-50/30 border-indigo-100' :
                       'bg-amber-50 border-amber-200 border-2 border-dashed'
                     }`}>
                       <div className="flex items-center gap-2 mb-3 md:mb-4">
                         <span className={`text-[9px] md:text-[10px] font-black uppercase px-2 py-0.5 rounded-lg ${
                           part.type === PracticalPartType.STEM ? 'bg-gray-100 text-gray-500' :
-                          part.type === PracticalPartType.BLANK ? 'bg-indigo-600 text-white' :
+                          part.type === PracticalPartType.CODE ? 'bg-blue-100 text-blue-600' :
+                          part.type === PracticalPartType.BLANK || part.type === PracticalPartType.CODE_BLANK ? 'bg-indigo-600 text-white' :
                           'bg-amber-600 text-white'
                         }`}>
                           {part.type === PracticalPartType.STEM ? `环节描述` :
-                           part.type === PracticalPartType.BLANK ? '你的最终作答' : '标准参考答案'}
+                           part.type === PracticalPartType.CODE ? '代码片段' :
+                           part.type === PracticalPartType.BLANK ? '你的最终作答' :
+                           part.type === PracticalPartType.CODE_BLANK ? '你的代码作答' :
+                           '标准参考答案'}
                         </span>
                       </div>
 
                       {part.type === PracticalPartType.STEM ? (
                         <div className="text-gray-700 text-sm md:text-base font-medium leading-relaxed markdown-body overflow-x-auto" 
                              dangerouslySetInnerHTML={{ __html: (window as any).marked.parse(part.content) }} />
-                      ) : part.type === PracticalPartType.BLANK ? (
+                      ) : part.type === PracticalPartType.CODE ? (
+                        <div className="bg-gray-800 text-gray-100 p-4 md:p-6 rounded-xl md:rounded-2xl font-mono text-sm overflow-x-auto shadow-inner whitespace-pre-wrap">
+                          {hasPlaceholders ? (
+                            // 渲染带有学员答案的占位符代码
+                            <div className="relative">
+                              {part.content.split(/(<\d+>)/).map((segment, i) => {
+                                // 检查是否是占位符
+                                if (/<\d+>/.test(segment)) {
+                                  const placeholderNumber = segment.match(/<(\d+)>/)![1];
+                                  const userAnswer = userAnswers[`${part.id}-placeholder-${placeholderNumber}`] || '';
+                                  return (
+                                    <span key={i} className="inline-block">
+                                      <span className={`px-2 py-1 rounded text-xs mr-1 ${
+                                        userAnswer ? 'bg-emerald-600 text-white' : 'bg-indigo-600 text-white'
+                                      }`}>
+                                        {userAnswer || segment}
+                                      </span>
+                                    </span>
+                                  );
+                                }
+                                return <span key={i}>{segment}</span>;
+                              })}
+                            </div>
+                          ) : (
+                            // 普通代码片段
+                            part.content
+                          )}
+                        </div>
+                      ) : part.type === PracticalPartType.BLANK || part.type === PracticalPartType.CODE_BLANK ? (
                         <div className={`p-3 md:p-6 bg-white rounded-xl md:rounded-2xl border border-indigo-50 text-indigo-900 font-medium text-xs md:text-sm leading-relaxed shadow-inner ${
-                          isUserCodeAnswer ? 'overflow-x-auto' : 'whitespace-pre-wrap break-words'
+                          part.type === PracticalPartType.CODE_BLANK || isUserCodeAnswer ? 'font-mono overflow-x-auto' : 'whitespace-pre-wrap break-words'
                         }`}>
                           {userAnswers[part.id] || <span className="italic text-gray-300">未作答</span>}
                         </div>

@@ -29,12 +29,14 @@ export async function getSystemConfig(db) {
  * @returns {Promise<void>}
  */
 export async function updateSystemConfig(db, configData) {
-  // 提取 deepseekApiKey
+  // 提取 deepseekApiKey 和 glmApiKey
   const deepseekApiKey = configData.deepseekApiKey;
+  const glmApiKey = configData.glmApiKey;
   
-  // 从主配置中移除 deepseekApiKey（它将单独存储）
+  // 从主配置中移除 API Key（它们将单独存储）
   const mainConfigData = { ...configData };
   delete mainConfigData.deepseekApiKey;
+  delete mainConfigData.glmApiKey;
   
   // 保存主配置到 system_config 表（使用 UPSERT）
   await db.execute(
@@ -47,6 +49,14 @@ export async function updateSystemConfig(db, configData) {
     await db.execute(
       "INSERT INTO system_config_kv (key, value) VALUES ('deepseekApiKey', $1) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value",
       [deepseekApiKey || '']
+    );
+  }
+  
+  // 保存 glmApiKey 到 system_config_kv 表
+  if (glmApiKey !== undefined) {
+    await db.execute(
+      "INSERT INTO system_config_kv (key, value) VALUES ('glmApiKey', $1) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value", 
+      [glmApiKey || '']
     );
   }
 }

@@ -26,7 +26,7 @@ interface LayoutProps {
 const Layout: React.FC<LayoutProps> = ({ children, user, activeTab, onTabChange, onLogout, themeConfig }) => {
   const isStudent = user.role === UserRole.STUDENT;
   const isSuperAdmin = user.phone === 'admin';
-  const [expandedMenus, setExpandedMenus] = useState<string[]>(['banks']); // 默认展开题库管理
+  const [expandedMenus, setExpandedMenus] = useState<string[]>(['banks', 'students']); // 默认展开题库管理和学员管理
   
   // 确保themeConfig不为null或undefined
   const config = themeConfig || {};
@@ -45,7 +45,18 @@ const Layout: React.FC<LayoutProps> = ({ children, user, activeTab, onTabChange,
   const adminTabs: MenuItem[] = [
     { id: 'dashboard', icon: 'fa-chart-line', label: '数据看板' },
     { id: 'admin-user', icon: 'fa-user-gear', label: '权限管理' },
-    { id: 'students', icon: 'fa-users', label: '学员管理' },
+    { 
+      id: 'students', 
+      icon: 'fa-users', 
+      label: '学员管理',
+      hasSubmenu: true,
+      submenu: [
+        { id: 'students', icon: 'fa-user', label: '账号管理' },
+        { id: 'registration-materials', icon: 'fa-file-alt', label: '报名材料' },
+        { id: 'major-forms', icon: 'fa-table', label: '专业表单' },
+        { id: 'occupation-management', icon: 'fa-briefcase', label: '职业工种管理' },
+      ]
+    },
     { 
       id: 'banks', 
       icon: 'fa-folder-tree', 
@@ -118,7 +129,8 @@ const Layout: React.FC<LayoutProps> = ({ children, user, activeTab, onTabChange,
                   <button
                     onClick={() => toggleMenu(tab.id)}
                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                      ['banks', 'question-bank-converter', 'import-manager'].includes(activeTab)
+                      (tab.id === 'banks' && ['banks', 'question-bank-converter', 'import-manager'].includes(activeTab)) ||
+                      (tab.id === 'students' && ['students', 'registration-materials', 'major-forms'].includes(activeTab))
                         ? 'bg-indigo-50 text-indigo-600 font-bold' 
                         : 'text-gray-500 hover:bg-gray-100 font-medium'
                     }`}

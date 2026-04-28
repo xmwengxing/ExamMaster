@@ -54,13 +54,15 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
     }
   };
 
+  const store = useAppStore();
+
   const handleSaveApiKey = async () => {
     setIsSavingApiKey(true);
     try {
       // 保存 API Key 和 AI 配置
       await onUpdateApiKey(apiKey);
       // 保存其他 AI 配置
-      await useAppStore.getState().updateProfile({
+      await store.updateProfile({
         deepseekApiKey: apiKey,
         aiProvider,
         ttsSpeed,

@@ -111,7 +111,9 @@ export interface SrsRecord {
 export enum PracticalPartType {
   STEM = 'STEM',
   BLANK = 'BLANK',
-  ANSWER = 'ANSWER'
+  ANSWER = 'ANSWER',
+  CODE = 'CODE',
+  CODE_BLANK = 'CODE_BLANK'
 }
 
 export interface PracticalTaskPart {

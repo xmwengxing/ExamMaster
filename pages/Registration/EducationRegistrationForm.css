@@ -1,0 +1,78 @@
+/* 学历教育报名表单样式 */
+.education-registration-form {
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+  background: #f0f2f5;
+  min-height: calc(100vh - 64px);
+}
+
+.form-header {
+  text-align: center;
+  margin-bottom: 32px;
+  padding: 24px;
+  background: white;
+  border-radius: 8px;
+}
+
+.form-header h2 {
+  margin-bottom: 8px;
+  color: #262626;
+  font-size: 24px;
+}
+
+.form-header p {
+  color: #8c8c8c;
+  margin-bottom: 0;
+}
+
+.form-section {
+  margin-bottom: 24px;
+  border-radius: 8px;
+}
+
+.form-section .ant-card-head {
+  background: #fafafa;
+  border-bottom: 2px solid #1890ff;
+}
+
+.form-section .ant-card-head-title {
+  font-weight: 600;
+  color: #262626;
+}
+
+.form-actions {
+  text-align: center;
+  padding: 24px;
+  background: white;
+  border-radius: 8px;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .education-registration-form {
+    padding: 16px;
+  }
+
+  .form-header {
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+
+  .form-section {
+    margin-bottom: 16px;
+  }
+
+  .form-actions {
+    padding: 16px;
+  }
+
+  .form-actions button {
+    width: 100%;
+    margin-bottom: 8px;
+  }
+
+  .form-actions button:last-child {
+    margin-bottom: 0;
+  }
+}

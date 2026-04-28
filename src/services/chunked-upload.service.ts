@@ -252,7 +252,8 @@ export class ChunkedUploadService {
     // 查找过期的会话
     const result = await db.query(
       `SELECT session_id FROM upload_sessions
-       WHERE expires_at < NOW() AND status != 'completed'`
+       WHERE expires_at < NOW() AND status != 'completed'`,
+      []
     );
 
     let cleanedCount = 0;

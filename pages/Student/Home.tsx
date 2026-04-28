@@ -121,6 +121,7 @@ const StudentHome: React.FC<HomeProps> = ({
     { id: 'mistakes', label: '错题本', icon: 'fa-fire', color: 'rose', desc: '攻坚难点', show: hasBank },
     { id: 'practical', label: '实操模拟', icon: 'fa-laptop-code', color: 'cyan', desc: '实战演练', show: hasPractical },
     { id: 'videos', label: '视频课程', icon: 'fa-video', color: 'purple', desc: '名师讲堂', show: hasVideo },
+    { id: 'registration', label: '报名登记', icon: 'fa-user-plus', color: 'teal', desc: '在线报名', show: true },
   ].filter(a => a.show !== false);
 
   const handleActionClick = (id: string) => {
@@ -137,6 +138,8 @@ const StudentHome: React.FC<HomeProps> = ({
       onNavigate('videos');
     } else if (id === 'practical') {
       onNavigate('practical-practice');
+    } else if (id === 'registration') {
+      onNavigate('registration');
     } else {
       // 进入顺序练习 / 背题模式时，始终带上当前题库 ID，避免后续切换题库导致进度错乱
       onNavigate('practice-mode', { mode: id, bankId: activeBank?.id });
@@ -296,7 +299,8 @@ const StudentHome: React.FC<HomeProps> = ({
             amber: 'bg-amber-50 text-amber-600 group-hover:bg-amber-600',
             rose: 'bg-rose-50 text-rose-600 group-hover:bg-rose-600',
             cyan: 'bg-cyan-50 text-cyan-600 group-hover:bg-cyan-600',
-            purple: 'bg-purple-50 text-purple-600 group-hover:bg-purple-600'
+            purple: 'bg-purple-50 text-purple-600 group-hover:bg-purple-600',
+            teal: 'bg-teal-50 text-teal-600 group-hover:bg-teal-600'
           };
 
           // 判断是否需要禁用（顺序练习和背题模式在加载时禁用）

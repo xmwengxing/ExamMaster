@@ -30,6 +30,14 @@ import AiAnalysisViewer from './pages/Admin/AiAnalysisViewer';
 import QuestionBankConverter from './pages/Admin/QuestionBankConverter';
 import ImportManager from './pages/Admin/ImportManager';
 import SimpleImportManager from './pages/Admin/SimpleImportManager';
+import RegistrationMaterials from './pages/Admin/RegistrationMaterials';
+import MajorForms from './pages/Admin/MajorForms';
+import OccupationManagement from './pages/Admin/OccupationManagement';
+import { 
+  RegistrationTypeSelector, 
+  EducationRegistrationForm, 
+  VocationalRegistrationForm 
+} from './pages/Registration';
 
 const App: React.FC = () => {
   const store = useAppStore();
@@ -293,6 +301,24 @@ const App: React.FC = () => {
   }
 
   if (!store.currentUser) {
+    // 未登录状态下，如果访问报名页面，直接显示报名页面
+    console.log('[App] 未登录状态，当前 activeTab:', activeTab);
+    
+    if (activeTab === 'registration') {
+      console.log('[App] 渲染报名类型选择页面');
+      return <RegistrationTypeSelector onNavigate={setActiveTab} />;
+    }
+    if (activeTab === 'registration-education') {
+      console.log('[App] 渲染学历教育报名表单');
+      return <EducationRegistrationForm onNavigate={setActiveTab} />;
+    }
+    if (activeTab === 'registration-vocational') {
+      console.log('[App] 渲染职业技能报名表单');
+      return <VocationalRegistrationForm onNavigate={setActiveTab} />;
+    }
+
+    // 否则显示登录页面
+    console.log('[App] 渲染登录页面');
     const themeConfig = store.systemConfig || {};
     const logoIcon = themeConfig.logoIcon || 'fa-graduation-cap';
     const logoText = themeConfig.logoText || 'EduMaster';
@@ -340,6 +366,21 @@ const App: React.FC = () => {
               <input className="w-full bg-gray-100 p-4 rounded-2xl font-bold" type="password" placeholder="请输入密码" value={loginForm.password} onChange={e => handleInputChange('password', e.target.value)} />
               <button type="submit" className="w-full bg-indigo-600 text-white py-4 rounded-[1.5rem] font-black shadow-xl mt-4 text-lg">立即登录</button>
             </form>
+            
+            {/* 报名登记入口 */}
+            <div className="mt-6 pt-6 border-t border-gray-100">
+              <p className="text-xs text-gray-400 text-center mb-3 font-medium">还没有账号？</p>
+              <button 
+                onClick={() => {
+                  console.log('[App] 点击报名登记按钮，切换到 registration 页面');
+                  setActiveTab('registration');
+                }}
+                className="w-full bg-emerald-50 text-emerald-600 py-4 rounded-[1.5rem] font-black shadow-sm hover:bg-emerald-100 transition-all flex items-center justify-center gap-2"
+              >
+                <i className="fa-solid fa-user-plus"></i>
+                报名登记
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -356,6 +397,9 @@ const App: React.FC = () => {
       switch (activeTab) {
         case 'dashboard': return <AdminDashboard />;
         case 'students': return <StudentManager students={store.students} customFields={store.customFieldSchema} onAdd={store.addStudent} onUpdate={store.updateStudent} onDelete={store.deleteStudents} onAddField={store.addCustomField} onRemoveField={store.removeCustomField} />;
+        case 'registration-materials': return <RegistrationMaterials />;
+        case 'major-forms': return <MajorForms />;
+        case 'occupation-management': return <OccupationManagement />;
         case 'banks': return (
           <BankManager banks={store.banks} allQuestions={store.questions}
             onAdd={store.addBank} onUpdate={store.updateBank} onDelete={store.deleteBank} onUpdateScore={store.updateBankScore}
@@ -428,6 +472,9 @@ const App: React.FC = () => {
       case 'discussions': return <Discussions questionId={activeParams?.questionId} />;
       case 'account': return <AccountSettings onBack={() => setActiveTab('home')} onChangePassword={store.changePassword} onResetData={store.resetUserData} onLogout={store.logout} onDeleteAccount={store.logout} currentUser={store.currentUser} onUpdateApiKey={async (apiKey) => { await store.updateProfile({ deepseekApiKey: apiKey }); }} />;
       case 'practical-practice': return <PracticalPractice onBackToPractice={() => setActiveTab('practice')} />;
+      case 'registration': return <RegistrationTypeSelector onNavigate={setActiveTab} />;
+      case 'registration-education': return <EducationRegistrationForm onNavigate={setActiveTab} />;
+      case 'registration-vocational': return <VocationalRegistrationForm onNavigate={setActiveTab} />;
       case 'practice-mode': {
         const activeBankId = activeParams?.bankId || currentActiveBank.id;
         const activeBank = store.banks.find(b => b.id === activeBankId) || currentActiveBank;
