@@ -493,7 +493,7 @@ INSERT INTO users (
 ) VALUES (
   'admin-1',
   'admin',
-  '$2b$10$rKvVPZqGvVZqGvVZqGvVZuO8K8K8K8K8K8K8K8K8K8K8K8K8K8K8K',
+  '$2b$10$Mx3AHIOiYHLdC94wMBJpSe/5W9j9A9hHgZogrl.qnkABg6sKggOgq',
   'ADMIN',
   'Super Admin',
   'System Administrator',

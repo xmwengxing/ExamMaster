@@ -24,7 +24,6 @@ const AdminUserMgt: React.FC<AdminUserMgtProps> = ({ currentUser, admins, studen
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
   const [editingAdmin, setEditingAdmin] = useState<User | null>(null);
-  const [bankPickerOpen, setBankPickerOpen] = useState<{ studentId: string } | null>(null);
 
   // 搜索与分页状态
   const [searchTerm, setSearchTerm] = useState('');
@@ -44,7 +43,6 @@ const AdminUserMgt: React.FC<AdminUserMgtProps> = ({ currentUser, admins, studen
 
   // Local state for pending permission changes
   const [pendingPerms, setPendingPerms] = useState<Record<string, StudentPermission[]>>({});
-  const [pendingBankIds, setPendingBankIds] = useState<Record<string, string[]>>({});
 
   const menuOptions = [
     { id: 'dashboard', label: '数据看板' },
@@ -92,16 +90,11 @@ const AdminUserMgt: React.FC<AdminUserMgtProps> = ({ currentUser, admins, studen
 
   // Sync pending perms with students when entering the tab
   useEffect(() => {
-    console.log('[AdminUserMgt useEffect] Syncing pending state with students data');
     const initialPerms: Record<string, StudentPermission[]> = {};
-    const initialBanks: Record<string, string[]> = {};
     safeStudents.forEach(s => {
       initialPerms[s.id] = s.studentPerms || [];
-      initialBanks[s.id] = s.allowedBankIds || [];
-      console.log('[AdminUserMgt useEffect] Student:', s.realName, 'allowedBankIds:', s.allowedBankIds);
     });
     setPendingPerms(initialPerms);
-    setPendingBankIds(initialBanks);
     console.log('[AdminUserMgt useEffect] Sync complete. Total students:', safeStudents.length);
   }, [safeStudents, tab]);
 
@@ -188,7 +181,7 @@ const AdminUserMgt: React.FC<AdminUserMgtProps> = ({ currentUser, admins, studen
   };
 
   const handleDownloadPermTemplate = () => {
-    const headers = ['手机号*', '权限列表(用半角逗号分隔: BANK,VIDEO,EXAM,NONE)', '授权题库ID(多个用逗号分隔)'].join(',');
+    const headers = ['手机号*', '权限列表(用半角逗号分隔: BANK,EXAM,VIDEO)'].join(',');
     const example = ['13800138000', 'BANK,VIDEO,EXAM', safeBanks[0]?.id || 'bank-id-1'].join(',');
     const blob = new Blob([`\uFEFF${headers}\n${example}`], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
@@ -201,99 +194,28 @@ const AdminUserMgt: React.FC<AdminUserMgtProps> = ({ currentUser, admins, studen
     setPendingPerms(prev => {
       const current = prev[studentId] || [];
       let next: StudentPermission[];
-
-      if (type === 'NONE') {
-        next = current.includes('NONE') ? [] : ['NONE'];
-      } else if (type === 'ALL') {
-        // 新增：全部启用功能
-        const hasAll = current.includes('BANK') && current.includes('VIDEO') && current.includes('EXAM');
-        next = hasAll ? [] : ['BANK', 'VIDEO', 'EXAM'];
+      if (current.includes(type)) {
+        next = current.filter(p => p !== type);
       } else {
-        if (current.includes('NONE')) return prev;
-        if (current.includes(type)) {
-          next = current.filter(p => p !== type);
-        } else {
-          next = [...current, type];
-        }
+        next = [...current, type];
       }
       return { ...prev, [studentId]: next };
     });
   };
 
-  const toggleBankPermission = (studentId: string, bankId: string) => {
-    setPendingBankIds(prev => {
-      const current = prev[studentId] || [];
-      
-      // 检查是否已存在（去重）
-      if (current.includes(bankId)) {
-        // 已存在，移除
-        const next = current.filter(id => id !== bankId);
-        console.log('[toggleBankPermission] 移除题库', {
-          studentId,
-          bankId,
-          currentBankIds: current,
-          nextBankIds: next
-        });
-        return { ...prev, [studentId]: next };
-      } else {
-        // 不存在，添加（确保不重复）
-        const next = [...new Set([...current, bankId])]; // 使用 Set 去重
-        console.log('[toggleBankPermission] 添加题库', {
-          studentId,
-          bankId,
-          currentBankIds: current,
-          nextBankIds: next
-        });
-        return { ...prev, [studentId]: next };
-      }
-    });
-  };
-
   const handleConfirmChanges = async () => {
-    console.log('[handleConfirmChanges] Starting...');
-    
-    // Collect all changes
-    type PermissionChange = { studentPerms: StudentPermission[], allowedBankIds: string[] };
-    const changes: Record<string, PermissionChange> = {};
+    const changes: Record<string, { studentPerms: StudentPermission[], allowedBankIds: string[] }> = {};
     
     Object.entries(pendingPerms).forEach(([id, perms]) => {
       const student = safeStudents.find(s => s.id === id);
-      const bIds = pendingBankIds[id] || [];
-      
-      console.log('[handleConfirmChanges] Processing student:', {
-        id,
-        studentName: student?.realName,
-        currentPerms: student?.studentPerms,
-        pendingPerms: perms,
-        currentBankIds: student?.allowedBankIds,
-        pendingBankIds: bIds
-      });
-      
-      const changedPerms = JSON.stringify(student?.studentPerms || []) !== JSON.stringify(perms);
-      const changedBanks = JSON.stringify(student?.allowedBankIds || []) !== JSON.stringify(bIds);
-
-      console.log('[handleConfirmChanges] Changes detected:', {
-        id,
-        changedPerms,
-        changedBanks,
-        willUpdate: changedPerms || changedBanks
-      });
-
-      if (student && (changedPerms || changedBanks)) {
-        changes[id] = { studentPerms: perms, allowedBankIds: bIds };
+      const changed = JSON.stringify(student?.studentPerms || []) !== JSON.stringify(perms);
+      if (changed) {
+        changes[id] = { studentPerms: perms, allowedBankIds: student?.allowedBankIds || [] };
       }
     });
-
-    const changeCount = Object.keys(changes).length;
-    if (changeCount === 0) {
-      alert('未检测到变更');
-      return;
-    }
-
-    console.log('[handleConfirmChanges] Updating', changeCount, 'students');
-
+    
+    if (Object.keys(changes).length === 0) { alert('未检测到变更'); return; }
     try {
-      // Use batch update for better performance (single refreshAll call)
       await onBatchStudentPerms(changes);
       alert('权限修改已确认生效！');
     } catch (error) {
@@ -303,8 +225,7 @@ const AdminUserMgt: React.FC<AdminUserMgtProps> = ({ currentUser, admins, studen
   };
 
   const hasPendingChanges = safeStudents.some(s => 
-    JSON.stringify(s.studentPerms || []) !== JSON.stringify(pendingPerms[s.id] || []) ||
-    JSON.stringify(s.allowedBankIds || []) !== JSON.stringify(pendingBankIds[s.id] || [])
+    JSON.stringify(s.studentPerms || []) !== JSON.stringify(pendingPerms[s.id] || [])
   );
 
   // 安全检查：如果currentUser为空，显示加载状态
@@ -431,22 +352,18 @@ const AdminUserMgt: React.FC<AdminUserMgtProps> = ({ currentUser, admins, studen
               <thead className="bg-gray-50/80 text-[10px] font-black text-gray-500 uppercase tracking-widest border-b">
                 <tr>
                   <th className="px-6 py-4">学员基本信息 (姓名/手机/单位)</th>
-                  <th className="px-6 py-4 text-center">全部启用</th>
-                  <th className="px-6 py-4 text-center">全部禁用</th>
-                  <th className="px-6 py-4 text-center">题库练习权限 (细化)</th>
-                  <th className="px-6 py-4 text-center">模拟考试权限</th>
-                  <th className="px-6 py-4 text-center">视频课程权限</th>
+                  <th className="px-6 py-4 text-center">所属分组</th>
+                  <th className="px-6 py-4 text-center"><span className="bg-red-50 text-red-600 px-2 py-0.5 rounded-full text-[9px]">高优</span> 题库</th>
+                  <th className="px-6 py-4 text-center">系统考试</th>
+                  <th className="px-6 py-4 text-center"><span className="bg-red-50 text-red-600 px-2 py-0.5 rounded-full text-[9px]">高优</span> 视频课程</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {paginatedStudents.map(s => {
                   const current = pendingPerms[s.id] || [];
-                  const isNone = current.includes('NONE');
                   const isBank = current.includes('BANK');
                   const isExam = current.includes('EXAM');
                   const isVideo = current.includes('VIDEO');
-                  const isAllEnabled = isBank && isExam && isVideo && !isNone;
-                  const allowedBanks = pendingBankIds[s.id] || [];
                   
                   return (
                     <tr key={s.id} className="hover:bg-indigo-50/20 transition-colors">
@@ -459,55 +376,31 @@ const AdminUserMgt: React.FC<AdminUserMgtProps> = ({ currentUser, admins, studen
                         </div>
                       </td>
                       <td className="px-6 py-4 text-center">
-                        <input 
-                          type="checkbox" 
-                          className="w-5 h-5 rounded-lg border-gray-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
-                          checked={isAllEnabled} 
-                          onChange={() => handlePermChange(s.id, 'ALL' as StudentPermission)}
-                        />
+                        <span className={`text-[10px] font-black px-2 py-1 rounded-full ${s.groupId ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-gray-50 text-gray-400 border border-gray-100'}`}>
+                          {s.groupId ? (s as any).groupName || '已分组' : '未分组'}
+                        </span>
                       </td>
                       <td className="px-6 py-4 text-center">
                         <input 
                           type="checkbox" 
                           className="w-5 h-5 rounded-lg border-gray-300 text-rose-600 focus:ring-rose-500 cursor-pointer"
-                          checked={isNone} 
-                          onChange={() => handlePermChange(s.id, 'NONE')}
+                          checked={isBank} 
+                          onChange={() => handlePermChange(s.id, 'BANK')}
                         />
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex flex-col items-center gap-2">
-                          <input 
-                            type="checkbox" 
-                            disabled={isNone}
-                            className={`w-5 h-5 rounded-lg border-gray-300 text-indigo-600 focus:ring-indigo-500 transition-all ${isNone ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer'}`}
-                            checked={!isNone && isBank} 
-                            onChange={() => handlePermChange(s.id, 'BANK')}
-                          />
-                          {!isNone && isBank && (
-                            <button 
-                              onClick={() => setBankPickerOpen({ studentId: s.id })}
-                              className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-2 py-1 rounded-lg border border-indigo-100 hover:bg-indigo-100"
-                            >
-                              选择题库 ({allowedBanks.length})
-                            </button>
-                          )}
-                        </div>
                       </td>
                       <td className="px-6 py-4 text-center">
                         <input 
                           type="checkbox" 
-                          disabled={isNone}
-                          className={`w-5 h-5 rounded-lg border-gray-300 text-indigo-600 focus:ring-indigo-500 transition-all ${isNone ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer'}`}
-                          checked={!isNone && isExam} 
+                          className="w-5 h-5 rounded-lg border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                          checked={isExam} 
                           onChange={() => handlePermChange(s.id, 'EXAM')}
                         />
                       </td>
                       <td className="px-6 py-4 text-center">
                         <input 
                           type="checkbox" 
-                          disabled={isNone}
-                          className={`w-5 h-5 rounded-lg border-gray-300 text-indigo-600 focus:ring-indigo-500 transition-all ${isNone ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer'}`}
-                          checked={!isNone && isVideo} 
+                          className="w-5 h-5 rounded-lg border-gray-300 text-rose-600 focus:ring-rose-500 cursor-pointer"
+                          checked={isVideo} 
                           onChange={() => handlePermChange(s.id, 'VIDEO')}
                         />
                       </td>
@@ -558,94 +451,6 @@ const AdminUserMgt: React.FC<AdminUserMgtProps> = ({ currentUser, admins, studen
         </div>
       )}
 
-      {/* Granular Bank Picker Modal */}
-      {bankPickerOpen && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
-          <div className="bg-white rounded-[2.5rem] w-full max-w-lg p-8 animate-in zoom-in-95 duration-200 shadow-2xl overflow-y-auto max-h-[85vh]">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-black text-gray-900">细化题库授权</h3>
-              <button onClick={() => setBankPickerOpen(null)} className="text-gray-400 hover:text-gray-600">
-                <i className="fa-solid fa-xmark text-xl"></i>
-              </button>
-            </div>
-            <p className="text-xs text-gray-400 mb-6 font-bold">为此学员勾选可见并可练习的题库：</p>
-            <div className="space-y-3">
-              {safeBanks.map(b => {
-                const checked = (pendingBankIds[bankPickerOpen.studentId] || []).includes(b.id);
-                return (
-                  <label key={b.id} className={`flex items-center gap-4 p-4 rounded-2xl border-2 transition-all cursor-pointer ${checked ? 'border-indigo-600 bg-indigo-50' : 'border-gray-50 hover:border-gray-100'}`}>
-                    <input 
-                      type="checkbox" 
-                      className="w-5 h-5 rounded-lg text-indigo-600 focus:ring-indigo-500" 
-                      checked={checked} 
-                      onChange={() => toggleBankPermission(bankPickerOpen.studentId, b.id)} 
-                    />
-                    <div>
-                      <div className={`font-black text-sm ${checked ? 'text-indigo-900' : 'text-gray-700'}`}>{b.name}</div>
-                      <div className="text-[10px] text-gray-400 font-bold">{b.category} · {b.questionCount} 题</div>
-                    </div>
-                  </label>
-                );
-              })}
-            </div>
-            <button onClick={() => setBankPickerOpen(null)} className="w-full mt-8 bg-indigo-600 text-white py-4 rounded-2xl font-black shadow-lg shadow-indigo-100">完成选择</button>
-          </div>
-        </div>
-      )}
-
-      {/* Admin Edit Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <form onSubmit={handleAdminSave} className="bg-white rounded-3xl w-full max-w-md p-8 animate-in zoom-in-95 duration-200 shadow-2xl overflow-y-auto max-h-[90vh]">
-            <h3 className="text-2xl font-black text-gray-900 mb-6">{editingAdmin ? '编辑管理员权限' : '新增二级管理员'}</h3>
-            {editingAdmin && console.log('[AdminUserMgt Modal] 编辑管理员:', {
-              id: editingAdmin.id,
-              realName: editingAdmin.realName,
-              permissions: editingAdmin.permissions,
-              permissionsType: typeof editingAdmin.permissions,
-              isArray: Array.isArray(editingAdmin.permissions)
-            })}
-            <div className="space-y-4">
-              <div className="space-y-1">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">管理员姓名</label>
-                <input required name="realName" className="w-full bg-gray-50 border-none rounded-2xl px-5 py-4 font-bold outline-none focus:ring-2 focus:ring-indigo-600/20" placeholder="请输入姓名" defaultValue={editingAdmin?.realName} />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">登录账号/手机号</label>
-                <input required name="phone" className="w-full bg-gray-50 border-none rounded-2xl px-5 py-4 font-bold outline-none focus:ring-2 focus:ring-indigo-600/20" placeholder="请输入账号" defaultValue={editingAdmin?.phone} />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">
-                  {editingAdmin ? '登录密码 (留空则不修改)' : '设置登录密码'}
-                </label>
-                <input 
-                  required={!editingAdmin} 
-                  name="password" 
-                  type="password" 
-                  className="w-full bg-gray-50 border-none rounded-2xl px-5 py-4 font-bold outline-none focus:ring-2 focus:ring-indigo-600/20" 
-                  placeholder={editingAdmin ? '••••••••' : '请输入登录密码'} 
-                />
-              </div>
-              <div>
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-3 ml-1">分配功能模块权限</label>
-                <div className="grid grid-cols-2 gap-3">
-                  {menuOptions.map(m => (
-                    <label key={m.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-2xl cursor-pointer hover:bg-indigo-50 transition-colors border-2 border-transparent has-[:checked]:border-indigo-600/20 has-[:checked]:bg-indigo-50/50">
-                      <input type="checkbox" name={m.id} className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" defaultChecked={editingAdmin?.permissions?.includes(m.id)} />
-                      <span className="text-sm font-bold text-gray-700">{m.label}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            </div>
-            <div className="flex gap-4 pt-8">
-              <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 bg-gray-100 text-gray-500 py-4 rounded-2xl font-black hover:bg-gray-200 transition-colors">取消</button>
-              <button type="submit" className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-black shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all">确认保存</button>
-            </div>
-          </form>
-        </div>
-      )}
-
       {/* Batch Import Modal */}
       {isBatchModalOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -663,9 +468,9 @@ const AdminUserMgt: React.FC<AdminUserMgtProps> = ({ currentUser, admins, studen
               <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100">
                 <h4 className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-3">填写规范说明</h4>
                 <ul className="text-[11px] text-amber-700/80 space-y-1.5 list-disc pl-4">
-                  <li>权限标识符: <strong>BANK</strong>, <strong>VIDEO</strong>, <strong>EXAM</strong>, <strong>NONE</strong></li>
-                  <li>题库授权: 在专属列填写题库名称或ID，多项用半角逗号分隔</li>
-                  <li>禁用优先: 若包含 <strong>NONE</strong>，则其余权限与题库授权将被忽略</li>
+                  <li>权限标识符: <strong>BANK</strong>（题库）, <strong>EXAM</strong>（系统考试）, <strong>VIDEO</strong>（视频课程）</li>
+                  <li>多个权限用半角逗号分隔，如: BANK,EXAM,VIDEO</li>
+                  <li><strong>题库</strong>和<strong>视频课程</strong>为高优先级：取消勾选后，无论分组如何配置，学员都无法访问</li>
                 </ul>
               </div>
 

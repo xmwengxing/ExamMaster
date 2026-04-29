@@ -298,6 +298,22 @@ export async function batchSetStudentPerms(req, res) {
 }
 
 /**
+ * 设置学员分组
+ */
+export async function setStudentGroup(req, res) {
+  try {
+    const { studentId } = req.params;
+    const { groupId } = req.body;
+    const { setStudentGroup } = await import('../services/groups.service.js');
+    const result = await setStudentGroup(req.db, studentId, groupId);
+    res.json(result);
+  } catch (error) {
+    console.error('[Admin] Set student group error:', error);
+    res.status(500).json({ error: '设置分组失败', message: error.message });
+  }
+}
+
+/**
  * 获取学员练习统计
  */
 export async function getStudentPracticeStats(req, res) {

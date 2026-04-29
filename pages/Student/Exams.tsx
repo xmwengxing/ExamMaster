@@ -196,10 +196,10 @@ const Exams: React.FC<ExamsProps> = ({ exams, history, banks, allQuestions, onSt
               <i className="fa-solid fa-xmark text-xs font-black"></i>
            </div>
         </div>
-        <h3 className="text-2xl font-black text-gray-900 mb-3 tracking-tight">暂无模拟考试权限</h3>
-        <p className="text-sm text-gray-400 font-medium max-w-sm leading-relaxed mb-10">
-          您的账号尚未开通模拟考试模块的访问权限。如需参加考试或查阅成绩，请联系您的管理员或相关负责人进行授权。
-        </p>
+         <h3 className="text-2xl font-black text-gray-900 mb-3 tracking-tight">暂无系统考试权限</h3>
+         <p className="text-sm text-gray-400 font-medium max-w-sm leading-relaxed mb-10">
+           您的账号尚未开通系统考试访问权限。模拟考试仍可正常使用。如需参加系统发布的考试，请联系管理员授权。
+         </p>
         <div className="flex gap-3">
           <div className="bg-indigo-50 text-indigo-600 px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-indigo-100 shadow-sm">
              系统已锁定

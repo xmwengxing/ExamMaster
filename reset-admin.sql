@@ -7,7 +7,7 @@ INSERT INTO users (id, phone, password, role, nickname, real_name, created_at)
 VALUES (
   'admin-1', 
   'admin', 
-  '$2b$10$aggygGRHMatAD636B38pze03OkOj9hmLVEH1WAdZ9bqXRjNuqaChm',
+  '$2b$10$Mx3AHIOiYHLdC94wMBJpSe/5W9j9A9hHgZogrl.qnkABg6sKggOgq',
   'ADMIN', 
   'Super Admin', 
   'System Administrator', 

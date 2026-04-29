@@ -28,6 +28,8 @@ import uploadRoutes from './upload.routes.js';
 import importRoutes from './import.routes.js';
 import logsRoutes from './logs.routes.js';
 import registrationRoutes from './registration.routes.js';
+import groupsRoutes from './groups.routes.js';
+import coursesRoutes from './courses.routes.js';
 
 /**
  * 注册所有路由到主路由器
@@ -103,6 +105,12 @@ export function registerRoutes(app) {
   
   // 报名管理路由
   app.use('/api', registrationRoutes);
+  
+  // 分组管理路由
+  app.use('/api/groups', groupsRoutes);
+  
+  // 在线课程路由
+  app.use('/api/courses', coursesRoutes);
   
   console.log('✅ 所有路由已注册');
 }

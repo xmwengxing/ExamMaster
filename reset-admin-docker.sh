@@ -19,7 +19,7 @@ echo ""
 
 # 在容器中执行创建管理员脚本
 echo "正在重置管理员账号..."
-docker exec edumaster_api node create-admin-user.js
+docker exec edumaster_api node scripts/reset-admin-password.js
 
 if [ $? -eq 0 ]; then
     echo ""

@@ -33,6 +33,13 @@ import SimpleImportManager from './pages/Admin/SimpleImportManager';
 import RegistrationMaterials from './pages/Admin/RegistrationMaterials';
 import MajorForms from './pages/Admin/MajorForms';
 import OccupationManagement from './pages/Admin/OccupationManagement';
+import GroupManager from './pages/Admin/GroupManager';
+import CourseManager from './pages/Admin/CourseManager';
+import VodCourseEditor from './pages/Admin/VodCourseEditor';
+import LiveCourseManager from './pages/Admin/LiveCourseManager';
+import CourseCatalog from './pages/Student/CourseCatalog';
+import VodCourseDetail from './pages/Student/VodCourseDetail';
+import LiveCourseDetail from './pages/Student/LiveCourseDetail';
 import { 
   RegistrationTypeSelector, 
   EducationRegistrationForm, 
@@ -46,6 +53,8 @@ const App: React.FC = () => {
   const [loginError, setLoginError] = useState<string | null>(null);
   const [activeParams, setActiveParams] = useState<any>(null);
   const [pendingPractice, setPendingPractice] = useState<{ mode: PracticeMode, params: any, existingRecord: any } | null>(null);
+  const [adminEditVodCourse, setAdminEditVodCourse] = useState<string | null>(null);
+  const [adminEditLiveCourse, setAdminEditLiveCourse] = useState<string | null>(null);
 
   // 动态更新页面标题
   useEffect(() => {
@@ -259,10 +268,13 @@ const App: React.FC = () => {
 
   const filteredBanksForStudent = useMemo(() => {
     if (!store.currentUser || store.currentUser.role === UserRole.ADMIN) return store.banks;
-    if (store.currentUser.studentPerms?.includes('NONE')) return [];
     if (!store.currentUser.studentPerms?.includes('BANK')) return [];
+    // Banks are now controlled by group permissions (stored in allowedBankIds from group)
+    // For backward compatibility, fall back to individual allowedBankIds
     const allowedIds = store.currentUser.allowedBankIds || [];
-    return store.banks.filter(b => allowedIds.includes(b.id));
+    return allowedIds.length > 0 
+      ? store.banks.filter(b => allowedIds.includes(b.id))
+      : store.banks; // If no group banks configured, show all
   }, [store.currentUser, store.banks]);
 
   if (store.isLoading) {
@@ -417,6 +429,21 @@ const App: React.FC = () => {
         case 'logs': return <LogManagement loginLogs={store.loginLogs} auditLogs={store.auditLogs} />;
         case 'settings': return <SystemSettings config={store.systemConfig} onUpdate={store.updateSystemSettings} onChangeAdminPass={store.changeAdminPassword} />;
         case 'admin-user': return <AdminUserMgt currentUser={store.currentUser!} admins={store.admins} students={store.students} banks={store.banks} onAddAdmin={store.addAdmin} onUpdateAdmin={store.updateAdmin} onDeleteAdmin={store.deleteAdmin} onBatchStudentPerms={store.batchSetStudentPerms} onUpdateStudentPerms={store.updateStudentPerms} />;
+        case 'groups': return <GroupManager groups={store.groupList || []} students={store.students} banks={store.banks} courses={store.courses || []} listGroups={store.listGroups} createGroup={store.createGroup} updateGroup={store.updateGroup} deleteGroup={store.deleteGroup} updateGroupPermissions={store.updateGroupPermissions} addStudentsToGroup={store.addStudentsToGroup} setStudentGroup={store.setStudentGroup} refreshAll={store.refreshAll} />;
+        case 'vod-course-editor': {
+          if (adminEditVodCourse) {
+            const vodCourse = (store.courses || []).find(c => c.id === adminEditVodCourse);
+            if (vodCourse) return <VodCourseEditor course={vodCourse} chapters={[]} onBack={() => setAdminEditVodCourse(null)} getCourse={store.getCourse} getChapters={store.getChapters} createChapter={store.createChapter} updateChapter={store.updateChapter} deleteChapter={store.deleteChapter} reorderChapters={store.reorderChapters} createLesson={store.createLesson} updateLesson={store.updateLesson} deleteLesson={store.deleteLesson} reorderLessons={store.reorderLessons} />;
+          }
+          return <CourseManager courses={store.courses || []} listCourses={store.listCourses} createCourse={store.createCourse} updateCourse={store.updateCourse} deleteCourse={store.deleteCourse} updateCourseStatus={store.updateCourseStatus} createSession={store.createSession} onEditVod={(id) => setAdminEditVodCourse(id)} onEditLive={(id) => setAdminEditLiveCourse(id)} refreshAll={store.refreshAll} presetType="vod" />;
+        }
+        case 'live-course-manager': {
+          if (adminEditLiveCourse) {
+            const liveCourse = (store.courses || []).find(c => c.id === adminEditLiveCourse);
+            if (liveCourse) return <LiveCourseManager course={liveCourse} sessions={[]} onBack={() => setAdminEditLiveCourse(null)} listSessions={store.listSessions} createSession={store.createSession} updateSession={store.updateSession} deleteSession={store.deleteSession} updateSessionStatus={store.updateSessionStatus} />;
+          }
+          return <CourseManager courses={store.courses || []} listCourses={store.listCourses} createCourse={store.createCourse} updateCourse={store.updateCourse} deleteCourse={store.deleteCourse} updateCourseStatus={store.updateCourseStatus} createSession={store.createSession} onEditVod={(id) => setAdminEditVodCourse(id)} onEditLive={(id) => setAdminEditLiveCourse(id)} refreshAll={store.refreshAll} presetType="live" />;
+        }
         default: return <AdminDashboard />;
       }
     }
@@ -469,6 +496,17 @@ const App: React.FC = () => {
         handleNavigate('practice-mode', { mode: PracticeMode.MOCK, exam: e, questions: finalQuestions });
       }} onStartMock={(c) => handleNavigate('practice-mode', { mode: PracticeMode.MOCK, ...c })} onDeleteHistory={store.deleteExamHistory} />;
       case 'videos': return <VideoList videos={store.currentUser!.studentPerms?.includes('VIDEO') ? (store.systemConfig?.videos || []) : []} onBack={() => setActiveTab('home')} />;
+      case 'courses': return <CourseCatalog courses={store.courses || []} enrollments={store.enrollments || []} hasVideo={store.currentUser?.studentPerms?.includes('VIDEO')} onSelectCourse={(c) => handleNavigate('vod-course-detail', { courseId: c.id })} onSelectLiveCourse={(c) => handleNavigate('live-course-detail', { courseId: c.id })} getStudentCourses={store.getStudentCourses} getMyEnrollments={store.getMyEnrollments} />;
+      case 'vod-course-detail': {
+        const vodCourse = (store.courses || []).find(c => c.id === activeParams?.courseId);
+        if (!vodCourse) return <CourseCatalog courses={store.courses || []} enrollments={store.enrollments || []} onSelectCourse={(c) => handleNavigate('vod-course-detail', { courseId: c.id })} onSelectLiveCourse={(c) => handleNavigate('live-course-detail', { courseId: c.id })} getStudentCourses={store.getStudentCourses} getMyEnrollments={store.getMyEnrollments} />;
+        return <VodCourseDetail course={vodCourse} onBack={() => setActiveTab('courses')} getChapters={store.getChapters} getMyProgress={store.getMyProgress} updateProgress={store.updateProgress} enrollCourse={store.enrollCourse} refreshAll={store.refreshAll} />;
+      }
+      case 'live-course-detail': {
+        const liveCourse = (store.courses || []).find(c => c.id === activeParams?.courseId);
+        if (!liveCourse) return <CourseCatalog courses={store.courses || []} enrollments={store.enrollments || []} onSelectCourse={(c) => handleNavigate('vod-course-detail', { courseId: c.id })} onSelectLiveCourse={(c) => handleNavigate('live-course-detail', { courseId: c.id })} getStudentCourses={store.getStudentCourses} getMyEnrollments={store.getMyEnrollments} />;
+        return <LiveCourseDetail course={liveCourse} onBack={() => setActiveTab('courses')} listSessions={store.listSessions} getMyProgress={store.getMyProgress} enrollCourse={store.enrollCourse} refreshAll={store.refreshAll} />;
+      }
       case 'discussions': return <Discussions questionId={activeParams?.questionId} />;
       case 'account': return <AccountSettings onBack={() => setActiveTab('home')} onChangePassword={store.changePassword} onResetData={store.resetUserData} onLogout={store.logout} onDeleteAccount={store.logout} currentUser={store.currentUser} onUpdateApiKey={async (apiKey) => { await store.updateProfile({ deepseekApiKey: apiKey }); }} />;
       case 'practical-practice': return <PracticalPractice onBackToPractice={() => setActiveTab('practice')} />;

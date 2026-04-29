@@ -16,7 +16,7 @@ export async function getStudents() {
     `SELECT id, phone, nickname, real_name, gender, id_card, school, 
             education_type, education_level, major, company, class_name,
             student_perms, allowed_bank_ids, custom_fields, avatar,
-            last_login, last_activity, total_online_time, login_history
+            last_login, last_activity, total_online_time, login_history, group_id
      FROM users WHERE role = 'STUDENT' ORDER BY id`
   );
   
@@ -77,6 +77,7 @@ export async function getStudents() {
     major: student.major,
     company: student.company,
     className: student.class_name,
+    groupId: student.group_id || null,
     studentPerms: Array.isArray(student.student_perms) ? student.student_perms : [],
     allowedBankIds: Array.isArray(student.allowed_bank_ids) ? student.allowed_bank_ids : [],
     customFields: student.custom_fields || {},

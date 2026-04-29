@@ -4,7 +4,8 @@ import {
   User, UserRole, QuestionBank, Question, Exam, 
   ExamRecord, PracticeRecord, QuestionType, LoginLog, 
   AuditLog, QuestionNote, DailyProgress, StudentPermission, PracticeMode,
-  PracticalTask, PracticalTaskRecord, SrsRecord
+  PracticalTask, PracticalTaskRecord, SrsRecord, UserGroup, GroupPermissions,
+  Course, CourseChapter, CourseLesson, LiveSession, CourseEnrollment
 } from './types';
 import { getCachedData, setCachedData, CACHE_KEYS, clearAllCache, removeCachedData, removeCachedDataByPrefix } from './utils/cache';
 
@@ -123,6 +124,9 @@ export const useAppStore = () => {
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [practicalTasks, setPracticalTasks] = useState<PracticalTask[]>([]);
   const [practicalRecords, setPracticalRecords] = useState<PracticalTaskRecord[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [enrollments, setEnrollments] = useState<CourseEnrollment[]>([]);
+  const [groupList, setGroupList] = useState<UserGroup[]>([]);
   const [customFieldSchema, setCustomFieldSchema] = useState<string[]>([]);
   const [allProgress, setAllProgress] = useState<DailyProgress[]>([]);
 
@@ -345,6 +349,27 @@ export const useAppStore = () => {
         setSrsRecords(srs || []);
         setMistakes(mist || []);
         setExamHistory(eHist || []);
+
+        // 加载在线课程数据
+        try {
+          if (userProfile.role === 'ADMIN') {
+            const [allCourses, allGroups] = await Promise.all([
+              fetchApi('/courses').catch(() => []),
+              fetchApi('/groups').catch(() => [])
+            ]);
+            setCourses(allCourses || []);
+            setGroupList(allGroups || []);
+          } else {
+            const [myCourses, myEnrollments] = await Promise.all([
+              fetchApi('/courses/my/accessible').catch(() => []),
+              fetchApi('/courses/my/enrollments').catch(() => [])
+            ]);
+            setCourses(myCourses || []);
+            setEnrollments(myEnrollments || []);
+          }
+        } catch (e) {
+          console.warn('[refreshAll] 课程数据加载失败:', e);
+        }
         console.log('[refreshAll] 阶段4完成，所有数据加载完毕');
       }, 300);
 
@@ -601,6 +626,7 @@ export const useAppStore = () => {
     isLoadingQuestions,  // 导出题目加载状态
     currentUser, banks, questions, exams, practiceRecords, examHistory, systemConfig, mistakes, favorites, srsRecords,
     students, admins, loginLogs, auditLogs, practicalTasks, practicalRecords, customFieldSchema, allProgress,
+    courses, enrollments, groupList,
     activeBank: activeBank || banks[0], 
     setActiveBank: handleSetActiveBank,  // 使用新的处理函数，支持按需加载题目
     loadBankQuestions,  // 导出按需加载函数
@@ -967,12 +993,7 @@ export const useAppStore = () => {
 
     // Administrative: Student permissions methods
     batchSetStudentPerms: async (data: Record<string, { studentPerms: StudentPermission[], allowedBankIds: string[] }>) => {
-      console.log('[store.batchSetStudentPerms] Batch updating students:', Object.keys(data).length, 'students');
-      console.log('[store.batchSetStudentPerms] Data:', data);
       await fetchApi('/admin/students/batch-perms', { method: 'POST', body: JSON.stringify(data) });
-      console.log('[store.batchSetStudentPerms] API call complete, calling refreshAll');
-      await refreshAll();
-      console.log('[store.batchSetStudentPerms] refreshAll complete');
     },
     updateStudentPerms: async (id: string, perms: StudentPermission[], bankIds?: string[]) => {
       console.log('[store.updateStudentPerms] Updating student:', {
@@ -1480,15 +1501,155 @@ export const useAppStore = () => {
         if (params?.type) searchParams.append('type', params.type);
         
         const query = searchParams.toString();
-        // 修复：不需要 /api 前缀，因为 API_BASE 已经包含了
         const result = await fetchApi(`/admin/ai-analysis${query ? '?' + query : ''}`);
         return result;
       } catch (e: any) {
         console.error('[fetchAdminAiAnalysis] Failed:', e);
         throw e;
       }
+    },
+
+    // ========== 分组管理（新） ==========
+    listGroups: async () => {
+      return await fetchApi('/groups');
+    },
+    createGroup: async (data: any) => {
+      await fetchApi('/groups', { method: 'POST', body: JSON.stringify(data) });
+      await refreshAll();
+    },
+    updateGroup: async (id: string, data: any) => {
+      await fetchApi(`/groups/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+      await refreshAll();
+    },
+    deleteGroup: async (id: string) => {
+      await fetchApi(`/groups/${id}`, { method: 'DELETE' });
+      await refreshAll();
+    },
+    updateGroupPermissions: async (id: string, permissions: any) => {
+      const result = await fetchApi(`/groups/${id}/permissions`, { method: 'PUT', body: JSON.stringify(permissions) });
+      await refreshAll();
+      return result;
+    },
+    getGroupStudents: async (groupId: string) => {
+      return await fetchApi(`/groups/${groupId}/students`);
+    },
+    addStudentsToGroup: async (groupId: string, userIds: string[]) => {
+      return await fetchApi(`/groups/${groupId}/students`, { method: 'POST', body: JSON.stringify({ userIds }) });
+    },
+    setStudentGroup: async (studentId: string, groupId: string | null) => {
+      await fetchApi(`/admin/students/${studentId}/group`, { method: 'PUT', body: JSON.stringify({ groupId }) });
+    },
+
+    // ========== 在线课程管理（新） ==========
+    // 分类
+    listCourseCategories: async (type?: string) => {
+      return await fetchApi(`/courses/categories${type ? '?type=' + type : ''}`);
+    },
+    createCourseCategory: async (data: any) => {
+      return await fetchApi('/courses/categories', { method: 'POST', body: JSON.stringify(data) });
+    },
+    deleteCourseCategory: async (id: string) => {
+      return await fetchApi(`/courses/categories/${id}`, { method: 'DELETE' });
+    },
+
+    // 课程
+    listCourses: async (filters?: { type?: string; category?: string; status?: string; search?: string }) => {
+      const params = new URLSearchParams();
+      if (filters?.type) params.append('type', filters.type);
+      if (filters?.category) params.append('category', filters.category);
+      if (filters?.status) params.append('status', filters.status);
+      if (filters?.search) params.append('search', filters.search);
+      const query = params.toString();
+      return await fetchApi(`/courses${query ? '?' + query : ''}`);
+    },
+    getCourse: async (id: string) => {
+      return await fetchApi(`/courses/${id}`);
+    },
+    createCourse: async (data: any) => {
+      const result = await fetchApi('/courses', { method: 'POST', body: JSON.stringify(data) });
+      await refreshAll();
+      return result;
+    },
+    updateCourse: async (id: string, data: any) => {
+      const result = await fetchApi(`/courses/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+      await refreshAll();
+      return result;
+    },
+    deleteCourse: async (id: string) => {
+      await fetchApi(`/courses/${id}`, { method: 'DELETE' });
+      await refreshAll();
+    },
+    updateCourseStatus: async (id: string, status: string) => {
+      const result = await fetchApi(`/courses/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) });
+      await refreshAll();
+      return result;
+    },
+
+    // 章节
+    getChapters: async (courseId: string) => {
+      return await fetchApi(`/courses/${courseId}/chapters`);
+    },
+    createChapter: async (courseId: string, data: any) => {
+      return await fetchApi(`/courses/${courseId}/chapters`, { method: 'POST', body: JSON.stringify(data) });
+    },
+    updateChapter: async (id: string, data: any) => {
+      return await fetchApi(`/courses/chapters/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+    },
+    deleteChapter: async (id: string) => {
+      return await fetchApi(`/courses/chapters/${id}`, { method: 'DELETE' });
+    },
+    reorderChapters: async (orderedIds: string[]) => {
+      return await fetchApi('/courses/chapters/reorder', { method: 'PUT', body: JSON.stringify({ orderedIds }) });
+    },
+
+    // 课时
+    createLesson: async (chapterId: string, data: any) => {
+      return await fetchApi(`/courses/chapters/${chapterId}/lessons`, { method: 'POST', body: JSON.stringify(data) });
+    },
+    updateLesson: async (id: string, data: any) => {
+      return await fetchApi(`/courses/lessons/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+    },
+    deleteLesson: async (id: string) => {
+      return await fetchApi(`/courses/lessons/${id}`, { method: 'DELETE' });
+    },
+    reorderLessons: async (orderedIds: string[]) => {
+      return await fetchApi('/courses/lessons/reorder', { method: 'PUT', body: JSON.stringify({ orderedIds }) });
+    },
+
+    // 直播场次
+    listSessions: async (courseId: string) => {
+      return await fetchApi(`/courses/${courseId}/sessions`);
+    },
+    createSession: async (courseId: string, data: any) => {
+      return await fetchApi(`/courses/${courseId}/sessions`, { method: 'POST', body: JSON.stringify(data) });
+    },
+    updateSession: async (id: string, data: any) => {
+      return await fetchApi(`/courses/sessions/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+    },
+    deleteSession: async (id: string) => {
+      return await fetchApi(`/courses/sessions/${id}`, { method: 'DELETE' });
+    },
+    updateSessionStatus: async (id: string, status: string) => {
+      return await fetchApi(`/courses/sessions/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) });
+    },
+
+    // 学员学习记录
+    getMyEnrollments: async () => {
+      return await fetchApi('/courses/my/enrollments');
+    },
+    getStudentCourses: async (type?: string) => {
+      return await fetchApi(`/courses/my/accessible${type ? '?type=' + type : ''}`);
+    },
+    getMyProgress: async (courseId: string) => {
+      return await fetchApi(`/courses/${courseId}/progress`);
+    },
+    enrollCourse: async (courseId: string) => {
+      return await fetchApi(`/courses/${courseId}/enroll`, { method: 'POST' });
+    },
+    updateProgress: async (courseId: string, data: any) => {
+      return await fetchApi(`/courses/${courseId}/progress`, { method: 'PUT', body: JSON.stringify(data) });
     }
-  }), [isLoading, currentUser, banks, questions, exams, practiceRecords, examHistory, systemConfig, mistakes, favorites, srsRecords, students, admins, loginLogs, auditLogs, practicalTasks, practicalRecords, customFieldSchema, refreshAll, handleSetActiveBank, loadBankQuestions]);
+  }), [isLoading, currentUser, banks, questions, exams, practiceRecords, examHistory, systemConfig, mistakes, favorites, srsRecords, students, admins, loginLogs, auditLogs, practicalTasks, practicalRecords, customFieldSchema, courses, enrollments, groupList, refreshAll, handleSetActiveBank, loadBankQuestions]);
 
   return storeValue;
 };

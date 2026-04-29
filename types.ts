@@ -21,7 +21,7 @@ export enum PracticeMode {
   SMART_REVIEW = 'SMART_REVIEW' // 新增：智能复习模式
 }
 
-export type StudentPermission = 'BANK' | 'VIDEO' | 'EXAM' | 'NONE';
+export type StudentPermission = 'BANK' | 'VIDEO' | 'EXAM';
 
 export interface BannerItem {
   id: string;
@@ -49,6 +49,7 @@ export interface User {
   major?: string;
   company?: string;
   className?: string; // 新增：班级字段
+  groupId?: string;     // 新增：学员分组ID
   gender?: string; // 新增：性别字段
   
   customFields?: Record<string, string>;
@@ -243,6 +244,106 @@ export interface VideoConfig {
   desc: string;
   type: 'LINK' | 'API';
   url: string;
+}
+
+// ========== 在线课程系统类型 ==========
+
+export interface UserGroup {
+  id: string;
+  name: string;
+  description?: string;
+  permissions: GroupPermissions;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GroupPermissions {
+  banks: string[];
+  exams: string[];
+  vod_courses: {
+    mode: 'all' | 'category' | 'specific' | 'none';
+    categories: string[];
+    courses: string[];
+  };
+  live_courses: {
+    mode: 'all' | 'category' | 'specific' | 'none';
+    categories: string[];
+    courses: string[];
+  };
+}
+
+export interface CourseCategory {
+  id: string;
+  name: string;
+  courseType: 'vod' | 'live';
+  sortOrder: number;
+  createdAt: string;
+}
+
+export interface Course {
+  id: string;
+  title: string;
+  description?: string;
+  coverUrl?: string;
+  courseType: 'vod' | 'live';
+  category?: string;
+  teacherName?: string;
+  teacherIntro?: string;
+  price: number;
+  status: 'draft' | 'published' | 'archived';
+  sortOrder: number;
+  studentCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CourseChapter {
+  id: string;
+  courseId: string;
+  title: string;
+  description?: string;
+  sortOrder: number;
+  createdAt: string;
+}
+
+export interface CourseLesson {
+  id: string;
+  chapterId: string;
+  courseId: string;
+  title: string;
+  videoType: 'upload' | 'embed' | 'link';
+  videoUrl?: string;
+  duration: number;
+  isFreePreview: boolean;
+  sortOrder: number;
+  createdAt: string;
+}
+
+export interface LiveSession {
+  id: string;
+  courseId: string;
+  title?: string;
+  meetingNumber?: string;
+  meetingUrl?: string;
+  meetingPassword?: string;
+  startTime?: string;
+  endTime?: string;
+  status: 'scheduled' | 'living' | 'ended';
+  replayUrl?: string;
+  createdAt: string;
+}
+
+export interface CourseEnrollment {
+  id: string;
+  userId: string;
+  courseId: string;
+  lastLessonId?: string;
+  lastPosition: number;
+  progressPercent: number;
+  completedAt?: string;
+  enrolledAt: string;
+  updatedAt: string;
 }
 
 // ========== 标签系统类型 ==========

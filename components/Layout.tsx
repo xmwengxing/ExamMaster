@@ -40,6 +40,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, activeTab, onTabChange,
     { id: 'exams', icon: 'fa-file-lines', label: '考试' },
     { id: 'mistakes', icon: 'fa-triangle-exclamation', label: '错题' },
     { id: 'discussions', icon: 'fa-comments', label: '讨论' },
+    { id: 'courses', icon: 'fa-graduation-cap', label: '课程' },
   ];
 
   const adminTabs: MenuItem[] = [
@@ -52,6 +53,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, activeTab, onTabChange,
       hasSubmenu: true,
       submenu: [
         { id: 'students', icon: 'fa-user', label: '账号管理' },
+        { id: 'groups', icon: 'fa-layer-group', label: '分组管理' },
         { id: 'registration-materials', icon: 'fa-file-alt', label: '报名材料' },
         { id: 'major-forms', icon: 'fa-table', label: '专业表单' },
         { id: 'occupation-management', icon: 'fa-briefcase', label: '职业工种管理' },
@@ -70,6 +72,16 @@ const Layout: React.FC<LayoutProps> = ({ children, user, activeTab, onTabChange,
     },
     { id: 'admin-exams', icon: 'fa-paper-plane', label: '考试发布' },
     { id: 'practical-center', icon: 'fa-keyboard', label: '实操发布' },
+    { 
+      id: 'courses-admin', 
+      icon: 'fa-video', 
+      label: '在线课程',
+      hasSubmenu: true,
+      submenu: [
+        { id: 'vod-course-editor', icon: 'fa-film', label: '录播课管理' },
+        { id: 'live-course-manager', icon: 'fa-broadcast-tower', label: '直播课管理' },
+      ]
+    },
     { id: 'supervisor', icon: 'fa-user-check', label: '督学管理' },
     { id: 'logs', icon: 'fa-clipboard-list', label: '日志管理' },
     { id: 'discussion-manager', icon: 'fa-comments', label: '讨论管理' },
@@ -130,7 +142,8 @@ const Layout: React.FC<LayoutProps> = ({ children, user, activeTab, onTabChange,
                     onClick={() => toggleMenu(tab.id)}
                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
                       (tab.id === 'banks' && ['banks', 'question-bank-converter', 'import-manager'].includes(activeTab)) ||
-                      (tab.id === 'students' && ['students', 'registration-materials', 'major-forms'].includes(activeTab))
+                      (tab.id === 'students' && ['students', 'groups', 'registration-materials', 'major-forms', 'occupation-management'].includes(activeTab)) ||
+                      (tab.id === 'courses-admin' && ['vod-course-editor', 'live-course-manager'].includes(activeTab))
                         ? 'bg-indigo-50 text-indigo-600 font-bold' 
                         : 'text-gray-500 hover:bg-gray-100 font-medium'
                     }`}
