@@ -10,14 +10,13 @@ import logger from '../../utils/logger.js';
  */
 export async function getQuestions(req, res, next) {
   try {
-    // 禁用缓存，确保返回最新数据
     res.set({
       'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
       'Pragma': 'no-cache',
       'Expires': '0'
     });
     
-    const { bankId, page, pageSize, idsOnly } = req.query;
+    const { bankId, search, page, pageSize, idsOnly } = req.query;
     
     // 如果只请求 ID 列表（用于优化）
     if (idsOnly === 'true') {
@@ -36,7 +35,7 @@ export async function getQuestions(req, res, next) {
     }
     
     // 否则返回所有题目（向后兼容）
-    const result = await questionService.getQuestions(req.db, { bankId });
+    const result = await questionService.getQuestions(req.db, { bankId, search });
     res.json(result);
   } catch (error) {
     logger.error('[Questions] 获取题目列表失败:', error);

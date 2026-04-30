@@ -11,20 +11,30 @@ import { validateFillInBlankAnswers } from '../utils/validators.js';
  * @returns {Promise<Array>} 题目列表
  */
 export async function getQuestions(db, options = {}) {
-  const { bankId } = options;
+  const { bankId, search } = options;
   
   let rows;
+  let params: any[] = [];
+  let conditions: string[] = [];
+  let paramIdx = 1;
   
   if (bankId) {
-    rows = await db.getMany(
-      'SELECT * FROM questions WHERE bank_id = $1 ORDER BY sort_order ASC, id ASC',
-      [bankId]
-    );
-  } else {
-    rows = await db.getMany(
-      'SELECT * FROM questions ORDER BY bank_id ASC, sort_order ASC, id ASC'
-    );
+    conditions.push(`bank_id = $${paramIdx++}`);
+    params.push(bankId);
   }
+  
+  if (search) {
+    conditions.push(`content ILIKE $${paramIdx++}`);
+    params.push(`%${search}%`);
+  }
+  
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+  const orderClause = bankId ? 'ORDER BY sort_order ASC, id ASC' : 'ORDER BY bank_id ASC, sort_order ASC, id ASC';
+  
+  rows = await db.getMany(
+    `SELECT * FROM questions ${whereClause} ${orderClause} LIMIT 50`,
+    params
+  );
   
   return (rows || []).map(formatQuestion);
 }

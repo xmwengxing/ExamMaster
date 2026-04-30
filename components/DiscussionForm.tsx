@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Discussion, Question } from '../types';
 import { useAppStore } from '../store';
 
+const API_BASE = '/api';
+
 interface DiscussionFormProps {
-  discussion?: Discussion;  // 如果提供，则为编辑模式
-  questionId?: string;      // 可选：关联的题目ID
+  discussion?: Discussion;
+  questionId?: string;
   onSubmit: (data: { title: string; content: string; questionId?: string }) => Promise<void>;
   onCancel: () => void;
 }
@@ -24,28 +26,54 @@ const DiscussionForm: React.FC<DiscussionFormProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showQuestionSelector, setShowQuestionSelector] = useState(false);
   const [questionSearch, setQuestionSearch] = useState('');
+  const [selectedBank, setSelectedBank] = useState('');
+  const [searchResults, setSearchResults] = useState<Question[]>([]);
+  const [searching, setSearching] = useState(false);
 
   const isEditMode = !!discussion;
 
-  // 筛选题目
-  const filteredQuestions = store.questions.filter(q => 
-    q.content.toLowerCase().includes(questionSearch.toLowerCase())
-  ).slice(0, 10); // 限制显示10个
+  // 搜索题目（API）
+  const searchQuestions = async (bankId: string, keyword: string) => {
+    if (!bankId) {
+      setSearchResults([]);
+      return;
+    }
+    setSearching(true);
+    try {
+      const token = localStorage.getItem('edu_token');
+      const params = new URLSearchParams();
+      if (bankId) params.append('bankId', bankId);
+      if (keyword) params.append('search', keyword);
+      const res = await fetch(`${API_BASE}/questions?${params}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSearchResults(Array.isArray(data) ? data.slice(0, 10) : []);
+      }
+    } catch (e) {
+      console.error('Search questions failed:', e);
+    }
+    setSearching(false);
+  };
 
-  const selectedQuestion = questionId 
-    ? store.questions.find(q => q.id === questionId)
-    : null;
+  // 延迟搜索
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (selectedBank) searchQuestions(selectedBank, questionSearch);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [selectedBank, questionSearch]);
+
+  const selectedQuestion = selectedBank
+    ? searchResults.find(q => q.id === questionId) || (store.questions.find(q => q.id === questionId))
+    : store.questions.find(q => q.id === questionId);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!title.trim()) {
-      return alert('请输入讨论标题');
-    }
-
-    if (!content.trim()) {
-      return alert('请输入讨论内容');
-    }
+    if (!title.trim()) return alert('请输入讨论标题');
+    if (!content.trim()) return alert('请输入讨论内容');
 
     setIsSubmitting(true);
     try {
@@ -82,9 +110,7 @@ const DiscussionForm: React.FC<DiscussionFormProps> = ({
             className="w-full px-4 py-3 border-2 border-gray-100 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-medium outline-none"
             maxLength={100}
           />
-          <div className="text-xs text-gray-400 mt-1 text-right">
-            {title.length}/100
-          </div>
+          <div className="text-xs text-gray-400 mt-1 text-right">{title.length}/100</div>
         </div>
 
         {/* 关联题目 */}
@@ -98,15 +124,9 @@ const DiscussionForm: React.FC<DiscussionFormProps> = ({
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1">
                   <div className="text-xs font-bold text-indigo-600 mb-1">已选择题目</div>
-                  <div className="text-sm text-gray-700 line-clamp-2">
-                    {selectedQuestion.content}
-                  </div>
+                  <div className="text-sm text-gray-700 line-clamp-2">{selectedQuestion.content}</div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setQuestionId(undefined)}
-                  className="text-gray-400 hover:text-rose-500 transition-colors"
-                >
+                <button type="button" onClick={() => setQuestionId(undefined)} className="text-gray-400 hover:text-rose-500 transition-colors">
                   <i className="fa-solid fa-xmark"></i>
                 </button>
               </div>
@@ -117,29 +137,45 @@ const DiscussionForm: React.FC<DiscussionFormProps> = ({
               onClick={() => setShowQuestionSelector(!showQuestionSelector)}
               className="w-full px-4 py-3 border-2 border-dashed border-gray-200 rounded-2xl text-gray-500 hover:border-indigo-300 hover:text-indigo-600 transition-colors font-medium"
             >
-              <i className="fa-solid fa-link mr-2"></i>
-              点击选择关联题目
+              <i className="fa-solid fa-link mr-2"></i>点击选择关联题目
             </button>
           )}
 
           {/* 题目选择器 */}
           {showQuestionSelector && !selectedQuestion && (
             <div className="mt-3 p-4 bg-gray-50 rounded-2xl border-2 border-gray-100">
-              <input
-                type="text"
-                value={questionSearch}
-                onChange={(e) => setQuestionSearch(e.target.value)}
-                placeholder="搜索题目..."
-                className="w-full px-4 py-2 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none mb-3"
-              />
+              <select
+                value={selectedBank}
+                onChange={e => { setSelectedBank(e.target.value); setQuestionSearch(''); }}
+                className="w-full px-4 py-2.5 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none mb-3 font-bold text-sm"
+              >
+                <option value="">-- 请选择题库 --</option>
+                {(store.banks || []).map((b: any) => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
+              </select>
               
-              {filteredQuestions.length === 0 ? (
+              {selectedBank && (
+                <input
+                  type="text"
+                  value={questionSearch}
+                  onChange={e => setQuestionSearch(e.target.value)}
+                  placeholder="搜索题目内容..."
+                  className="w-full px-4 py-2 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none mb-3"
+                />
+              )}
+              
+              {!selectedBank ? (
+                <div className="text-center py-4 text-gray-400 text-sm">请先选择题库</div>
+              ) : searching ? (
+                <div className="text-center py-4 text-gray-400 text-sm"><i className="fa-solid fa-spinner fa-spin mr-1"></i>搜索中...</div>
+              ) : searchResults.length === 0 ? (
                 <div className="text-center py-4 text-gray-400 text-sm">
-                  {questionSearch ? '未找到匹配的题目' : '暂无题目'}
+                  {questionSearch ? '未找到匹配的题目' : '输入关键词搜索题目'}
                 </div>
               ) : (
                 <div className="space-y-2 max-h-60 overflow-y-auto">
-                  {filteredQuestions.map(q => (
+                  {searchResults.map(q => (
                     <button
                       key={q.id}
                       type="button"
@@ -150,12 +186,8 @@ const DiscussionForm: React.FC<DiscussionFormProps> = ({
                       }}
                       className="w-full p-3 text-left bg-white rounded-xl border-2 border-gray-100 hover:border-indigo-200 transition-colors"
                     >
-                      <div className="text-sm text-gray-700 line-clamp-2">
-                        {q.content}
-                      </div>
-                      <div className="text-xs text-gray-400 mt-1">
-                        {q.type} · {q.bankId}
-                      </div>
+                      <div className="text-sm text-gray-700 line-clamp-2">{q.content}</div>
+                      <div className="text-xs text-gray-400 mt-1">{q.type}</div>
                     </button>
                   ))}
                 </div>
