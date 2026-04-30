@@ -35,6 +35,8 @@ import MajorForms from './pages/Admin/MajorForms';
 import OccupationManagement from './pages/Admin/OccupationManagement';
 import GroupManager from './pages/Admin/GroupManager';
 import CourseManager from './pages/Admin/CourseManager';
+import ContentManager from './pages/Admin/ContentManager';
+import SecurityManager from './pages/Admin/SecurityManager';
 import VodCourseEditor from './pages/Admin/VodCourseEditor';
 import LiveCourseManager from './pages/Admin/LiveCourseManager';
 import CourseCatalog from './pages/Student/CourseCatalog';
@@ -428,8 +430,8 @@ const App: React.FC = () => {
         case 'supervisor': return <Supervisor students={store.students} logs={store.loginLogs} />;
         case 'logs': return <LogManagement loginLogs={store.loginLogs} auditLogs={store.auditLogs} />;
         case 'settings': return <SystemSettings config={store.systemConfig} onUpdate={store.updateSystemSettings} onChangeAdminPass={store.changeAdminPassword} defaultTab={activeParams?.tab} />;
-        case 'settings-content': return <SystemSettings config={store.systemConfig} onUpdate={store.updateSystemSettings} onChangeAdminPass={store.changeAdminPassword} defaultTab="content" />;
-        case 'settings-security': return <SystemSettings config={store.systemConfig} onUpdate={store.updateSystemSettings} onChangeAdminPass={store.changeAdminPassword} defaultTab="security" />;
+        case 'settings-content': return <ContentManager config={store.systemConfig} onUpdate={store.updateSystemSettings} />;
+        case 'settings-security': return <SecurityManager onChangeAdminPass={store.changeAdminPassword} />;
         case 'admin-user': return <AdminUserMgt currentUser={store.currentUser!} admins={store.admins} students={store.students} banks={store.banks} onAddAdmin={store.addAdmin} onUpdateAdmin={store.updateAdmin} onDeleteAdmin={store.deleteAdmin} onBatchStudentPerms={store.batchSetStudentPerms} onUpdateStudentPerms={store.updateStudentPerms} />;
         case 'groups': return <GroupManager groups={store.groupList || []} students={store.students} banks={store.banks} courses={store.courses || []} listGroups={store.listGroups} createGroup={store.createGroup} updateGroup={store.updateGroup} deleteGroup={store.deleteGroup} updateGroupPermissions={store.updateGroupPermissions} addStudentsToGroup={store.addStudentsToGroup} setStudentGroup={store.setStudentGroup} refreshAll={store.refreshAll} />;
         case 'vod-course-editor': {
