@@ -96,15 +96,6 @@ services:
       start_period: 10s
     networks:
       - examaster_network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
-      interval: 30s
-      timeout: 3s
-      retries: 3
-      start_period: 10s
-    networks:
-      - examaster_network
 
 # 数据卷定义
 volumes:
