@@ -20,6 +20,18 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({ config, onUpdate, onCha
   const [customProvName, setCustomProvName] = useState('');
   const [addingProvider, setAddingProvider] = useState(false);
 
+  // Helper: read provider-specific config
+  const getProv = (field: string, provider: string, defaults: Record<string, any> = {}) => {
+    return form?.[field]?.[provider] ?? defaults[provider] ?? '';
+  };
+  // Helper: write provider-specific config
+  const setProv = (field: string, provider: string, value: any) => {
+    setForm((prev: any) => ({ ...(prev || {}), [field]: { ...((prev?.[field]) || {}), [provider]: value } }));
+  };
+  const curProv = () => form?.aiProvider || 'deepseek';
+  const defaultUrls: Record<string,string> = {'deepseek':'https://api.deepseek.com','openai':'https://api.openai.com/v1','claude':'https://api.anthropic.com','gemini':'https://generativelanguage.googleapis.com','openrouter':'https://openrouter.ai/api/v1','xiaomimimo':'https://platform.xiaomimimo.com/v1','wenxin':'https://aip.baidubce.com','qwen':'https://dashscope.aliyuncs.com/api/v1','glm':'https://open.bigmodel.cn/api/paas/v4','moonshotai':'https://api.moonshot.cn/v1','minimaxai':'https://api.minimax.chat/v1','openai-completions':'','anthropic-completions':''};
+  const defaultModels: Record<string,string> = {'deepseek':'deepseek-chat','openai':'gpt-4o','claude':'claude-3-5-sonnet-20241022','gemini':'gemini-1.5-pro','openrouter':'openai/gpt-4o','xiaomimimo':'mimo-v1','wenxin':'ERNIE-Bot-4','qwen':'qwen-max','glm':'glm-4','moonshotai':'moonshot-v1-8k','minimaxai':'abab6-chat','openai-completions':'','anthropic-completions':''};
+
   useEffect(() => {
     setForm(config || {});
   }, [config]);
@@ -530,12 +542,13 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({ config, onUpdate, onCha
                         setTestResult(null);
                         try {
                           const providerKey = 'custom-' + Date.now();
+                          const p = curProv();
                           const newProvider = {
                             provider: providerKey,
                             name: customProvName.trim(),
-                            baseUrl: form?.aiBaseUrl,
-                            modelId: form?.aiModelId,
-                            apiKey: form?.aiApiKeys?.[form?.aiProvider || 'deepseek'] ?? form?.deepseekApiKey,
+                            baseUrl: getProv('aiBaseUrls', p, defaultUrls),
+                            modelId: getProv('aiModelIds', p, defaultModels),
+                            apiKey: getProv('aiApiKeys', p),
                           };
                           const updated = [...(form?.aiCustomProviders || []), newProvider];
                           setForm(prev => ({
@@ -574,28 +587,9 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({ config, onUpdate, onCha
                   <input 
                     type="text"
                     className="w-full bg-white border-2 border-indigo-100 rounded-xl px-5 py-3 font-mono text-sm outline-none focus:ring-2 focus:ring-indigo-200 transition-all" 
-                    value={form?.aiBaseUrl || (() => {
-                      // 根据不同服务商设置默认基础地址
-                      const provider = form?.aiProvider || 'deepseek';
-                      const defaultUrls = {
-                        'deepseek': 'https://api.deepseek.com',
-                        'openai': 'https://api.openai.com/v1',
-                        'claude': 'https://api.anthropic.com',
-                        'gemini': 'https://generativelanguage.googleapis.com',
-                        'openrouter': 'https://openrouter.ai/api/v1',
-                        'xiaomimimo': 'https://platform.xiaomimimo.com/v1',
-                        'wenxin': 'https://aip.baidubce.com',
-                        'qwen': 'https://dashscope.aliyuncs.com/api/v1',
-                        'glm': 'https://open.bigmodel.cn/api/paas/v4',
-                        'moonshotai': 'https://api.moonshot.cn/v1',
-                        'minimaxai': 'https://api.minimax.chat/v1',
-                        'openai-completions': '',
-                        'anthropic-completions': '',
-                      };
-                      return defaultUrls[provider] || '';
-                    })()} 
-                    placeholder={form?.aiProvider === 'openai-completions' || form?.aiProvider === 'anthropic-completions' ? '请输入自定义基础地址' : '默认基础地址'}
-                    onChange={e => setForm(prev => ({ ...(prev || defaultForm), aiBaseUrl: e.target.value }))} 
+                    value={getProv('aiBaseUrls', curProv(), defaultUrls)}
+                    placeholder={(form?.aiProvider === 'openai-completions' || form?.aiProvider === 'anthropic-completions') ? '请输入自定义基础地址' : '默认基础地址'}
+                    onChange={e => setProv('aiBaseUrls', curProv(), e.target.value)} 
                   />
                   <p className="text-[10px] text-indigo-500 font-medium italic ml-1">
                     {form?.aiProvider === 'openai-completions' || form?.aiProvider === 'anthropic-completions'
@@ -612,28 +606,9 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({ config, onUpdate, onCha
                   <input 
                     type="text"
                     className="w-full bg-white border-2 border-indigo-100 rounded-xl px-5 py-3 font-mono text-sm outline-none focus:ring-2 focus:ring-indigo-200 transition-all" 
-                    value={form?.aiModelId || (() => {
-                      // 根据不同服务商设置默认模型ID
-                      const provider = form?.aiProvider || 'deepseek';
-                      const defaultModels = {
-                        'deepseek': 'deepseek-chat',
-                        'openai': 'gpt-4o',
-                        'claude': 'claude-3-5-sonnet-20241022',
-                        'gemini': 'gemini-1.5-pro',
-                        'openrouter': 'openai/gpt-4o',
-                        'xiaomimimo': 'mimo-v1',
-                        'wenxin': 'ERNIE-Bot-4',
-                        'qwen': 'qwen-max',
-                        'glm': 'glm-4',
-                        'moonshotai': 'moonshot-v1-8k',
-                        'minimaxai': 'abab6-chat',
-                        'openai-completions': '',
-                        'anthropic-completions': '',
-                      };
-                      return defaultModels[provider] || '';
-                    })()} 
-                     placeholder={form?.aiProvider === 'openai-completions' || form?.aiProvider === 'anthropic-completions' ? '请输入模型ID' : '默认模型ID'}
-                    onChange={e => setForm(prev => ({ ...(prev || defaultForm), aiModelId: e.target.value }))} 
+                    value={getProv('aiModelIds', curProv(), defaultModels)}
+                    placeholder={(form?.aiProvider === 'openai-completions' || form?.aiProvider === 'anthropic-completions') ? '请输入模型ID' : '默认模型ID'}
+                    onChange={e => setProv('aiModelIds', curProv(), e.target.value)} 
                   />
                   <p className="text-[10px] text-indigo-500 font-medium italic ml-1">
                     {form?.aiProvider === 'openai-completions' || form?.aiProvider === 'anthropic-completions'
@@ -652,9 +627,9 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({ config, onUpdate, onCha
                       type="number"
                       min="1"
                       className="w-full bg-white border-2 border-indigo-100 rounded-xl px-5 py-3 font-mono text-sm outline-none focus:ring-2 focus:ring-indigo-200 transition-all" 
-                      value={form?.aiMaxContext || ''} 
+                      value={getProv('aiMaxContexts', curProv())} 
                       placeholder="留空使用默认值"
-                      onChange={e => setForm(prev => ({ ...(prev || {}), aiMaxContext: e.target.value ? parseInt(e.target.value) : undefined }))} 
+                      onChange={e => setProv('aiMaxContexts', curProv(), e.target.value ? parseInt(e.target.value) : '')} 
                     />
                     <p className="text-[9px] text-indigo-400 font-medium italic ml-1">
                       选填，例如：4096、8192、32768
@@ -668,9 +643,9 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({ config, onUpdate, onCha
                       type="number"
                       min="1"
                       className="w-full bg-white border-2 border-indigo-100 rounded-xl px-5 py-3 font-mono text-sm outline-none focus:ring-2 focus:ring-indigo-200 transition-all" 
-                      value={form?.aiMaxTokens || ''} 
+                      value={getProv('aiMaxTokenVals', curProv())} 
                       placeholder="留空使用默认值"
-                      onChange={e => setForm(prev => ({ ...(prev || {}), aiMaxTokens: e.target.value ? parseInt(e.target.value) : undefined }))} 
+                      onChange={e => setProv('aiMaxTokenVals', curProv(), e.target.value ? parseInt(e.target.value) : '')} 
                     />
                     <p className="text-[9px] text-indigo-400 font-medium italic ml-1">
                       选填，例如：1024、2048、4096
@@ -683,9 +658,9 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({ config, onUpdate, onCha
                     <input 
                       type="text"
                       className="w-full bg-white border-2 border-indigo-100 rounded-xl px-5 py-3 font-mono text-sm outline-none focus:ring-2 focus:ring-indigo-200 transition-all" 
-                      value={form?.aiModelAlias || ''} 
+                      value={getProv('aiModelAliases', curProv())} 
                       placeholder="留空使用实际模型名"
-                      onChange={e => setForm(prev => ({ ...(prev || {}), aiModelAlias: e.target.value }))} 
+                      onChange={e => setProv('aiModelAliases', curProv(), e.target.value)} 
                     />
                     <p className="text-[9px] text-indigo-400 font-medium italic ml-1">
                       选填，用于UI展示，不影响API调用
@@ -694,11 +669,15 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({ config, onUpdate, onCha
                 </div>
                 <p className="text-[10px] text-indigo-500 font-medium italic">
                   <i className="fa-solid fa-circle-info mr-1"></i>
-                  以上三项为选填参数。留空时将自动使用模型默认值，系统会尝试从端点 URL 自动加载
+                  以上配置仅对当前选中的提供商生效，切换提供商后配置各自独立。留空则使用默认值。
                 </p>
 
-                {/* 测试连接按钮 */}
+                {/* 保存 + 测试连接按钮 */}
                 <div className="flex items-center gap-3">
+                  <button type="button"
+                    onClick={() => { onUpdate(form); setTestResult({ ok: true, message: 'AI 配置已保存' }); }}
+                    className="flex items-center gap-2 bg-emerald-600 text-white px-5 py-3 rounded-xl font-black text-sm hover:bg-emerald-700 transition-all shadow-sm"
+                  ><i className="fa-solid fa-floppy-disk"></i> 保存当前提供商</button>
                   <button
                     type="button"
                     disabled={testing}
@@ -706,6 +685,7 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({ config, onUpdate, onCha
                       setTesting(true);
                       setTestResult(null);
                       const start = Date.now();
+                      const p = curProv();
                       try {
                         const res = await fetch('/api/admin/ai/test-connection', {
                           method: 'POST',
@@ -714,12 +694,10 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({ config, onUpdate, onCha
                             'Authorization': `Bearer ${localStorage.getItem('edu_token')}`
                           },
                           body: JSON.stringify({
-                            provider: form?.aiProvider || 'deepseek',
-                            baseUrl: form?.aiBaseUrl,
-                            modelId: form?.aiModelId,
-                            apiKey: form?.aiApiKeys?.[form?.aiProvider || 'deepseek'] ?? form?.deepseekApiKey,
-                            maxContext: form?.aiMaxContext,
-                            maxTokens: form?.aiMaxTokens,
+                            provider: p,
+                            baseUrl: getProv('aiBaseUrls', p, defaultUrls),
+                            modelId: getProv('aiModelIds', p, defaultModels),
+                            apiKey: getProv('aiApiKeys', p),
                           })
                         });
                         const latency = Date.now() - start;
@@ -753,26 +731,18 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({ config, onUpdate, onCha
                   )}
                 </div>
 
-                {/* API Key配置 */}
+                {/* API Key 配置（当前提供商） */}
                 <div className="space-y-2">
                    <label className="text-[10px] font-black text-indigo-600 uppercase tracking-widest ml-1 flex items-center gap-2">
-                     <i className="fa-solid fa-key"></i> 管理员全局 API Key
+                     <i className="fa-solid fa-key"></i> API Key（仅当前提供商）
                    </label>
                    <div className="flex gap-2">
                      <input 
                        type={showApiKey ? 'text' : 'password'}
                        className="flex-1 bg-white border-2 border-indigo-100 rounded-xl px-5 py-3 font-mono text-sm outline-none focus:ring-2 focus:ring-indigo-200 transition-all" 
-                       value={form?.aiApiKeys?.[form?.aiProvider || 'deepseek'] ?? form?.deepseekApiKey ?? ''} 
-                       placeholder="请输入 API Key"
-                       onChange={e => {
-                         const provider = form?.aiProvider || 'deepseek';
-                         setForm((prev: any) => ({
-                           ...(prev || defaultForm),
-                           aiApiKeys: { ...(prev?.aiApiKeys || {}), [provider]: e.target.value },
-                           // 兼容旧字段：deepseek 服务商同步写入 deepseekApiKey
-                           ...(provider === 'deepseek' ? { deepseekApiKey: e.target.value } : {})
-                         }));
-                       }}
+                       value={getProv('aiApiKeys', curProv())}
+                       placeholder="请输入当前提供商的 API Key"
+                       onChange={e => setProv('aiApiKeys', curProv(), e.target.value)}
                      />
                      <button
                        type="button"
