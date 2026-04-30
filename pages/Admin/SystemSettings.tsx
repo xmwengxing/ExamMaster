@@ -29,8 +29,8 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({ config, onUpdate, onCha
     setForm((prev: any) => ({ ...(prev || {}), [field]: { ...((prev?.[field]) || {}), [provider]: value } }));
   };
   const curProv = () => form?.aiProvider || 'deepseek';
-  const defaultUrls: Record<string,string> = {'deepseek':'https://api.deepseek.com','openai':'https://api.openai.com/v1','claude':'https://api.anthropic.com','gemini':'https://generativelanguage.googleapis.com','openrouter':'https://openrouter.ai/api/v1','xiaomimimo':'https://platform.xiaomimimo.com/v1','wenxin':'https://aip.baidubce.com','qwen':'https://dashscope.aliyuncs.com/api/v1','glm':'https://open.bigmodel.cn/api/paas/v4','moonshotai':'https://api.moonshot.cn/v1','minimaxai':'https://api.minimax.chat/v1','openai-completions':'','anthropic-completions':''};
-  const defaultModels: Record<string,string> = {'deepseek':'deepseek-chat','openai':'gpt-4o','claude':'claude-3-5-sonnet-20241022','gemini':'gemini-1.5-pro','openrouter':'openai/gpt-4o','xiaomimimo':'mimo-v1','wenxin':'ERNIE-Bot-4','qwen':'qwen-max','glm':'glm-4','moonshotai':'moonshot-v1-8k','minimaxai':'abab6-chat','openai-completions':'','anthropic-completions':''};
+  const defaultUrls: Record<string,string> = {'deepseek':'https://api.deepseek.com','openai':'https://api.openai.com/v1','claude':'https://api.anthropic.com','gemini':'https://generativelanguage.googleapis.com','openrouter':'https://openrouter.ai/api/v1','xiaomimimo':'https://platform.xiaomimimo.com/v1','longcat':'https://api.longcat.chat/openai','wenxin':'https://aip.baidubce.com','qwen':'https://dashscope.aliyuncs.com/api/v1','glm':'https://open.bigmodel.cn/api/paas/v4','moonshotai':'https://api.moonshot.cn/v1','minimaxai':'https://api.minimax.chat/v1','openai-completions':'','anthropic-completions':''};
+  const defaultModels: Record<string,string> = {'deepseek':'deepseek-chat','openai':'gpt-4o','claude':'claude-3-5-sonnet-20241022','gemini':'gemini-1.5-pro','openrouter':'openai/gpt-4o','xiaomimimo':'mimo-v1','longcat':'LongCat-Flash-Chat','wenxin':'ERNIE-Bot-4','qwen':'qwen-max','glm':'glm-4','moonshotai':'moonshot-v1-8k','minimaxai':'abab6-chat','openai-completions':'','anthropic-completions':''};
 
   useEffect(() => {
     setForm(config || {});
@@ -467,6 +467,7 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({ config, onUpdate, onCha
                     { value: 'gemini', label: 'Gemini (Google)' },
                     { value: 'openrouter', label: 'OpenRouter（多模型聚合）' },
                     { value: 'xiaomimimo', label: '小米米莫（MoE 专家模型）' },
+                    { value: 'longcat', label: '龙猫 LongCat（美团）' },
                     { value: 'wenxin', label: '文心一言 (百度)' },
                     { value: 'qwen', label: '通义千问 (阿里云)' },
                     { value: 'glm', label: '智谱清言 (GLM)' },
@@ -785,6 +786,11 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({ config, onUpdate, onCha
                   {form?.aiProvider === 'xiaomimimo' && (
                     <a href="https://platform.xiaomimimo.com/dashboard" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-black hover:bg-indigo-700 transition-all shadow-sm">
                       <i className="fa-solid fa-external-link-alt"></i> 获取小米米莫 API Key
+                    </a>
+                  )}
+                  {form?.aiProvider === 'longcat' && (
+                    <a href="https://longcat.chat/platform/dashboard" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-black hover:bg-indigo-700 transition-all shadow-sm">
+                      <i className="fa-solid fa-external-link-alt"></i> 获取龙猫 LongCat API Key
                     </a>
                   )}
                   {form?.aiProvider === 'wenxin' && (

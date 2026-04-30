@@ -160,6 +160,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                 { value: 'gemini', label: 'Gemini (Google)' },
                 { value: 'openrouter', label: 'OpenRouter（多模型聚合）' },
                 { value: 'xiaomimimo', label: '小米米莫（MoE专家模型）' },
+                { value: 'longcat', label: '龙猫 LongCat（美团）' },
                 { value: 'wenxin', label: '文心一言 (百度)' },
                 { value: 'openai-completions', label: '自定义提供商' },
               ];

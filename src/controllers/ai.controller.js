@@ -107,9 +107,17 @@ export async function testConnection(req, res) {
         testUrl = (baseUrl || 'https://api.moonshot.cn/v1') + '/models';
         headers = { 'Authorization': `Bearer ${apiKey}` };
         break;
+      case 'longcat':
+        testUrl = (baseUrl || 'https://api.longcat.chat/openai') + '/v1/models';
+        headers = { 'Authorization': `Bearer ${apiKey}` };
+        break;
+      case 'xiaomimimo':
+        testUrl = (baseUrl || 'https://platform.xiaomimimo.com/v1') + '/models';
+        headers = { 'Authorization': `Bearer ${apiKey}` };
+        break;
       default:
-        // For most OpenAI-compatible APIs
-        testUrl = (baseUrl || 'https://api.example.com') + '/models';
+        // For OpenAI-compatible APIs, try /v1/models
+        testUrl = (baseUrl || 'https://api.example.com/v1') + '/models';
         headers = { 'Authorization': `Bearer ${apiKey}` };
     }
     
