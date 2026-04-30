@@ -108,7 +108,12 @@ export async function testConnection(req, res) {
         headers = { 'Authorization': `Bearer ${apiKey}` };
         break;
       case 'longcat':
-        testUrl = (baseUrl || 'https://api.longcat.chat/openai') + '/v1/models';
+        // LongCat doesn't have /models, use chat completions instead
+        testUrl = (baseUrl || 'https://api.longcat.chat/openai') + '/v1/chat/completions';
+        headers = { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' };
+        break;
+      case 'openrouter':
+        testUrl = (baseUrl || 'https://openrouter.ai/api/v1') + '/models';
         headers = { 'Authorization': `Bearer ${apiKey}` };
         break;
       case 'xiaomimimo':
@@ -125,18 +130,24 @@ export async function testConnection(req, res) {
     const timeout = setTimeout(() => controller.abort(), 15000);
     
     try {
+      // For providers using chat completions endpoint, send a minimal POST
+      const isChatEndpoint = testUrl.includes('/chat/completions');
       const response = await fetch(testUrl, {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json', ...headers },
+        method: isChatEndpoint ? 'POST' : 'GET',
+        headers,
+        body: isChatEndpoint ? JSON.stringify({ model: modelId || 'gpt-3.5-turbo', messages: [{ role: 'user', content: 'hi' }], max_tokens: 1 }) : undefined,
         signal: controller.signal
       });
       clearTimeout(timeout);
       
       if (response.ok) {
         res.json({ ok: true, message: '连接成功，API 可正常访问' });
+      } else if (response.status === 401 || response.status === 403) {
+        res.json({ ok: false, message: 'API Key 无效或权限不足' });
       } else {
         const body = await response.text().catch(() => '');
-        res.json({ ok: false, message: `服务器返回 ${response.status}${body ? ': ' + body.slice(0, 80) : ''}` });
+        const short = body.length > 80 ? body.slice(0,80) + '...' : body;
+        res.json({ ok: false, message: `服务器返回 ${response.status}${short ? ': ' + short : ''}` });
       }
     } catch (e) {
       clearTimeout(timeout);
