@@ -162,8 +162,17 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                 { value: 'xiaomimimo', label: '小米米莫（MoE专家模型）' },
                 { value: 'longcat', label: '龙猫 LongCat（美团）' },
                 { value: 'wenxin', label: '文心一言 (百度)' },
-                { value: 'openai-completions', label: '自定义提供商' },
+                { value: 'qwen', label: '通义千问 (阿里云)' },
+                { value: 'glm', label: '智谱清言 (GLM)' },
+                { value: 'moonshotai', label: '月之暗面 (Moonshot AI)' },
+                { value: 'minimaxai', label: 'MiniMax AI' },
+                { value: 'openai-completions', label: 'OpenAI协议（自定义）' },
+                { value: 'anthropic-completions', label: 'Anthropic协议（自定义）' },
               ];
+              const defaultUrls: Record<string,string> = {deepseek:'https://api.deepseek.com',openai:'https://api.openai.com/v1',claude:'https://api.anthropic.com',gemini:'https://generativelanguage.googleapis.com',openrouter:'https://openrouter.ai/api/v1',xiaomimimo:'https://platform.xiaomimimo.com/v1',longcat:'https://api.longcat.chat/openai',wenxin:'https://aip.baidubce.com',qwen:'https://dashscope.aliyuncs.com/api/v1',glm:'https://open.bigmodel.cn/api/paas/v4',moonshotai:'https://api.moonshot.cn/v1',minimaxai:'https://api.minimax.chat/v1'};
+              const defaultModels: Record<string,string> = {deepseek:'deepseek-chat',openai:'gpt-4o',claude:'claude-3-5-sonnet-20241022',gemini:'gemini-1.5-pro',openrouter:'openai/gpt-4o',xiaomimimo:'mimo-v1',longcat:'LongCat-Flash-Chat',wenxin:'ERNIE-Bot-4',qwen:'qwen-max',glm:'glm-4',moonshotai:'moonshot-v1-8k',minimaxai:'abab6-chat'};
+              const isCustom = aiProvider === 'openai-completions' || aiProvider === 'anthropic-completions';
+              const isBuiltIn = Object.keys(defaultUrls).includes(aiProvider);
               return (
                 <div className="flex gap-2">
                   <select 
@@ -188,17 +197,17 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
           </div>
 
           {/* 自定义提供商 */}
-          {aiProvider === 'openai-completions' && (
+          {(aiProvider === 'openai-completions' || aiProvider === 'anthropic-completions') && (
             <div className="bg-amber-50 p-3 rounded-xl border border-amber-200 space-y-2">
-              <p className="text-[10px] font-black text-amber-700">添加自定义 AI 提供商</p>
+              <p className="text-[10px] font-black text-amber-700">添加自定义 AI 提供商（{aiProvider === 'anthropic-completions' ? 'Anthropic协议' : 'OpenAI协议'}）</p>
+              <input
+                type="text"
+                className="w-full bg-white border-2 border-amber-100 rounded-lg px-3 py-2 font-bold text-xs outline-none focus:ring-2 focus:ring-amber-200"
+                placeholder="提供商名称（必填）"
+                value={customProvName}
+                onChange={e => setCustomProvName(e.target.value)}
+              />
               <div className="flex gap-2">
-                <input
-                  type="text"
-                  className="flex-1 bg-white border-2 border-amber-100 rounded-lg px-3 py-2 font-bold text-xs outline-none focus:ring-2 focus:ring-amber-200"
-                  placeholder="提供商名称（必填）"
-                  value={customProvName}
-                  onChange={e => setCustomProvName(e.target.value)}
-                />
                 <button
                   type="button"
                   onClick={() => {
@@ -217,8 +226,51 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                   <i className="fa-solid fa-plus"></i> 添加
                 </button>
               </div>
+              <p className="text-[9px] text-amber-600 font-medium">添加后请在上方填写模型ID和基础地址</p>
             </div>
           )}
+
+           {/* 模型ID */}
+          <div className="space-y-1.5 md:space-y-2">
+            <label className="text-[9px] md:text-[10px] font-black text-purple-600 uppercase tracking-widest ml-1 flex items-center gap-2">
+              <i className="fa-solid fa-microchip"></i> 模型 ID（Model ID）
+            </label>
+            <input 
+              type="text"
+              className="w-full bg-white border-2 border-purple-100 rounded-lg md:rounded-xl px-3 md:px-4 py-2 md:py-3 font-mono text-xs md:text-sm outline-none focus:ring-2 focus:ring-purple-200 transition-all" 
+              placeholder={isBuiltIn ? (defaultModels[aiProvider] || '默认模型') : '请输入模型ID'}
+              value={currentUser?.customFields?.aiModelId || ''}
+              onChange={e => {
+                const cf = { ...(currentUser?.customFields || {}), aiModelId: e.target.value };
+                store.updateProfile({ customFields: cf });
+              }}
+            />
+          </div>
+
+          {/* 基础地址 */}
+          <div className="space-y-1.5 md:space-y-2">
+            <label className="text-[9px] md:text-[10px] font-black text-purple-600 uppercase tracking-widest ml-1 flex items-center gap-2">
+              <i className="fa-solid fa-server"></i> 基础地址（Base URL）
+            </label>
+            <input 
+              type="text"
+              className={`w-full border-2 rounded-lg md:rounded-xl px-3 md:px-4 py-2 md:py-3 font-mono text-xs md:text-sm outline-none transition-all ${
+                isBuiltIn ? 'bg-gray-100 text-gray-500 cursor-not-allowed border-gray-200' : 'bg-white border-purple-100 focus:ring-2 focus:ring-purple-200'
+              }`}
+              placeholder={isBuiltIn ? (defaultUrls[aiProvider] || '') : '请输入自定义基础地址'}
+              value={isBuiltIn ? (defaultUrls[aiProvider] || '') : (currentUser?.customFields?.aiBaseUrl || '')}
+              readOnly={isBuiltIn}
+              onChange={e => {
+                if (!isBuiltIn) {
+                  const cf = { ...(currentUser?.customFields || {}), aiBaseUrl: e.target.value };
+                  store.updateProfile({ customFields: cf });
+                }
+              }}
+            />
+            <p className="text-[8px] md:text-[9px] text-gray-400 font-medium italic ml-1">
+              {isBuiltIn ? '系统预设地址，不可修改' : '自定义提供商需填写完整的 API 基础地址'}
+            </p>
+          </div>
 
           {/* API Key 输入 */}
           <div className="space-y-1.5 md:space-y-2">
