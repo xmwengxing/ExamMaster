@@ -451,6 +451,52 @@ const AdminUserMgt: React.FC<AdminUserMgtProps> = ({ currentUser, admins, studen
         </div>
       )}
 
+      {/* Admin Edit Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <form onSubmit={handleAdminSave} className="bg-white rounded-3xl w-full max-w-md p-8 animate-in zoom-in-95 duration-200 shadow-2xl overflow-y-auto max-h-[90vh]">
+            <h3 className="text-2xl font-black text-gray-900 mb-6">{editingAdmin ? '编辑管理员权限' : '新增二级管理员'}</h3>
+            <div className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">管理员姓名</label>
+                <input required name="realName" className="w-full bg-gray-50 border-none rounded-2xl px-5 py-4 font-bold outline-none focus:ring-2 focus:ring-indigo-600/20" placeholder="请输入姓名" defaultValue={editingAdmin?.realName} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">登录账号/手机号</label>
+                <input required name="phone" className="w-full bg-gray-50 border-none rounded-2xl px-5 py-4 font-bold outline-none focus:ring-2 focus:ring-indigo-600/20" placeholder="请输入账号" defaultValue={editingAdmin?.phone} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">
+                  {editingAdmin ? '登录密码 (留空则不修改)' : '设置登录密码'}
+                </label>
+                <input 
+                  required={!editingAdmin} 
+                  name="password" 
+                  type="password" 
+                  className="w-full bg-gray-50 border-none rounded-2xl px-5 py-4 font-bold outline-none focus:ring-2 focus:ring-indigo-600/20" 
+                  placeholder={editingAdmin ? '••••••••' : '请输入登录密码'} 
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-3 ml-1">分配功能模块权限</label>
+                <div className="grid grid-cols-2 gap-3">
+                  {menuOptions.map(m => (
+                    <label key={m.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-2xl cursor-pointer hover:bg-indigo-50 transition-colors border-2 border-transparent has-[:checked]:border-indigo-600/20 has-[:checked]:bg-indigo-50/50">
+                      <input type="checkbox" name={m.id} className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" defaultChecked={editingAdmin?.permissions?.includes(m.id)} />
+                      <span className="text-sm font-bold text-gray-700">{m.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-4 pt-8">
+              <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 bg-gray-100 text-gray-500 py-4 rounded-2xl font-black hover:bg-gray-200 transition-colors">取消</button>
+              <button type="submit" className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-black shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all">确认保存</button>
+            </div>
+          </form>
+        </div>
+      )}
+
       {/* Batch Import Modal */}
       {isBatchModalOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
