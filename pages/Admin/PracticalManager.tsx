@@ -299,7 +299,7 @@ const PracticalManager: React.FC = () => {
 
             <div className="mt-12 pt-8 border-t border-dashed flex gap-4">
               <button onClick={() => setIsModalOpen(false)} className="flex-1 py-4 bg-gray-100 text-gray-500 rounded-2xl font-black">取消</button>
-              <button onClick={handleSave} className="flex-2 py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-xl">保存实操题</button>
+              <button onClick={handleSave} className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-xl">保存</button>
             </div>
           </div>
         </div>
