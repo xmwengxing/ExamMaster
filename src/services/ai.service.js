@@ -12,7 +12,7 @@ import db from '../../db.js';
 async function getApiConfig(userId) {
   // 1. 优先使用用户自己的 API Key
   const userResult = await db.getOne(
-    'SELECT deepseek_api_key as api_key, custom_fields, ai_provider FROM users WHERE id = $1',
+    'SELECT deepseek_api_key as api_key, custom_fields FROM users WHERE id = $1',
     [userId]
   );
   
