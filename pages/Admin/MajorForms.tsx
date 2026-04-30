@@ -450,7 +450,16 @@ const MajorForms: React.FC = () => {
 
       {/* 数据表格 */}
       <div className="bg-white rounded-3xl border shadow-sm overflow-hidden">
-        {!selectedOccupation ? (
+        {!selectedOccupation && occupations.length === 0 ? (
+          <div className="text-center py-16">
+            <i className="fa-solid fa-folder-open text-5xl text-gray-200 mb-4"></i>
+            <h3 className="text-lg font-black text-gray-400 mb-2">暂无职业数据</h3>
+            <p className="text-sm text-gray-400 max-w-md mx-auto leading-relaxed">
+              请先在「职业技能 &gt; 职业工种管理」中添加职业，<br/>
+              然后回到本页选择职业，点击「添加专业」或「Excel 导入」创建专业对照表
+            </p>
+          </div>
+        ) : !selectedOccupation ? (
           <div className="text-center py-12">
             <i className="fa-solid fa-hand-pointer text-4xl text-gray-300 mb-4"></i>
             <p className="text-gray-400 font-medium">请先选择职业</p>
@@ -472,10 +481,12 @@ const MajorForms: React.FC = () => {
             </button>
           </div>
         ) : mappings.length === 0 ? (
-          <div className="text-center py-12">
-            <i className="fa-solid fa-inbox text-4xl text-gray-300 mb-4"></i>
-            <p className="text-gray-400 font-medium mb-2">暂无专业对照记录</p>
-            <p className="text-xs text-gray-400">点击"添加专业"或"Excel 导入"添加记录</p>
+          <div className="text-center py-16">
+            <i className="fa-solid fa-inbox text-5xl text-gray-200 mb-4"></i>
+            <h3 className="text-lg font-black text-gray-400 mb-2">该职业暂无专业对照表</h3>
+            <p className="text-sm text-gray-400 max-w-md mx-auto leading-relaxed">
+              点击「添加专业」逐条录入，或「Excel 导入」批量导入专业对照数据
+            </p>
           </div>
         ) : (
           <>

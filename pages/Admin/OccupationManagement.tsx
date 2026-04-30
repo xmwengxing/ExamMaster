@@ -322,6 +322,7 @@ const OccupationManagement: React.FC = () => {
                 allowClear
                 value={selectedOccupation || undefined}
                 onChange={setSelectedOccupation}
+                disabled={data.length === 0}
               >
                 {occupations.map(occ => (
                   <Option key={occ} value={occ}>{occ}</Option>
@@ -331,7 +332,16 @@ const OccupationManagement: React.FC = () => {
           </div>
         </div>
 
-        <Table
+        {!loading && data.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '64px 0' }}>
+            <i className="fa-solid fa-briefcase" style={{ fontSize: 48, color: '#d1d5db', marginBottom: 16, display: 'block' }}></i>
+            <h3 style={{ fontSize: 18, fontWeight: 800, color: '#9ca3af', marginBottom: 8 }}>暂无职业工种数据</h3>
+            <p style={{ fontSize: 14, color: '#9ca3af', maxWidth: 400, margin: '0 auto', lineHeight: 1.8 }}>
+              点击「新增职业工种」逐条录入，或「导入Excel」批量导入职业工种清单
+            </p>
+          </div>
+        ) : (
+        <Table<OccupationRecord>
           columns={columns}
           dataSource={filteredData}
           rowKey="id"
@@ -341,7 +351,15 @@ const OccupationManagement: React.FC = () => {
             showSizeChanger: true,
             showTotal: (total) => `共 ${total} 条记录`
           }}
+          locale={{
+            emptyText: (
+              <div style={{ padding: '48px 0' }}>
+                <p style={{ fontSize: 14, color: '#9ca3af', fontWeight: 600 }}>该筛选条件下暂无数据</p>
+              </div>
+            )
+          }}
         />
+        )}
       </Card>
 
       {/* 新增/编辑弹窗 */}
