@@ -9,6 +9,7 @@ interface SystemSettingsProps {
   defaultTab?: 'theme' | 'ai' | 'cache';
 }
 
+const defaultForm: any = {};
 
 const SystemSettings: React.FC<SystemSettingsProps> = ({ config, onUpdate, onChangeAdminPass, defaultTab }) => {
   const [form, setForm] = useState<any>(config || {});
@@ -16,6 +17,8 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({ config, onUpdate, onCha
   const [activeCategory, setActiveCategory] = useState<'theme' | 'ai' | 'cache'>(defaultTab || 'theme');
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string; latency?: number } | null>(null);
   const [testing, setTesting] = useState(false);
+  const [customProvName, setCustomProvName] = useState('');
+  const [addingProvider, setAddingProvider] = useState(false);
 
   useEffect(() => {
     setForm(config || {});
@@ -444,23 +447,119 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({ config, onUpdate, onCha
             <div className="space-y-4">
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-indigo-600 uppercase tracking-widest ml-1">AI 服务提供商</label>
-                <select 
-                  className="w-full bg-white border-2 border-indigo-100 rounded-xl px-5 py-3 font-bold outline-none focus:ring-2 focus:ring-indigo-200 transition-all"
-                  value={form?.aiProvider || 'deepseek'}
-                  onChange={e => setForm(prev => ({ ...(prev || defaultForm), aiProvider: e.target.value }))}
-                >
-                  <option value="deepseek">DeepSeek（推荐）</option>
-                  <option value="openai">OpenAI (GPT-4/GPT-3.5)</option>
-                  <option value="claude">Claude (Anthropic)</option>
-                  <option value="gemini">Gemini (Google)</option>
-                  <option value="wenxin">文心一言 (百度)</option>
-                  <option value="qwen">通义千问 (阿里云)</option>
-                  <option value="glm">智谱清言 (GLM)</option>
-                  <option value="moonshotai">月之暗面 (Moonshot AI)</option>
-                  <option value="minimaxai">MiniMax AI</option>
-                  <option value="openai-completions">OpenAI Completions（自定义）</option>
-                </select>
+                {(() => {
+                  const builtInProviders = [
+                    { value: 'deepseek', label: 'DeepSeek（推荐）' },
+                    { value: 'openai', label: 'OpenAI (GPT-4/GPT-3.5)' },
+                    { value: 'claude', label: 'Claude (Anthropic)' },
+                    { value: 'gemini', label: 'Gemini (Google)' },
+                    { value: 'wenxin', label: '文心一言 (百度)' },
+                    { value: 'qwen', label: '通义千问 (阿里云)' },
+                    { value: 'glm', label: '智谱清言 (GLM)' },
+                    { value: 'moonshotai', label: '月之暗面 (Moonshot AI)' },
+                    { value: 'minimaxai', label: 'MiniMax AI' },
+                    { value: 'openai-completions', label: 'OpenAI Completions（自定义）' },
+                  ];
+                  const customProviders = (form?.aiCustomProviders || []).map((p: any) => ({
+                    value: p.provider || p.name,
+                    label: `${p.name || p.provider}（自定义）`,
+                    isCustom: true,
+                    ...p
+                  }));
+                  const allProviders = [...builtInProviders, ...customProviders];
+                  return (
+                    <div className="flex gap-2">
+                      <select 
+                        className="flex-1 bg-white border-2 border-indigo-100 rounded-xl px-5 py-3 font-bold outline-none focus:ring-2 focus:ring-indigo-200 transition-all"
+                        value={form?.aiProvider || 'deepseek'}
+                        onChange={e => setForm(prev => ({ ...(prev || {}), aiProvider: e.target.value }))}
+                      >
+                        {builtInProviders.map(p => (
+                          <option key={p.value} value={p.value}>{p.label}</option>
+                        ))}
+                        {customProviders.length > 0 && (
+                          <optgroup label="──── 自定义提供商 ────">
+                            {customProviders.map((p: any) => (
+                              <option key={p.value} value={p.value}>{p.label}</option>
+                            ))}
+                          </optgroup>
+                        )}
+                      </select>
+                      {customProviders.find((p: any) => p.value === form?.aiProvider) && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const filtered = (form?.aiCustomProviders || []).filter((p: any) => (p.provider || p.name) !== form?.aiProvider);
+                            setForm(prev => ({ ...(prev || {}), aiCustomProviders: filtered, aiProvider: 'deepseek' }));
+                          }}
+                          className="px-3 py-3 bg-rose-50 border-2 border-rose-100 rounded-xl text-rose-600 hover:bg-rose-100 transition-all text-sm"
+                          title="删除此自定义提供商"
+                        >
+                          <i className="fa-solid fa-trash"></i>
+                        </button>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
+
+              {/* 自定义提供商添加 */}
+              {form?.aiProvider === 'openai-completions' && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
+                  <p className="text-xs font-black text-amber-700">
+                    <i className="fa-solid fa-puzzle-piece mr-1"></i> 添加自定义 AI 提供商
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      className="flex-1 bg-white border-2 border-amber-100 rounded-xl px-4 py-3 font-bold text-sm outline-none focus:ring-2 focus:ring-amber-200"
+                      placeholder="提供商名称（必填）"
+                      value={customProvName}
+                      onChange={e => setCustomProvName(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      disabled={!customProvName.trim() || addingProvider}
+                      onClick={async () => {
+                        if (!customProvName.trim()) return;
+                        setAddingProvider(true);
+                        setTestResult(null);
+                        try {
+                          const providerKey = 'custom-' + Date.now();
+                          const newProvider = {
+                            provider: providerKey,
+                            name: customProvName.trim(),
+                            baseUrl: form?.aiBaseUrl,
+                            modelId: form?.aiModelId,
+                            apiKey: form?.aiApiKeys?.[form?.aiProvider || 'deepseek'] ?? form?.deepseekApiKey,
+                          };
+                          const updated = [...(form?.aiCustomProviders || []), newProvider];
+                          setForm(prev => ({
+                            ...(prev || {}),
+                            aiCustomProviders: updated,
+                            aiProvider: providerKey
+                          }));
+                          setCustomProvName('');
+                          setTestResult({ ok: true, message: `提供商「${customProvName.trim()}」已添加` });
+                        } catch (e: any) {
+                          setTestResult({ ok: false, message: e.message || '添加失败' });
+                        }
+                        setAddingProvider(false);
+                      }}
+                      className="flex items-center gap-2 bg-amber-600 text-white px-5 py-3 rounded-xl font-black text-sm hover:bg-amber-700 transition-all disabled:opacity-50"
+                    >
+                      {addingProvider ? (
+                        <><i className="fa-solid fa-spinner fa-spin"></i> 添加中</>
+                      ) : (
+                        <><i className="fa-solid fa-plus"></i> 添加提供商</>
+                      )}
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-amber-600 font-medium italic">
+                    填写提供商名称后点击"添加提供商"按钮即可保存到提供商列表。添加后可以点击垃圾桶图标删除。
+                  </p>
+                </div>
+              )}
 
               <div className="bg-white/80 backdrop-blur-sm p-6 rounded-2xl border border-indigo-100 space-y-4">
                 {/* 基础地址配置 */}

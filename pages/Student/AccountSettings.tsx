@@ -26,6 +26,8 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
   const [ttsSpeed, setTtsSpeed] = useState(currentUser?.ttsSpeed || 1);
   const [ttsVoice, setTtsVoice] = useState(currentUser?.ttsVoice || 'female');
   const [ttsAutoPlay, setTtsAutoPlay] = useState(currentUser?.ttsAutoPlay !== false);
+  const [customProvName, setCustomProvName] = useState('');
+  const customProviders = (currentUser?.customFields?.aiCustomProviders || []) as any[];
 
   const handlePassChange = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,7 +69,11 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
         aiProvider,
         ttsSpeed,
         ttsVoice,
-        ttsAutoPlay
+        ttsAutoPlay,
+        customFields: {
+          ...(currentUser?.customFields || {}),
+          aiCustomProviders: customProviders
+        }
       });
       alert('AI 配置已保存');
     } catch (err) {
@@ -146,18 +152,70 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
           {/* AI 服务商选择 */}
           <div className="space-y-1.5 md:space-y-2">
             <label className="text-[9px] md:text-[10px] font-black text-purple-600 uppercase tracking-widest ml-1">AI 服务提供商</label>
-            <select 
-              className="w-full bg-white border-2 border-purple-100 rounded-lg md:rounded-xl px-3 md:px-4 py-2 md:py-3 font-bold outline-none focus:ring-2 focus:ring-purple-200 transition-all text-xs md:text-sm"
-              value={aiProvider}
-              onChange={e => setAiProvider(e.target.value)}
-            >
-              <option value="deepseek">DeepSeek（推荐）</option>
-              <option value="openai">OpenAI (GPT-4/GPT-3.5)</option>
-              <option value="claude">Claude (Anthropic)</option>
-              <option value="gemini">Gemini (Google)</option>
-              <option value="wenxin">文心一言 (百度)</option>
-            </select>
+            {(() => {
+              const builtIn = [
+                { value: 'deepseek', label: 'DeepSeek（推荐）' },
+                { value: 'openai', label: 'OpenAI (GPT-4/GPT-3.5)' },
+                { value: 'claude', label: 'Claude (Anthropic)' },
+                { value: 'gemini', label: 'Gemini (Google)' },
+                { value: 'wenxin', label: '文心一言 (百度)' },
+                { value: 'openai-completions', label: '自定义提供商' },
+              ];
+              return (
+                <div className="flex gap-2">
+                  <select 
+                    className="flex-1 bg-white border-2 border-purple-100 rounded-lg md:rounded-xl px-3 md:px-4 py-2 md:py-3 font-bold outline-none focus:ring-2 focus:ring-purple-200 transition-all text-xs md:text-sm"
+                    value={aiProvider}
+                    onChange={e => setAiProvider(e.target.value)}
+                  >
+                    {builtIn.map(p => (
+                      <option key={p.value} value={p.value}>{p.label}</option>
+                    ))}
+                    {customProviders.length > 0 && (
+                      <optgroup label="──── 我的自定义提供商 ────">
+                        {customProviders.map((p: any) => (
+                          <option key={p.provider || p.name} value={p.provider || p.name}>{p.name || p.provider}（自定义）</option>
+                        ))}
+                      </optgroup>
+                    )}
+                  </select>
+                </div>
+              );
+            })()}
           </div>
+
+          {/* 自定义提供商 */}
+          {aiProvider === 'openai-completions' && (
+            <div className="bg-amber-50 p-3 rounded-xl border border-amber-200 space-y-2">
+              <p className="text-[10px] font-black text-amber-700">添加自定义 AI 提供商</p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  className="flex-1 bg-white border-2 border-amber-100 rounded-lg px-3 py-2 font-bold text-xs outline-none focus:ring-2 focus:ring-amber-200"
+                  placeholder="提供商名称（必填）"
+                  value={customProvName}
+                  onChange={e => setCustomProvName(e.target.value)}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!customProvName.trim()) return;
+                    const key = 'custom-' + Date.now();
+                    const newP = { provider: key, name: customProvName.trim() };
+                    const updated = [...customProviders, newP];
+                    store.updateProfile({
+                      customFields: { ...(currentUser?.customFields || {}), aiCustomProviders: updated }
+                    });
+                    setAiProvider(key);
+                    setCustomProvName('');
+                  }}
+                  className="flex items-center gap-1 bg-amber-600 text-white px-3 py-2 rounded-lg font-black text-[10px]"
+                >
+                  <i className="fa-solid fa-plus"></i> 添加
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* API Key 输入 */}
           <div className="space-y-1.5 md:space-y-2">
