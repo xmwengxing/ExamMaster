@@ -27,6 +27,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, activeTab, onTabChange,
   const isStudent = user.role === UserRole.STUDENT;
   const isSuperAdmin = user.phone === 'admin';
   const [expandedMenus, setExpandedMenus] = useState<string[]>(['banks', 'students']); // 默认展开题库管理和学员管理
+  const [mobileSubmenu, setMobileSubmenu] = useState<{ parent: MenuItem; items: MenuItem['submenu'] } | null>(null);
   
   // 确保themeConfig不为null或undefined
   const config = themeConfig || {};
@@ -241,42 +242,74 @@ const Layout: React.FC<LayoutProps> = ({ children, user, activeTab, onTabChange,
         </div>
 
         <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t h-16 z-40 shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
-          <div className={`flex items-center h-full ${isStudent ? 'justify-around px-2' : 'overflow-x-auto'}`}>
-            <div className={`flex items-center h-full ${isStudent ? 'w-full justify-around' : 'px-2 min-w-max'}`}>
-              {currentTabs.map(tab => {
-                // 如果有子菜单，展开显示所有子项
-                if (tab.hasSubmenu && tab.submenu) {
-                  return tab.submenu.map(subItem => (
-                    <button
-                      key={subItem.id}
-                      onClick={() => onTabChange(subItem.id)}
-                      className={`flex flex-col items-center justify-center gap-1 h-full transition-all whitespace-nowrap ${
-                        isStudent ? 'flex-1' : 'px-4'
-                      } ${activeTab === subItem.id ? 'text-indigo-600 scale-105' : 'text-gray-400'}`}
-                    >
-                      <i className={`fa-solid ${subItem.icon} text-lg`}></i>
-                      <span className="text-[10px] font-bold">{subItem.label}</span>
-                    </button>
-                  ));
-                }
-                
-                // 普通菜单项
-                return (
-                  <button
-                    key={tab.id}
-                    onClick={() => onTabChange(tab.id)}
-                    className={`flex flex-col items-center justify-center gap-1 h-full transition-all whitespace-nowrap ${
-                      isStudent ? 'flex-1' : 'px-4'
-                    } ${activeTab === tab.id ? 'text-indigo-600 scale-105' : 'text-gray-400'}`}
-                  >
-                    <i className={`fa-solid ${tab.icon} text-lg`}></i>
-                    <span className="text-[10px] font-bold">{tab.label}</span>
-                  </button>
-                );
-              })}
-            </div>
+          <div className="flex items-center justify-around h-full px-1">
+            {currentTabs.map(tab => {
+              const hasChildren = tab.hasSubmenu && tab.submenu;
+              const isActive = hasChildren 
+                ? tab.submenu!.some(s => s.id === activeTab) || activeTab === tab.id
+                : activeTab === tab.id;
+              
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => {
+                    if (hasChildren) {
+                      setMobileSubmenu({ parent: tab, items: tab.submenu! });
+                    } else {
+                      onTabChange(tab.id);
+                    }
+                  }}
+                  className={`flex flex-col items-center justify-center gap-0.5 h-14 px-1.5 rounded-xl transition-all min-w-0 flex-1 ${
+                    isActive ? 'text-indigo-600' : 'text-gray-400'
+                  }`}
+                >
+                  <i className={`fa-solid ${tab.icon} text-lg`}></i>
+                  <span className="text-[9px] font-bold leading-tight truncate max-w-full">{tab.label}</span>
+                </button>
+              );
+            })}
           </div>
         </nav>
+
+        {/* Mobile Submenu Drawer */}
+        {mobileSubmenu && (
+          <div className="md:hidden fixed inset-0 z-50 flex flex-col justify-end">
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setMobileSubmenu(null)}></div>
+            <div className="relative bg-white rounded-t-[2rem] p-6 animate-in slide-in-from-bottom duration-300 shadow-2xl">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-black text-gray-900">
+                  <i className={`fa-solid ${mobileSubmenu.parent.icon} mr-2 text-indigo-500`}></i>
+                  {mobileSubmenu.parent.label}
+                </h3>
+                <button onClick={() => setMobileSubmenu(null)} className="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center text-gray-500">
+                  <i className="fa-solid fa-xmark"></i>
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-2 mb-6">
+                {mobileSubmenu.items.map(item => (
+                  <button
+                    key={item.id}
+                    onClick={() => { onTabChange(item.id); setMobileSubmenu(null); }}
+                    className={`flex items-center gap-3 px-4 py-3.5 rounded-2xl font-bold text-sm transition-all ${
+                      activeTab === item.id
+                        ? 'bg-indigo-100 text-indigo-700'
+                        : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                    }`}
+                  >
+                    <i className={`fa-solid ${item.icon} w-5 text-center`}></i>
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={() => { onTabChange(mobileSubmenu.parent.id); setMobileSubmenu(null); }}
+                className="w-full py-4 bg-gray-100 text-gray-500 rounded-2xl font-black text-sm"
+              >
+                返回首页菜单
+              </button>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );
