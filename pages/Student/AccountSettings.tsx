@@ -158,6 +158,8 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                 { value: 'openai', label: 'OpenAI (GPT-4/GPT-3.5)' },
                 { value: 'claude', label: 'Claude (Anthropic)' },
                 { value: 'gemini', label: 'Gemini (Google)' },
+                { value: 'openrouter', label: 'OpenRouter（多模型聚合）' },
+                { value: 'xiaomimimo', label: '小米米莫（MoE专家模型）' },
                 { value: 'wenxin', label: '文心一言 (百度)' },
                 { value: 'openai-completions', label: '自定义提供商' },
               ];

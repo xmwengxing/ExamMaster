@@ -453,12 +453,15 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({ config, onUpdate, onCha
                     { value: 'openai', label: 'OpenAI (GPT-4/GPT-3.5)' },
                     { value: 'claude', label: 'Claude (Anthropic)' },
                     { value: 'gemini', label: 'Gemini (Google)' },
+                    { value: 'openrouter', label: 'OpenRouter（多模型聚合）' },
+                    { value: 'xiaomimimo', label: '小米米莫（MoE 专家模型）' },
                     { value: 'wenxin', label: '文心一言 (百度)' },
                     { value: 'qwen', label: '通义千问 (阿里云)' },
                     { value: 'glm', label: '智谱清言 (GLM)' },
                     { value: 'moonshotai', label: '月之暗面 (Moonshot AI)' },
                     { value: 'minimaxai', label: 'MiniMax AI' },
-                    { value: 'openai-completions', label: 'OpenAI Completions（自定义）' },
+                    { value: 'openai-completions', label: 'OpenAI 协议（自定义）' },
+                    { value: 'anthropic-completions', label: 'Anthropic 协议（自定义）' },
                   ];
                   const customProviders = (form?.aiCustomProviders || []).map((p: any) => ({
                     value: p.provider || p.name,
@@ -504,10 +507,11 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({ config, onUpdate, onCha
               </div>
 
               {/* 自定义提供商添加 */}
-              {form?.aiProvider === 'openai-completions' && (
+              {(form?.aiProvider === 'openai-completions' || form?.aiProvider === 'anthropic-completions') && (
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
                   <p className="text-xs font-black text-amber-700">
-                    <i className="fa-solid fa-puzzle-piece mr-1"></i> 添加自定义 AI 提供商
+                    <i className="fa-solid fa-puzzle-piece mr-1"></i>
+                    添加自定义 AI 提供商（{form?.aiProvider === 'anthropic-completions' ? 'Anthropic 协议' : 'OpenAI 协议'}）
                   </p>
                   <div className="flex gap-2">
                     <input
@@ -578,20 +582,23 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({ config, onUpdate, onCha
                         'openai': 'https://api.openai.com/v1',
                         'claude': 'https://api.anthropic.com',
                         'gemini': 'https://generativelanguage.googleapis.com',
+                        'openrouter': 'https://openrouter.ai/api/v1',
+                        'xiaomimimo': 'https://platform.xiaomimimo.com/v1',
                         'wenxin': 'https://aip.baidubce.com',
                         'qwen': 'https://dashscope.aliyuncs.com/api/v1',
                         'glm': 'https://open.bigmodel.cn/api/paas/v4',
                         'moonshotai': 'https://api.moonshot.cn/v1',
                         'minimaxai': 'https://api.minimax.chat/v1',
-                        'openai-completions': ''
+                        'openai-completions': '',
+                        'anthropic-completions': '',
                       };
                       return defaultUrls[provider] || '';
                     })()} 
-                    placeholder={form?.aiProvider === 'openai-completions' ? '请输入自定义基础地址' : '默认基础地址'}
+                    placeholder={form?.aiProvider === 'openai-completions' || form?.aiProvider === 'anthropic-completions' ? '请输入自定义基础地址' : '默认基础地址'}
                     onChange={e => setForm(prev => ({ ...(prev || defaultForm), aiBaseUrl: e.target.value }))} 
                   />
                   <p className="text-[10px] text-indigo-500 font-medium italic ml-1">
-                    {form?.aiProvider === 'openai-completions' 
+                    {form?.aiProvider === 'openai-completions' || form?.aiProvider === 'anthropic-completions'
                       ? '自定义模式需要手动填写完整的 API 基础地址' 
                       : '留空则使用默认地址，可自定义代理地址'}
                   </p>
@@ -610,23 +617,26 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({ config, onUpdate, onCha
                       const provider = form?.aiProvider || 'deepseek';
                       const defaultModels = {
                         'deepseek': 'deepseek-chat',
-                        'openai': 'gpt-4-turbo-preview',
-                        'claude': 'claude-3-opus-20240229',
-                        'gemini': 'gemini-pro',
+                        'openai': 'gpt-4o',
+                        'claude': 'claude-3-5-sonnet-20241022',
+                        'gemini': 'gemini-1.5-pro',
+                        'openrouter': 'openai/gpt-4o',
+                        'xiaomimimo': 'mimo-v1',
                         'wenxin': 'ERNIE-Bot-4',
                         'qwen': 'qwen-max',
                         'glm': 'glm-4',
                         'moonshotai': 'moonshot-v1-8k',
                         'minimaxai': 'abab6-chat',
-                        'openai-completions': ''
+                        'openai-completions': '',
+                        'anthropic-completions': '',
                       };
                       return defaultModels[provider] || '';
                     })()} 
-                    placeholder={form?.aiProvider === 'openai-completions' ? '请输入模型ID，如：gpt-3.5-turbo' : '默认模型ID'}
+                     placeholder={form?.aiProvider === 'openai-completions' || form?.aiProvider === 'anthropic-completions' ? '请输入模型ID' : '默认模型ID'}
                     onChange={e => setForm(prev => ({ ...(prev || defaultForm), aiModelId: e.target.value }))} 
                   />
                   <p className="text-[10px] text-indigo-500 font-medium italic ml-1">
-                    {form?.aiProvider === 'openai-completions' 
+                    {form?.aiProvider === 'openai-completions' || form?.aiProvider === 'anthropic-completions'
                       ? '自定义模式需要手动填写模型ID' 
                       : '留空则使用推荐模型，可根据需要切换其他模型'}
                   </p>
@@ -797,6 +807,16 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({ config, onUpdate, onCha
                       <i className="fa-solid fa-external-link-alt"></i> 获取 Gemini API Key
                     </a>
                   )}
+                  {form?.aiProvider === 'openrouter' && (
+                    <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-black hover:bg-indigo-700 transition-all shadow-sm">
+                      <i className="fa-solid fa-external-link-alt"></i> 获取 OpenRouter API Key
+                    </a>
+                  )}
+                  {form?.aiProvider === 'xiaomimimo' && (
+                    <a href="https://platform.xiaomimimo.com/dashboard" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-black hover:bg-indigo-700 transition-all shadow-sm">
+                      <i className="fa-solid fa-external-link-alt"></i> 获取小米米莫 API Key
+                    </a>
+                  )}
                   {form?.aiProvider === 'wenxin' && (
                     <a href="https://console.bce.baidu.com/qianfan/ais/console/applicationConsole/application" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-black hover:bg-indigo-700 transition-all shadow-sm">
                       <i className="fa-solid fa-external-link-alt"></i> 获取文心一言 API Key
@@ -822,11 +842,11 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({ config, onUpdate, onCha
                       <i className="fa-solid fa-external-link-alt"></i> 获取 MiniMax API Key
                     </a>
                   )}
-                  {form?.aiProvider === 'openai-completions' && (
+                  {(form?.aiProvider === 'openai-completions' || form?.aiProvider === 'anthropic-completions') && (
                     <div className="bg-amber-50 px-4 py-2 rounded-xl border border-amber-200">
                       <p className="text-xs text-amber-700 font-bold">
                         <i className="fa-solid fa-circle-info mr-1"></i>
-                        自定义模式：请根据您的服务商获取 API Key
+                        自定义模式（{form?.aiProvider === 'anthropic-completions' ? 'Anthropic 协议' : 'OpenAI 协议'}）：请根据您的服务商获取 API Key
                       </p>
                     </div>
                   )}
