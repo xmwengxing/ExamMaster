@@ -127,7 +127,7 @@ export async function testConnection(req, res) {
     }
     
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
+    const timeout = setTimeout(() => controller.abort(), 30000);
     
     try {
       // For providers using chat completions endpoint, send a minimal POST
@@ -152,7 +152,7 @@ export async function testConnection(req, res) {
     } catch (e) {
       clearTimeout(timeout);
       if (e.name === 'AbortError') {
-        res.json({ ok: false, message: '连接超时（超过15秒）' });
+        res.json({ ok: false, message: '连接超时（超过30秒）' });
       } else {
         res.json({ ok: false, message: e.message || '网络连接失败' });
       }

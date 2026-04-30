@@ -12,44 +12,68 @@ import db from '../../db.js';
 async function getApiConfig(userId) {
   // 1. 优先使用用户自己的 API Key
   const userResult = await db.getOne(
-    'SELECT deepseek_api_key as api_key FROM users WHERE id = $1',
+    'SELECT deepseek_api_key as api_key, custom_fields, ai_provider FROM users WHERE id = $1',
     [userId]
   );
   
-  // 2. 读取系统配置（aiProvider、aiBaseUrl、aiModelId）
+  // 2. 读取系统配置
   const mainConfig = await db.getOne("SELECT data FROM system_config WHERE id = 'main'");
   const config = mainConfig?.data || {};
   const provider = config.aiProvider || 'deepseek';
   
-  // 3. 确定 baseUrl 和 model
+  // 3. 默认值映射
   const defaultUrls = {
-    deepseek: 'https://api.deepseek.com/v1/chat/completions',
-    glm: 'https://open.bigmodel.cn/api/paas/v4/chat/completions',
-    openai: 'https://api.openai.com/v1/chat/completions',
-    claude: 'https://api.anthropic.com/v1/messages',
-    gemini: 'https://generativelanguage.googleapis.com/v1beta/models',
-    qwen: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation',
-    moonshotai: 'https://api.moonshot.cn/v1/chat/completions',
+    deepseek: 'https://api.deepseek.com',
+    openai: 'https://api.openai.com/v1',
+    claude: 'https://api.anthropic.com',
+    gemini: 'https://generativelanguage.googleapis.com',
+    openrouter: 'https://openrouter.ai/api/v1',
+    xiaomimimo: 'https://platform.xiaomimimo.com/v1',
+    longcat: 'https://api.longcat.chat/openai',
+    wenxin: 'https://aip.baidubce.com',
+    qwen: 'https://dashscope.aliyuncs.com/api/v1',
+    glm: 'https://open.bigmodel.cn/api/paas/v4',
+    moonshotai: 'https://api.moonshot.cn/v1',
+    minimaxai: 'https://api.minimax.chat/v1',
   };
   const defaultModels = {
     deepseek: 'deepseek-chat',
-    glm: 'glm-4',
-    openai: 'gpt-4-turbo-preview',
-    claude: 'claude-3-opus-20240229',
+    openai: 'gpt-4o',
+    claude: 'claude-3-5-sonnet-20241022',
+    gemini: 'gemini-1.5-pro',
+    openrouter: 'openai/gpt-4o',
+    xiaomimimo: 'mimo-v1',
+    longcat: 'LongCat-Flash-Chat',
+    wenxin: 'ERNIE-Bot-4',
     qwen: 'qwen-max',
+    glm: 'glm-4',
     moonshotai: 'moonshot-v1-8k',
+    minimaxai: 'abab6-chat',
+  };
+  const chatPaths = {
+    deepseek: '/v1/chat/completions',
+    openai: '/chat/completions',
+    claude: '/v1/messages',
+    openrouter: '/chat/completions',
+    xiaomimimo: '/chat/completions',
+    longcat: '/v1/chat/completions',
+    moonshotai: '/chat/completions',
+    minimaxai: '/v1/chat/completions',
   };
   
-  const baseUrl = config.aiBaseUrl || defaultUrls[provider] || defaultUrls.deepseek;
-  const model = config.aiModelId || defaultModels[provider] || 'deepseek-chat';
+  // 4. 使用 per-provider 配置
+  const baseUrl = (config.aiBaseUrls?.[provider]) || defaultUrls[provider] || '';
+  const model = (config.aiModelIds?.[provider]) || defaultModels[provider] || 'deepseek-chat';
+  const chatPath = chatPaths[provider] || '/v1/chat/completions';
+  const fullUrl = baseUrl + chatPath;
   
-  // 4. API Key 优先级：用户自己的 > 系统全局的（统一存在 deepseekApiKey 字段）
-  const systemKeyResult = await db.getOne(
-    "SELECT value FROM system_config_kv WHERE key = 'deepseekApiKey'"
-  );
-  const apiKey = (userResult?.api_key) || systemKeyResult?.value || null;
+  // 5. API Key: 用户自己的 > 系统 per-provider > 系统 deepseekApiKey
+  const providerApiKey = (config.aiApiKeys?.[provider]);
+  const deepseekKey = (config.deepseekApiKey || '');
+  const systemKey = providerApiKey || deepseekKey || '';
+  const apiKey = (userResult?.api_key) || systemKey || null;
   
-  return { provider, baseUrl, model, apiKey };
+  return { provider, baseUrl: fullUrl, model, apiKey };
 }
 
 /**
