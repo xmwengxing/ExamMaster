@@ -75,3 +75,71 @@ export async function gradeAnswer(req, res) {
     res.status(status).json({ error: error.message });
   }
 }
+
+/**
+ * 测试 AI 连接
+ */
+export async function testConnection(req, res) {
+  try {
+    const { provider, baseUrl, modelId, apiKey, maxContext, maxTokens } = req.body;
+    
+    if (!apiKey) {
+      return res.status(400).json({ error: '请先填写 API Key' });
+    }
+    
+    // Build test endpoint based on provider
+    let testUrl = baseUrl;
+    let headers = {};
+    
+    switch (provider) {
+      case 'deepseek':
+        testUrl = (baseUrl || 'https://api.deepseek.com') + '/v1/models';
+        headers = { 'Authorization': `Bearer ${apiKey}` };
+        break;
+      case 'openai':
+        testUrl = (baseUrl || 'https://api.openai.com/v1') + '/models';
+        headers = { 'Authorization': `Bearer ${apiKey}` };
+        break;
+      case 'gemini':
+        testUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
+        break;
+      case 'moonshotai':
+        testUrl = (baseUrl || 'https://api.moonshot.cn/v1') + '/models';
+        headers = { 'Authorization': `Bearer ${apiKey}` };
+        break;
+      default:
+        // For most OpenAI-compatible APIs
+        testUrl = (baseUrl || 'https://api.example.com') + '/models';
+        headers = { 'Authorization': `Bearer ${apiKey}` };
+    }
+    
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    
+    try {
+      const response = await fetch(testUrl, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        signal: controller.signal
+      });
+      clearTimeout(timeout);
+      
+      if (response.ok) {
+        res.json({ ok: true, message: '连接成功，API 可正常访问' });
+      } else {
+        const body = await response.text().catch(() => '');
+        res.json({ ok: false, message: `服务器返回 ${response.status}${body ? ': ' + body.slice(0, 80) : ''}` });
+      }
+    } catch (e) {
+      clearTimeout(timeout);
+      if (e.name === 'AbortError') {
+        res.json({ ok: false, message: '连接超时（超过15秒）' });
+      } else {
+        res.json({ ok: false, message: e.message || '网络连接失败' });
+      }
+    }
+  } catch (error) {
+    console.error('[AI Test Connection Error]', error);
+    res.status(500).json({ error: error.message });
+  }
+}

@@ -14,6 +14,8 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({ config, onUpdate, onCha
   const [form, setForm] = useState<any>(config || {});
   const [showApiKey, setShowApiKey] = useState(false);
   const [activeCategory, setActiveCategory] = useState<'theme' | 'ai' | 'cache'>(defaultTab || 'theme');
+  const [testResult, setTestResult] = useState<{ ok: boolean; message: string; latency?: number } | null>(null);
+  const [testing, setTesting] = useState(false);
 
   useEffect(() => {
     setForm(config || {});
@@ -529,6 +531,117 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({ config, onUpdate, onCha
                       ? '自定义模式需要手动填写模型ID' 
                       : '留空则使用推荐模型，可根据需要切换其他模型'}
                   </p>
+                </div>
+
+                {/* 高级参数配置 */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-indigo-600 uppercase tracking-widest ml-1 flex items-center gap-2">
+                      <i className="fa-solid fa-expand"></i> 最长上下文（Max Context）
+                    </label>
+                    <input 
+                      type="number"
+                      min="1"
+                      className="w-full bg-white border-2 border-indigo-100 rounded-xl px-5 py-3 font-mono text-sm outline-none focus:ring-2 focus:ring-indigo-200 transition-all" 
+                      value={form?.aiMaxContext || ''} 
+                      placeholder="留空使用默认值"
+                      onChange={e => setForm(prev => ({ ...(prev || {}), aiMaxContext: e.target.value ? parseInt(e.target.value) : undefined }))} 
+                    />
+                    <p className="text-[9px] text-indigo-400 font-medium italic ml-1">
+                      选填，例如：4096、8192、32768
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-indigo-600 uppercase tracking-widest ml-1 flex items-center gap-2">
+                      <i className="fa-solid fa-gauge-high"></i> 最大 Token（Max Tokens）
+                    </label>
+                    <input 
+                      type="number"
+                      min="1"
+                      className="w-full bg-white border-2 border-indigo-100 rounded-xl px-5 py-3 font-mono text-sm outline-none focus:ring-2 focus:ring-indigo-200 transition-all" 
+                      value={form?.aiMaxTokens || ''} 
+                      placeholder="留空使用默认值"
+                      onChange={e => setForm(prev => ({ ...(prev || {}), aiMaxTokens: e.target.value ? parseInt(e.target.value) : undefined }))} 
+                    />
+                    <p className="text-[9px] text-indigo-400 font-medium italic ml-1">
+                      选填，例如：1024、2048、4096
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-indigo-600 uppercase tracking-widest ml-1 flex items-center gap-2">
+                      <i className="fa-solid fa-tag"></i> 模型别名（Model Alias）
+                    </label>
+                    <input 
+                      type="text"
+                      className="w-full bg-white border-2 border-indigo-100 rounded-xl px-5 py-3 font-mono text-sm outline-none focus:ring-2 focus:ring-indigo-200 transition-all" 
+                      value={form?.aiModelAlias || ''} 
+                      placeholder="留空使用实际模型名"
+                      onChange={e => setForm(prev => ({ ...(prev || {}), aiModelAlias: e.target.value }))} 
+                    />
+                    <p className="text-[9px] text-indigo-400 font-medium italic ml-1">
+                      选填，用于UI展示，不影响API调用
+                    </p>
+                  </div>
+                </div>
+                <p className="text-[10px] text-indigo-500 font-medium italic">
+                  <i className="fa-solid fa-circle-info mr-1"></i>
+                  以上三项为选填参数。留空时将自动使用模型默认值，系统会尝试从端点 URL 自动加载
+                </p>
+
+                {/* 测试连接按钮 */}
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    disabled={testing}
+                    onClick={async () => {
+                      setTesting(true);
+                      setTestResult(null);
+                      const start = Date.now();
+                      try {
+                        const res = await fetch('/api/admin/ai/test-connection', {
+                          method: 'POST',
+                          headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${localStorage.getItem('edu_token')}`
+                          },
+                          body: JSON.stringify({
+                            provider: form?.aiProvider || 'deepseek',
+                            baseUrl: form?.aiBaseUrl,
+                            modelId: form?.aiModelId,
+                            apiKey: form?.aiApiKeys?.[form?.aiProvider || 'deepseek'] ?? form?.deepseekApiKey,
+                            maxContext: form?.aiMaxContext,
+                            maxTokens: form?.aiMaxTokens,
+                          })
+                        });
+                        const latency = Date.now() - start;
+                        const data = await res.json().catch(() => ({}));
+                        const ok = data.ok !== false && res.ok;
+                        setTestResult({ ok, message: data.message || (res.ok ? '连接成功' : `HTTP ${res.status}`), latency });
+                      } catch (e: any) {
+                        const latency = Date.now() - start;
+                        setTestResult({ ok: false, message: e.message || '网络错误', latency });
+                      }
+                      setTesting(false);
+                    }}
+                    className="flex items-center gap-2 bg-indigo-600 text-white px-5 py-3 rounded-xl font-black text-sm hover:bg-indigo-700 transition-all disabled:opacity-50"
+                  >
+                    {testing ? (
+                      <><i className="fa-solid fa-spinner fa-spin"></i> 测试中...</>
+                    ) : (
+                      <><i className="fa-solid fa-plug"></i> 测试连接</>
+                    )}
+                  </button>
+                  {testResult && (
+                    <div className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold ${
+                      testResult.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
+                    }`}>
+                      <i className={`fa-solid ${testResult.ok ? 'fa-check-circle' : 'fa-xmark-circle'}`}></i>
+                      {testResult.message}
+                      {testResult.latency !== undefined && (
+                        <span className="opacity-70 ml-1">({testResult.latency}ms)</span>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* API Key配置 */}
