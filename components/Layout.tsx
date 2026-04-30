@@ -56,8 +56,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, activeTab, onTabChange,
         { id: 'students', icon: 'fa-user', label: '账号管理' },
         { id: 'groups', icon: 'fa-layer-group', label: '分组管理' },
         { id: 'registration-materials', icon: 'fa-file-alt', label: '报名材料' },
-        { id: 'major-forms', icon: 'fa-table', label: '专业表单' },
-        { id: 'occupation-management', icon: 'fa-briefcase', label: '职业工种管理' },
+        { id: 'supervisor', icon: 'fa-user-check', label: '督学管理' },
       ]
     },
     { 
@@ -70,6 +69,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, activeTab, onTabChange,
         { id: 'question-bank-converter', icon: 'fa-file-import', label: '题库转换' },
         { id: 'import-manager', icon: 'fa-cloud-arrow-up', label: '导入管理' },
         { id: 'tags', icon: 'fa-tags', label: '标签管理' },
+        { id: 'ai-analysis', icon: 'fa-wand-magic-sparkles', label: 'AI解析' },
       ]
     },
     { id: 'admin-exams', icon: 'fa-paper-plane', label: '考试发布' },
@@ -84,9 +84,17 @@ const Layout: React.FC<LayoutProps> = ({ children, user, activeTab, onTabChange,
         { id: 'live-course-manager', icon: 'fa-broadcast-tower', label: '直播课管理' },
       ]
     },
-    { id: 'supervisor', icon: 'fa-user-check', label: '督学管理' },
+    { 
+      id: 'vocational', 
+      icon: 'fa-briefcase', 
+      label: '职业技能',
+      hasSubmenu: true,
+      submenu: [
+        { id: 'major-forms', icon: 'fa-table', label: '专业表单' },
+        { id: 'occupation-management', icon: 'fa-briefcase', label: '职业工种管理' },
+      ]
+    },
     { id: 'discussion-manager', icon: 'fa-comments', label: '讨论管理' },
-    { id: 'ai-analysis', icon: 'fa-wand-magic-sparkles', label: 'AI解析' },
     { 
       id: 'settings', 
       icon: 'fa-gears', 
@@ -152,9 +160,10 @@ const Layout: React.FC<LayoutProps> = ({ children, user, activeTab, onTabChange,
                   <button
                     onClick={() => toggleMenu(tab.id)}
                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                      (tab.id === 'banks' && ['banks', 'question-bank-converter', 'import-manager', 'tags'].includes(activeTab)) ||
-                      (tab.id === 'students' && ['students', 'groups', 'registration-materials', 'major-forms', 'occupation-management'].includes(activeTab)) ||
+                      (tab.id === 'banks' && ['banks', 'question-bank-converter', 'import-manager', 'tags', 'ai-analysis'].includes(activeTab)) ||
+                      (tab.id === 'students' && ['students', 'groups', 'registration-materials', 'supervisor'].includes(activeTab)) ||
                       (tab.id === 'courses-admin' && ['vod-course-editor', 'live-course-manager'].includes(activeTab)) ||
+                      (tab.id === 'vocational' && ['major-forms', 'occupation-management'].includes(activeTab)) ||
                       (tab.id === 'settings' && ['settings', 'settings-content', 'settings-security', 'logs'].includes(activeTab))
                         ? 'bg-indigo-50 text-indigo-600 font-bold' 
                         : 'text-gray-500 hover:bg-gray-100 font-medium'
