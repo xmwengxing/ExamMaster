@@ -51,7 +51,7 @@ switch (command) {
     try {
       run('docker compose up -d');
       console.log('✅ Docker 服务已启动');
-      console.log('   前端: http://localhost:8080');
+      console.log('   前端: http://localhost:9080');
       console.log('   API:  http://localhost:3080');
     } catch (e) {
       console.log('ℹ️  如果 Docker 未安装，请手动启动 PostgreSQL 并配置 .env 中的数据库连接');
@@ -134,7 +134,7 @@ switch (command) {
 
   case 'docker:up':
     run('docker compose up -d');
-    console.log('✅ 服务已启动: http://localhost:8080');
+    console.log('✅ 服务已启动: http://localhost:9080');
     break;
 
   case 'docker:down':

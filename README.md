@@ -37,7 +37,7 @@ docker compose up -d
 docker compose exec -T postgres psql -U examaster_user -d examaster < scripts/seed.sql
 
 # 4. 访问
-# 前端: http://localhost:8080
+# 前端: http://localhost:9080
 # API:  http://localhost:3080/api/health
 # 默认管理员: admin / admin
 ```
@@ -115,7 +115,7 @@ docker compose up -d
 | `DB_USER` | 数据库用户 | `examaster_user` |
 | `DB_PASSWORD` | 数据库密码 | 自定强密码 |
 | `JWT_SECRET` | JWT 签名密钥 (64 位随机字符串) | `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
-| `ALLOWED_ORIGINS` | CORS 允许的来源 | `http://localhost:5180,http://localhost:8080` |
+| `ALLOWED_ORIGINS` | CORS 允许的来源 | `http://localhost:5180,http://localhost:9080` |
 | `DEEPSEEK_API_KEY` | AI 功能 API 密钥 (可选) | - |
 
 ## 🔧 CLI 命令

@@ -6,7 +6,7 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
   : [
       'http://localhost:5180',          // Local dev (Vite)
-      'http://localhost:8080',          // Docker dev (nginx)
+      'http://localhost:9080',          // Docker dev (nginx)
       'http://localhost:3080',          // Docker API direct
     ];
 
