@@ -29,6 +29,12 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
   const [customProvName, setCustomProvName] = useState('');
   const customProviders = (currentUser?.customFields?.aiCustomProviders || []) as any[];
 
+  // AI provider defaults (shared across the component)
+  const defaultUrls: Record<string,string> = {deepseek:'https://api.deepseek.com',openai:'https://api.openai.com/v1',claude:'https://api.anthropic.com',gemini:'https://generativelanguage.googleapis.com',openrouter:'https://openrouter.ai/api/v1',xiaomimimo:'https://platform.xiaomimimo.com/v1',longcat:'https://api.longcat.chat/openai',wenxin:'https://aip.baidubce.com',qwen:'https://dashscope.aliyuncs.com/api/v1',glm:'https://open.bigmodel.cn/api/paas/v4',moonshotai:'https://api.moonshot.cn/v1',minimaxai:'https://api.minimax.chat/v1'};
+  const defaultModels: Record<string,string> = {deepseek:'deepseek-chat',openai:'gpt-4o',claude:'claude-3-5-sonnet-20241022',gemini:'gemini-1.5-pro',openrouter:'openai/gpt-4o',xiaomimimo:'mimo-v1',longcat:'LongCat-Flash-Chat',wenxin:'ERNIE-Bot-4',qwen:'qwen-max',glm:'glm-4',moonshotai:'moonshot-v1-8k',minimaxai:'abab6-chat'};
+  const isCustom = aiProvider === 'openai-completions' || aiProvider === 'anthropic-completions';
+  const isBuiltIn = Object.keys(defaultUrls).includes(aiProvider);
+
   const handlePassChange = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!passForm.old || !passForm.newP) return alert('请完整填写密码信息');
@@ -169,10 +175,6 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                 { value: 'openai-completions', label: 'OpenAI协议（自定义）' },
                 { value: 'anthropic-completions', label: 'Anthropic协议（自定义）' },
               ];
-              const defaultUrls: Record<string,string> = {deepseek:'https://api.deepseek.com',openai:'https://api.openai.com/v1',claude:'https://api.anthropic.com',gemini:'https://generativelanguage.googleapis.com',openrouter:'https://openrouter.ai/api/v1',xiaomimimo:'https://platform.xiaomimimo.com/v1',longcat:'https://api.longcat.chat/openai',wenxin:'https://aip.baidubce.com',qwen:'https://dashscope.aliyuncs.com/api/v1',glm:'https://open.bigmodel.cn/api/paas/v4',moonshotai:'https://api.moonshot.cn/v1',minimaxai:'https://api.minimax.chat/v1'};
-              const defaultModels: Record<string,string> = {deepseek:'deepseek-chat',openai:'gpt-4o',claude:'claude-3-5-sonnet-20241022',gemini:'gemini-1.5-pro',openrouter:'openai/gpt-4o',xiaomimimo:'mimo-v1',longcat:'LongCat-Flash-Chat',wenxin:'ERNIE-Bot-4',qwen:'qwen-max',glm:'glm-4',moonshotai:'moonshot-v1-8k',minimaxai:'abab6-chat'};
-              const isCustom = aiProvider === 'openai-completions' || aiProvider === 'anthropic-completions';
-              const isBuiltIn = Object.keys(defaultUrls).includes(aiProvider);
               return (
                 <div className="flex gap-2">
                   <select 
