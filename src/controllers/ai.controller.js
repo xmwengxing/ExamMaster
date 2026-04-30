@@ -53,8 +53,8 @@ export async function getAnalysis(req, res) {
  */
 export async function getAllAnalysis(req, res) {
   try {
-    const { page = 1, pageSize = 30, search = '', type = '' } = req.query;
-    const result = await aiService.getAllAnalysis({ page, pageSize, search, type });
+    const { page = 1, pageSize = 30, search = '', type = '', bankId = '' } = req.query;
+    const result = await aiService.getAllAnalysis({ page, pageSize, search, type, bankId });
     res.json(result);
   } catch (error) {
     console.error('[Get Admin AI Analysis Error]', error);

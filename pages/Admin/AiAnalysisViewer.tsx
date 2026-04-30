@@ -11,6 +11,7 @@ const AiAnalysisViewer: React.FC = () => {
   const [totalPages, setTotalPages] = useState(0);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
+  const [bankFilter, setBankFilter] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -46,7 +47,8 @@ const AiAnalysisViewer: React.FC = () => {
         page,
         pageSize,
         search,
-        type: typeFilter
+        type: typeFilter,
+        bankId: bankFilter
       });
       setRecords(result.records || []);
       setTotal(result.total || 0);
@@ -60,7 +62,7 @@ const AiAnalysisViewer: React.FC = () => {
 
   useEffect(() => {
     loadData();
-  }, [page, typeFilter]);
+  }, [page, typeFilter, bankFilter]);
 
   // 搜索处理（防抖）
   useEffect(() => {
@@ -113,6 +115,23 @@ const AiAnalysisViewer: React.FC = () => {
                 className="w-full pl-12 pr-4 py-3 bg-gray-50 border-2 border-gray-100 rounded-2xl font-bold text-gray-800 focus:border-indigo-400 outline-none"
               />
             </div>
+          </div>
+
+          {/* 来源题库筛选 */}
+          <div className="w-full md:w-48">
+            <select
+              value={bankFilter}
+              onChange={(e) => {
+                setBankFilter(e.target.value);
+                setPage(1);
+              }}
+              className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-100 rounded-2xl font-bold text-gray-800 focus:border-indigo-400 outline-none"
+            >
+              <option value="">全部题库</option>
+              {(store.banks || []).map((b: any) => (
+                <option key={b.id} value={b.id}>{b.name}</option>
+              ))}
+            </select>
           </div>
 
           {/* 题型筛选 */}
@@ -180,6 +199,11 @@ const AiAnalysisViewer: React.FC = () => {
                         <span className={`px-2 py-1 rounded-lg text-[10px] font-black border ${getTypeColor(record.questionType)}`}>
                           {getTypeLabel(record.questionType)}
                         </span>
+                        {record.bankName && (
+                          <span className="px-2 py-1 rounded-lg text-[10px] font-black border bg-teal-50 text-teal-600 border-teal-100">
+                            <i className="fa-solid fa-database mr-1"></i>{record.bankName}
+                          </span>
+                        )}
                         <span className="text-xs text-gray-400">题目ID: {record.questionId}</span>
                       </div>
 

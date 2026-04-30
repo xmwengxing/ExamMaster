@@ -1492,6 +1492,7 @@ export const useAppStore = () => {
       pageSize?: number;
       search?: string;
       type?: string;
+      bankId?: string;
     }) => {
       try {
         const searchParams = new URLSearchParams();
@@ -1499,6 +1500,7 @@ export const useAppStore = () => {
         if (params?.pageSize) searchParams.append('pageSize', params.pageSize.toString());
         if (params?.search) searchParams.append('search', params.search);
         if (params?.type) searchParams.append('type', params.type);
+        if (params?.bankId) searchParams.append('bankId', params.bankId);
         
         const query = searchParams.toString();
         const result = await fetchApi(`/admin/ai-analysis${query ? '?' + query : ''}`);

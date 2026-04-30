@@ -207,14 +207,20 @@ export async function saveAnalysis(userId, questionId, content) {
     throw new Error('缺少必要参数');
   }
   
+  // 检查该题是否已有解析（任何学员），已有则不覆盖
+  const existing = await db.getOne(
+    'SELECT id FROM ai_analysis WHERE question_id = $1 LIMIT 1',
+    [questionId]
+  );
+  if (existing) {
+    return { success: true, existing: true };
+  }
+  
   const now = new Date().toISOString();
   
   await db.execute(
     `INSERT INTO ai_analysis (user_id, question_id, content, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5)
-     ON CONFLICT (user_id, question_id) DO UPDATE SET
-       content = EXCLUDED.content,
-       updated_at = EXCLUDED.updated_at`,
+     VALUES ($1, $2, $3, $4, $5)`,
     [userId, questionId, content, now, now]
   );
   
@@ -246,7 +252,7 @@ export async function getAnalysis(userId, questionId) {
  * @returns {Promise<Object>} 解析记录列表和分页信息
  */
 export async function getAllAnalysis(options) {
-  const { page = 1, pageSize = 30, search = '', type = '' } = options;
+  const { page = 1, pageSize = 30, search = '', type = '', bankId = '' } = options;
   const offset = (parseInt(page) - 1) * parseInt(pageSize);
   
   // 构建查询条件
@@ -267,6 +273,12 @@ export async function getAllAnalysis(options) {
     paramIndex++;
   }
   
+  if (bankId) {
+    whereClause += ` AND q.bank_id = $${paramIndex}`;
+    params.push(bankId);
+    paramIndex++;
+  }
+  
   // 获取总数
   const countResult = await db.getOne(
     `SELECT COUNT(*) as total
@@ -281,22 +293,24 @@ export async function getAllAnalysis(options) {
   params.push(parseInt(pageSize), offset);
   const records = await db.getMany(
     `SELECT
-       a.user_id as "userId",
-       a.question_id as "questionId",
-       a.content,
-       a.created_at as "createdAt",
-       a.updated_at as "updatedAt",
-       u.nickname as "userName",
-       u.real_name as "userRealName",
-       q.type as "questionType",
-       q.content as "questionContent",
-       q.bank_id as "bankId"
-     FROM ai_analysis a
-     JOIN questions q ON a.question_id = q.id
-     JOIN users u ON a.user_id = u.id
-     WHERE ${whereClause}
-     ORDER BY a.updated_at DESC
-     LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+        a.user_id as "userId",
+        a.question_id as "questionId",
+        a.content,
+        a.created_at as "createdAt",
+        a.updated_at as "updatedAt",
+        u.nickname as "userName",
+        u.real_name as "userRealName",
+        q.type as "questionType",
+        q.content as "questionContent",
+        q.bank_id as "bankId",
+        b.name as "bankName"
+      FROM ai_analysis a
+      JOIN questions q ON a.question_id = q.id
+      JOIN users u ON a.user_id = u.id
+      LEFT JOIN banks b ON q.bank_id = b.id
+      WHERE ${whereClause}
+      ORDER BY a.updated_at DESC
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
     params
   );
   
