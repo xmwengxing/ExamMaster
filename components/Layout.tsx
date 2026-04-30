@@ -242,7 +242,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, activeTab, onTabChange,
         </div>
 
         <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t h-16 z-40 shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
-          <div className="flex items-center justify-around h-full px-1">
+          <div className="flex items-center h-full overflow-x-auto px-1">
             {currentTabs.map(tab => {
               const hasChildren = tab.hasSubmenu && tab.submenu;
               const isActive = hasChildren 
@@ -259,12 +259,12 @@ const Layout: React.FC<LayoutProps> = ({ children, user, activeTab, onTabChange,
                       onTabChange(tab.id);
                     }
                   }}
-                  className={`flex flex-col items-center justify-center gap-0.5 h-14 px-1.5 rounded-xl transition-all min-w-0 flex-1 ${
+                  className={`flex flex-col items-center justify-center gap-0.5 h-14 px-2 flex-shrink-0 rounded-xl transition-all ${
                     isActive ? 'text-indigo-600' : 'text-gray-400'
                   }`}
                 >
                   <i className={`fa-solid ${tab.icon} text-lg`}></i>
-                  <span className="text-[9px] font-bold leading-tight truncate max-w-full">{tab.label}</span>
+                  <span className="text-[9px] font-bold leading-tight whitespace-nowrap">{tab.label}</span>
                 </button>
               );
             })}
