@@ -51,12 +51,10 @@ const AdminUserMgt: React.FC<AdminUserMgtProps> = ({ currentUser, admins, studen
     { id: 'banks', label: '题库管理' },
     { id: 'admin-exams', label: '考试发布' },
     { id: 'practical-center', label: '实操发布' },
-    { id: 'supervisor', label: '督学管理' },
-    { id: 'logs', label: '日志管理' },
+    { id: 'courses-admin', label: '在线课程' },
     { id: 'vocational', label: '职业技能' },
     { id: 'discussion-manager', label: '讨论管理' },
     { id: 'settings', label: '系统设置' },
-    { id: 'courses-admin', label: '在线课程' },
   ];
 
   // 获取所有班级列表（去重）
