@@ -68,6 +68,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, activeTab, onTabChange,
         { id: 'banks', icon: 'fa-database', label: '题库列表' },
         { id: 'question-bank-converter', icon: 'fa-file-import', label: '题库转换' },
         { id: 'import-manager', icon: 'fa-cloud-arrow-up', label: '导入管理' },
+        { id: 'tags', icon: 'fa-tags', label: '标签管理' },
       ]
     },
     { id: 'admin-exams', icon: 'fa-paper-plane', label: '考试发布' },
@@ -83,11 +84,18 @@ const Layout: React.FC<LayoutProps> = ({ children, user, activeTab, onTabChange,
       ]
     },
     { id: 'supervisor', icon: 'fa-user-check', label: '督学管理' },
-    { id: 'logs', icon: 'fa-clipboard-list', label: '日志管理' },
     { id: 'discussion-manager', icon: 'fa-comments', label: '讨论管理' },
-    { id: 'tags', icon: 'fa-tags', label: '标签管理' },
     { id: 'ai-analysis', icon: 'fa-wand-magic-sparkles', label: 'AI解析' },
-    { id: 'settings', icon: 'fa-gears', label: '系统设置' },
+    { 
+      id: 'settings', 
+      icon: 'fa-gears', 
+      label: '系统设置',
+      hasSubmenu: true,
+      submenu: [
+        { id: 'settings', icon: 'fa-cog', label: '系统配置' },
+        { id: 'logs', icon: 'fa-clipboard-list', label: '日志管理' },
+      ]
+    },
   ];
 
   const toggleMenu = (menuId: string) => {
@@ -141,9 +149,10 @@ const Layout: React.FC<LayoutProps> = ({ children, user, activeTab, onTabChange,
                   <button
                     onClick={() => toggleMenu(tab.id)}
                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                      (tab.id === 'banks' && ['banks', 'question-bank-converter', 'import-manager'].includes(activeTab)) ||
+                      (tab.id === 'banks' && ['banks', 'question-bank-converter', 'import-manager', 'tags'].includes(activeTab)) ||
                       (tab.id === 'students' && ['students', 'groups', 'registration-materials', 'major-forms', 'occupation-management'].includes(activeTab)) ||
-                      (tab.id === 'courses-admin' && ['vod-course-editor', 'live-course-manager'].includes(activeTab))
+                      (tab.id === 'courses-admin' && ['vod-course-editor', 'live-course-manager'].includes(activeTab)) ||
+                      (tab.id === 'settings' && ['settings', 'logs'].includes(activeTab))
                         ? 'bg-indigo-50 text-indigo-600 font-bold' 
                         : 'text-gray-500 hover:bg-gray-100 font-medium'
                     }`}
