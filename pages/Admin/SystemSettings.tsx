@@ -9,11 +9,12 @@ interface SystemSettingsProps {
   config: any;
   onUpdate: (data: any) => void;
   onChangeAdminPass: (old: string, newP: string) => Promise<boolean>;
+  defaultTab?: 'theme' | 'content' | 'security' | 'ai' | 'cache';
 }
 
 const defaultForm = { announcement: '', banners: [] as any[], videos: [] as any[] };
 
-const SystemSettings: React.FC<SystemSettingsProps> = ({ config, onUpdate, onChangeAdminPass }) => {
+const SystemSettings: React.FC<SystemSettingsProps> = ({ config, onUpdate, onChangeAdminPass, defaultTab }) => {
   const store = useAppStore();
   const [form, setForm] = useState<any>(config || defaultForm);
   const [passForm, setPassForm] = useState({ old: '', newP: '', confirm: '' });
@@ -21,7 +22,7 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({ config, onUpdate, onCha
   const fileRef = useRef<HTMLInputElement>(null);
   const bannerFileRef = useRef<HTMLInputElement>(null);
   const [activeBannerId, setActiveBannerId] = useState<string | null>(null);
-  const [activeCategory, setActiveCategory] = useState<'theme' | 'content' | 'security' | 'ai' | 'cache'>('theme');
+  const [activeCategory, setActiveCategory] = useState<'theme' | 'content' | 'security' | 'ai' | 'cache'>(defaultTab || 'theme');
 
   useEffect(() => {
     setForm(config || defaultForm);

@@ -93,6 +93,8 @@ const Layout: React.FC<LayoutProps> = ({ children, user, activeTab, onTabChange,
       hasSubmenu: true,
       submenu: [
         { id: 'settings', icon: 'fa-cog', label: '系统配置' },
+        { id: 'settings-content', icon: 'fa-layer-group', label: '内容管理' },
+        { id: 'settings-security', icon: 'fa-shield-halved', label: '系统安全' },
         { id: 'logs', icon: 'fa-clipboard-list', label: '日志管理' },
       ]
     },
@@ -152,7 +154,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, activeTab, onTabChange,
                       (tab.id === 'banks' && ['banks', 'question-bank-converter', 'import-manager', 'tags'].includes(activeTab)) ||
                       (tab.id === 'students' && ['students', 'groups', 'registration-materials', 'major-forms', 'occupation-management'].includes(activeTab)) ||
                       (tab.id === 'courses-admin' && ['vod-course-editor', 'live-course-manager'].includes(activeTab)) ||
-                      (tab.id === 'settings' && ['settings', 'logs'].includes(activeTab))
+                      (tab.id === 'settings' && ['settings', 'settings-content', 'settings-security', 'logs'].includes(activeTab))
                         ? 'bg-indigo-50 text-indigo-600 font-bold' 
                         : 'text-gray-500 hover:bg-gray-100 font-medium'
                     }`}
