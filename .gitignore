@@ -86,6 +86,7 @@ deploy*.sh
 upload-*.sh
 ssh-helper.sh
 quick-deploy.sh
+deploy.sh
 服务器脚本/
 
 # Python
