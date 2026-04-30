@@ -14,8 +14,8 @@ export async function getQuestions(db, options = {}) {
   const { bankId, search } = options;
   
   let rows;
-  let params: any[] = [];
-  let conditions: string[] = [];
+  let params = [];
+  let conditions = [];
   let paramIdx = 1;
   
   if (bankId) {
