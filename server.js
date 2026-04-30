@@ -1,5 +1,5 @@
 /**
- * EduMaster 服务器主入口文件（模块化版本）
+ * ExamMaster 服务器主入口文件（模块化版本）
  * 
  * 本文件只包含应用初始化和启动逻辑
  * 所有业务逻辑已模块化到 src/ 目录
@@ -28,7 +28,7 @@ import db from './db.js';
 
 // 创建 Express 应用
 const app = express();
-const port = process.env.PORT || 3001;
+const port = process.env.PORT || 3080;
 
 // ========== 中间件配置 ==========
 
@@ -85,7 +85,7 @@ if (process.env.NODE_ENV !== 'test') {
     console.log(`
 ╔════════════════════════════════════════════════════════════╗
 ║                                                            ║
-║   🎓 EduMaster 全栈刷题系统                                ║
+║   🎓 ExamMaster - 智能刷题考试系统                                ║
 ║                                                            ║
 ║   服务器已启动: http://localhost:${port}                    ║
 ║   环境: ${process.env.NODE_ENV || 'development'}                                      ║

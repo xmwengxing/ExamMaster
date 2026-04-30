@@ -5,10 +5,9 @@ import logger from '../../utils/logger.js';
 const allowedOrigins = process.env.ALLOWED_ORIGINS 
   ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
   : [
-      'https://exammaster.zzzjl.com',  // 生产域名
-      'http://localhost:5173',          // 本地开发（Vite）
-      'http://localhost:3000',          // 本地开发（备用）
-      'http://100.126.218.23:5173',     // 内网开发（IP访问）
+      'http://localhost:5180',          // Local dev (Vite)
+      'http://localhost:8080',          // Docker dev (nginx)
+      'http://localhost:3080',          // Docker API direct
     ];
 
 // CORS 配置选项

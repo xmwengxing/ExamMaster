@@ -7,28 +7,26 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-nginx/ssl/*.pem
-nginx/ssl/*.key
-
 # Dependencies
 node_modules
 
-# Build output (前端构建产物需要在服务器上构建，所以排除)
+# Build output
 dist
 dist-ssr
 *.local
 
-# Database files (数据库文件不提交到 Git)
+# Database files
 *.db
 *.db-journal
 edumaster.db
 edumaster.db.backup_*
 backups/
 
-# Environment variables (敏感信息不提交)
+# Environment variables (sensitive, do not commit)
 .env
 .env.local
 .env.production
+.env.server
 
 # Editor directories and files
 .vscode/*
@@ -48,11 +46,14 @@ backups/
 .sqlite
 Thumbs.db
 
-# SSL certificates (证书文件不提交，但保留目录结构)
+# SSL certificates - do NOT commit certificate files
 nginx/ssl/*.pem
 nginx/ssl/*.key
 nginx/ssl/*.crt
 !nginx/ssl/README.md
+
+# Uploaded user content
+uploads/
 
 # Temporary files
 *.tmp
@@ -62,56 +63,57 @@ nginx/ssl/*.crt
 # PM2
 .pm2
 
-# Kiro IDE
+# IDE
 .kiro/
 
-# 备忘文档 (开发笔记不提交)
+# Local dev notes (not for public repo)
 备忘文件/
+docs/local/
+RTK.md
 
-# Test files (测试脚本不提交)
-test-*.html
-test-*.js
-check-*.js
-create-*.js
-fix-*.cjs
-test-*.cjs
-
-# Test coverage reports
+# Test coverage
 coverage/
 .nyc_output/
 
-# Test database files
+# Test databases
 *.test.db
 *_test.db
 
-# Test temporary files
-tests/**/*.tmp
-tests/**/*.temp
-
-# Git helper scripts (Windows)
-git-*.bat
-
-# Local deployment scripts (本地部署脚本不提交)
+# Deployment scripts (may contain secrets)
 deploy*.bat
+deploy*.py
+deploy*.sh
 upload-*.sh
+ssh-helper.sh
+quick-deploy.sh
+服务器脚本/
 
-# Documentation (Chinese) - 临时文档
-*.txt
+# Python
+__pycache__/
+*.pyc
 
-# Config files (特定配置文件)
+# Package manager lock files (use only one)
+pnpm-lock.yaml
+
+# Misc
 metadata.json
 server-status.json
-
-# Migration report (迁移报告不提交)
 migration-report.json
-
-# Question conversion files (local use only)
 convert-questions.bat
 convert-questions-python.bat
 测试-*.csv
+快速同步.bat
 
-# PostgreSQL data directory (数据目录不提交)
+# PostgreSQL data
 postgres/data/
 
-# git仓库批处理
-快速同步.bat
+# Archived legacy files
+archive/
+
+# Git history related
+*.txt
+git-*.bat
+
+# Temporary docs
+*.tmp
+*.temp
