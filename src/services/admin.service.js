@@ -8,63 +8,21 @@ import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 
 /**
- * 获取所有学生
- * @returns {Promise<Array>} 学生列表
+ * 获取学生列表（支持分页）
+ * @param {Object} options - 查询选项 { page, pageSize }
+ * @returns {Promise<Object>} 分页结果 { data, pagination }
  */
-export async function getStudents() {
-  const rows = await db.getMany(
-    `SELECT id, phone, nickname, real_name, gender, id_card, school, 
+export async function getStudents(options = {}) {
+  const { page, pageSize } = options;
+
+  // Build base query parts
+  const selectClause = `SELECT id, phone, nickname, real_name, gender, id_card, school,
             education_type, education_level, major, company, class_name,
             student_perms, allowed_bank_ids, custom_fields, avatar,
             last_login, last_activity, total_online_time, login_history, group_id
-     FROM users WHERE role = 'STUDENT' ORDER BY id`
-  );
-  
-  // 获取所有学员的登录日志（包含退出时间和时长）
-  // 使用 try-catch 处理可能不存在的字段
-  let loginLogsByUser = {};
-  try {
-    const loginLogs = await db.getMany(
-      `SELECT user_id, time, logout_time, session_duration 
-       FROM login_logs 
-       WHERE user_id IN (SELECT id FROM users WHERE role = 'STUDENT')
-       ORDER BY time DESC`
-    );
-    
-    // 按用户ID分组登录日志
-    loginLogs.forEach(log => {
-      if (!loginLogsByUser[log.user_id]) {
-        loginLogsByUser[log.user_id] = [];
-      }
-      loginLogsByUser[log.user_id].push({
-        loginTime: new Date(log.time).toLocaleString('zh-CN', { 
-          year: 'numeric', 
-          month: '2-digit', 
-          day: '2-digit', 
-          hour: '2-digit', 
-          minute: '2-digit', 
-          second: '2-digit',
-          hour12: false 
-        }),
-        logoutTime: log.logout_time ? new Date(log.logout_time).toLocaleString('zh-CN', { 
-          year: 'numeric', 
-          month: '2-digit', 
-          day: '2-digit', 
-          hour: '2-digit', 
-          minute: '2-digit', 
-          second: '2-digit',
-          hour12: false 
-        }) : undefined,
-        duration: log.session_duration || undefined
-      });
-    });
-  } catch (error) {
-    console.error('[Admin Service] 获取登录日志失败，可能是字段不存在:', error.message);
-    // 如果查询失败，使用旧的 login_history 字段
-    loginLogsByUser = {};
-  }
-  
-  return (rows || []).map(student => ({
+     FROM users WHERE role = 'STUDENT'`;
+
+  const mapRow = (student) => ({
     id: student.id,
     phone: student.phone,
     nickname: student.nickname,
@@ -85,10 +43,35 @@ export async function getStudents() {
     lastLogin: student.last_login,
     lastActivity: student.last_activity,
     totalOnlineTime: student.total_online_time || 0,
-    // 使用新格式的登录历史（包含退出时间和时长），如果查询失败则使用旧格式
-    loginHistory: loginLogsByUser[student.id]?.slice(0, 100) || (Array.isArray(student.login_history) ? student.login_history : []),
+    loginHistory: Array.isArray(student.login_history) ? student.login_history.slice(0, 10) : [],
     role: 'STUDENT'
-  }));
+  });
+
+  if (page && pageSize) {
+    const pageNum = parseInt(page) || 1;
+    const pageSizeNum = parseInt(pageSize) || 20;
+
+    const result = await db.paginate('users', {
+      page: pageNum,
+      pageSize: pageSizeNum,
+      where: "role = 'STUDENT'",
+      orderBy: 'id ASC'
+    });
+
+    return {
+      data: result.data.map(mapRow),
+      pagination: {
+        total: result.total,
+        page: result.page,
+        pageSize: result.pageSize,
+        totalPages: result.totalPages
+      }
+    };
+  }
+
+  // 无分页参数：返回前 20 条（默认兜底）
+  const rows = await db.getMany(selectClause + ' ORDER BY id LIMIT 20');
+  return (rows || []).map(mapRow);
 }
 
 /**
@@ -721,11 +704,24 @@ export async function changeAdminPassword(dbConn, adminId, oldPassword, newPassw
 }
 
 /**
- * 获取所有考试历史
+ * 获取所有考试历史（支持分页）
  * @param {Object} dbConn - 数据库连接
- * @returns {Promise<Array>} 考试历史列表
+ * @param {Object} options - 查询选项 { page, pageSize }
+ * @returns {Promise<Object>} 分页结果
  */
-export async function getAllExamHistory(dbConn) {
+export async function getAllExamHistory(dbConn, options = {}) {
+  const { page, pageSize } = options;
+
+  const pageNum = parseInt(page) || 1;
+  const pageSizeNum = parseInt(pageSize) || 20;
+
+  const countResult = await dbConn.query(
+    'SELECT COUNT(*) as total FROM exam_history'
+  );
+  const total = parseInt(countResult.rows[0].total);
+  const totalPages = Math.ceil(total / pageSizeNum);
+  const offset = (pageNum - 1) * pageSizeNum;
+
   const rows = await dbConn.query(`
     SELECT 
       eh.id,
@@ -744,33 +740,50 @@ export async function getAllExamHistory(dbConn) {
     FROM exam_history eh
     LEFT JOIN users u ON eh.user_id = u.id
     ORDER BY eh.submit_time DESC
-  `);
-  
-  return (rows.rows || []).map(row => ({
-    id: row.id,
-    userId: row.user_id,
-    bankId: row.bank_id,
-    examTitle: row.exam_title,
-    score: row.score,
-    totalScore: row.total_score,
-    passScore: row.pass_score,
-    timeUsed: row.time_used,
-    submitTime: row.submit_time,
-    passed: row.passed,
-    user: {
-      phone: row.phone,
-      nickname: row.nickname,
-      realName: row.real_name
-    }
-  }));
+    LIMIT $1 OFFSET $2
+  `, [pageSizeNum, offset]);
+
+  return {
+    data: (rows.rows || []).map(row => ({
+      id: row.id,
+      userId: row.user_id,
+      bankId: row.bank_id,
+      examTitle: row.exam_title,
+      score: row.score,
+      totalScore: row.total_score,
+      passScore: row.pass_score,
+      timeUsed: row.time_used,
+      submitTime: row.submit_time,
+      passed: row.passed,
+      user: {
+        phone: row.phone,
+        nickname: row.nickname,
+        realName: row.real_name
+      }
+    })),
+    pagination: { total, page: pageNum, pageSize: pageSizeNum, totalPages }
+  };
 }
 
 /**
- * 获取所有学员进度
+ * 获取所有学员进度（支持分页）
  * @param {Object} dbConn - 数据库连接
- * @returns {Promise<Array>} 进度列表
+ * @param {Object} options - 查询选项 { page, pageSize }
+ * @returns {Promise<Object>} 分页结果
  */
-export async function getAllProgress(dbConn) {
+export async function getAllProgress(dbConn, options = {}) {
+  const { page, pageSize } = options;
+
+  const pageNum = parseInt(page) || 1;
+  const pageSizeNum = parseInt(pageSize) || 20;
+
+  const countResult = await dbConn.query(
+    'SELECT COUNT(*) as total FROM daily_progress'
+  );
+  const total = parseInt(countResult.rows[0].total);
+  const totalPages = Math.ceil(total / pageSizeNum);
+  const offset = (pageNum - 1) * pageSizeNum;
+
   const rows = await dbConn.query(`
     SELECT 
       dp.id,
@@ -783,19 +796,23 @@ export async function getAllProgress(dbConn) {
     FROM daily_progress dp
     LEFT JOIN users u ON dp.user_id = u.id
     ORDER BY dp.date DESC, dp.user_id
-  `);
-  
-  return (rows.rows || []).map(row => ({
-    id: row.id,
-    userId: row.user_id,
-    date: row.date,
-    count: row.count,
-    user: {
-      phone: row.phone,
-      nickname: row.nickname,
-      realName: row.real_name
-    }
-  }));
+    LIMIT $1 OFFSET $2
+  `, [pageSizeNum, offset]);
+
+  return {
+    data: (rows.rows || []).map(row => ({
+      id: row.id,
+      userId: row.user_id,
+      date: row.date,
+      count: row.count,
+      user: {
+        phone: row.phone,
+        nickname: row.nickname,
+        realName: row.real_name
+      }
+    })),
+    pagination: { total, page: pageNum, pageSize: pageSizeNum, totalPages }
+  };
 }
 
 /**

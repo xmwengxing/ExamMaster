@@ -4,8 +4,12 @@
 
 import express from 'express';
 import { errorLogger } from '../services/error-logger.service.js';
+import { auth, adminAuth } from '../middleware/auth.js';
 
 const router = express.Router();
+
+// All log endpoints require admin authentication
+router.use(auth, adminAuth);
 
 /**
  * GET /api/logs

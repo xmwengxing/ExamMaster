@@ -362,8 +362,8 @@ export async function paginate(tableName, options = {}) {
     throw new Error('页码必须大于等于 1');
   }
   
-  if (pageSize < 1 || pageSize > 1000) {
-    throw new Error('每页大小必须在 1-1000 之间');
+  if (pageSize < 1 || pageSize > 100) {
+    throw new Error('每页大小必须在 1-100 之间');
   }
   
   const start = Date.now();

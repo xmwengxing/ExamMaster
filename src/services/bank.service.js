@@ -2,14 +2,15 @@
 // 处理题库的 CRUD 操作和分值配置
 
 /**
- * 获取所有题库列表
+ * 获取题库列表（支持分页）
  * @param {Object} db - 数据库实例
- * @returns {Promise<Array>} 题库列表（camelCase格式）
+ * @param {Object} options - 查询选项 { page, pageSize }
+ * @returns {Promise<Object|Array>} 题库列表或分页结果
  */
-export async function getAllBanks(db) {
-  const rows = await db.getMany('SELECT * FROM banks');
+export async function getAllBanks(db, options = {}) {
+  const { page, pageSize } = options;
   
-  return (rows || []).map(bank => ({
+  const mapRow = (bank) => ({
     id: bank.id,
     name: bank.name,
     category: bank.category,
@@ -18,8 +19,34 @@ export async function getAllBanks(db) {
     questionCount: bank.question_count || 0,
     scoreConfig: bank.score_config || { SINGLE: 1, MULTIPLE: 2, JUDGE: 1 },
     usageCount: bank.usage_count || 0,
-    updatedAt: bank.updated_at // 添加更新时间戳
-  }));
+    updatedAt: bank.updated_at
+  });
+
+  // 如果提供了分页参数，使用分页查询
+  if (page && pageSize) {
+    const pageNum = parseInt(page) || 1;
+    const pageSizeNum = parseInt(pageSize) || 20;
+    
+    const result = await db.paginate('banks', {
+      page: pageNum,
+      pageSize: pageSizeNum,
+      orderBy: 'updated_at DESC'
+    });
+    
+    return {
+      data: result.data.map(mapRow),
+      pagination: {
+        total: result.total,
+        page: result.page,
+        pageSize: result.pageSize,
+        totalPages: result.totalPages
+      }
+    };
+  }
+
+  // 无分页参数：返回前 20 条（默认兜底）
+  const rows = await db.getMany('SELECT * FROM banks ORDER BY updated_at DESC LIMIT 20');
+  return (rows || []).map(mapRow);
 }
 
 /**

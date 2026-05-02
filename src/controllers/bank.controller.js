@@ -10,7 +10,8 @@ import logger from '../../utils/logger.js';
  */
 export async function getAllBanks(req, res, next) {
   try {
-    const banks = await bankService.getAllBanks(req.db);
+    const { page, pageSize } = req.query;
+    const banks = await bankService.getAllBanks(req.db, { page, pageSize });
     
     // 如果是学员，只返回授权的题库
     if (req.user.role === 'STUDENT') {

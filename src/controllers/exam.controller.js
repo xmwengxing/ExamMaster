@@ -156,7 +156,8 @@ export async function getExamHistory(req, res, next) {
  */
 export async function getAllExamHistory(req, res, next) {
   try {
-    const history = await examService.getAllExamHistory(req.db);
+    const { page, pageSize } = req.query;
+    const history = await examService.getAllExamHistory(req.db, { page, pageSize });
     res.json(history);
   } catch (error) {
     logger.error('[Exam History] 获取所有考试历史失败:', error);

@@ -6,7 +6,8 @@ import * as adminService from '../services/admin.service.js';
 
 export async function getStudents(req, res) {
   try {
-    const students = await adminService.getStudents();
+    const { page, pageSize } = req.query;
+    const students = await adminService.getStudents({ page, pageSize });
     res.json(students);
   } catch (error) {
     console.error('[Admin] Get students error:', error);
@@ -250,7 +251,8 @@ export async function changePassword(req, res) {
 
 export async function getExamHistory(req, res) {
   try {
-    const history = await adminService.getAllExamHistory(req.db);
+    const { page, pageSize } = req.query;
+    const history = await adminService.getAllExamHistory(req.db, { page, pageSize });
     res.json(history);
   } catch (error) {
     console.error('[Admin] Get exam history error:', error);
@@ -260,7 +262,8 @@ export async function getExamHistory(req, res) {
 
 export async function getAllProgress(req, res) {
   try {
-    const progress = await adminService.getAllProgress(req.db);
+    const { page, pageSize } = req.query;
+    const progress = await adminService.getAllProgress(req.db, { page, pageSize });
     res.json(progress);
   } catch (error) {
     console.error('[Admin] Get all progress error:', error);

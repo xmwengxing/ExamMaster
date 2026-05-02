@@ -229,13 +229,37 @@ export async function getExamHistory(db, userId) {
 }
 
 /**
- * 获取所有考试历史记录（管理员）
+ * 获取所有考试历史记录（管理员，支持分页）
  * @param {Object} db - 数据库实例
- * @returns {Promise<Array>} 所有考试历史记录列表
+ * @param {Object} options - 查询选项 { page, pageSize }
+ * @returns {Promise<Object>} 分页结果
  */
-export async function getAllExamHistory(db) {
-  const rows = await db.getMany('SELECT * FROM exam_history ORDER BY submit_time DESC');
-  
+export async function getAllExamHistory(db, options = {}) {
+  const { page, pageSize } = options;
+
+  if (page && pageSize) {
+    const pageNum = parseInt(page) || 1;
+    const pageSizeNum = parseInt(pageSize) || 20;
+
+    const result = await db.paginate('exam_history', {
+      page: pageNum,
+      pageSize: pageSizeNum,
+      orderBy: 'submit_time DESC'
+    });
+
+    return {
+      data: result.data.map(formatExamHistory),
+      pagination: {
+        total: result.total,
+        page: result.page,
+        pageSize: result.pageSize,
+        totalPages: result.totalPages
+      }
+    };
+  }
+
+  // 无分页参数：返回前 20 条
+  const rows = await db.getMany('SELECT * FROM exam_history ORDER BY submit_time DESC LIMIT 20');
   return (rows || []).map(formatExamHistory);
 }
 
