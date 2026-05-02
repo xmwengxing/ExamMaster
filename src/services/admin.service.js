@@ -712,57 +712,62 @@ export async function changeAdminPassword(dbConn, adminId, oldPassword, newPassw
 export async function getAllExamHistory(dbConn, options = {}) {
   const { page, pageSize } = options;
 
-  const pageNum = parseInt(page) || 1;
-  const pageSizeNum = parseInt(pageSize) || 20;
+  if (page && pageSize) {
+    const pageNum = parseInt(page) || 1;
+    const pageSizeNum = parseInt(pageSize) || 20;
 
-  const countResult = await dbConn.query(
-    'SELECT COUNT(*) as total FROM exam_history'
-  );
-  const total = parseInt(countResult.rows[0].total);
-  const totalPages = Math.ceil(total / pageSizeNum);
-  const offset = (pageNum - 1) * pageSizeNum;
+    const countResult = await dbConn.query(
+      'SELECT COUNT(*) as total FROM exam_history'
+    );
+    const total = parseInt(countResult.rows[0].total);
+    const totalPages = Math.ceil(total / pageSizeNum);
+    const offset = (pageNum - 1) * pageSizeNum;
 
+    const rows = await dbConn.query(`
+      SELECT 
+        eh.id, eh.user_id, eh.bank_id, eh.exam_title,
+        eh.score, eh.total_score, eh.pass_score,
+        eh.time_used, eh.submit_time, eh.passed,
+        u.phone, u.nickname, u.real_name
+      FROM exam_history eh
+      LEFT JOIN users u ON eh.user_id = u.id
+      ORDER BY eh.submit_time DESC
+      LIMIT $1 OFFSET $2
+    `, [pageSizeNum, offset]);
+
+    return {
+      data: (rows.rows || []).map(row => ({
+        id: row.id, userId: row.user_id, bankId: row.bank_id,
+        examTitle: row.exam_title, score: row.score,
+        totalScore: row.total_score, passScore: row.pass_score,
+        timeUsed: row.time_used, submitTime: row.submit_time,
+        passed: row.passed,
+        user: { phone: row.phone, nickname: row.nickname, realName: row.real_name }
+      })),
+      pagination: { total, page: pageNum, pageSize: pageSizeNum, totalPages }
+    };
+  }
+
+  // 无分页参数：返回数组（向后兼容）
   const rows = await dbConn.query(`
     SELECT 
-      eh.id,
-      eh.user_id,
-      eh.bank_id,
-      eh.exam_title,
-      eh.score,
-      eh.total_score,
-      eh.pass_score,
-      eh.time_used,
-      eh.submit_time,
-      eh.passed,
-      u.phone,
-      u.nickname,
-      u.real_name
+      eh.id, eh.user_id, eh.bank_id, eh.exam_title,
+      eh.score, eh.total_score, eh.pass_score,
+      eh.time_used, eh.submit_time, eh.passed,
+      u.phone, u.nickname, u.real_name
     FROM exam_history eh
     LEFT JOIN users u ON eh.user_id = u.id
     ORDER BY eh.submit_time DESC
-    LIMIT $1 OFFSET $2
-  `, [pageSizeNum, offset]);
-
-  return {
-    data: (rows.rows || []).map(row => ({
-      id: row.id,
-      userId: row.user_id,
-      bankId: row.bank_id,
-      examTitle: row.exam_title,
-      score: row.score,
-      totalScore: row.total_score,
-      passScore: row.pass_score,
-      timeUsed: row.time_used,
-      submitTime: row.submit_time,
-      passed: row.passed,
-      user: {
-        phone: row.phone,
-        nickname: row.nickname,
-        realName: row.real_name
-      }
-    })),
-    pagination: { total, page: pageNum, pageSize: pageSizeNum, totalPages }
-  };
+    LIMIT 100
+  `);
+  return (rows.rows || []).map(row => ({
+    id: row.id, userId: row.user_id, bankId: row.bank_id,
+    examTitle: row.exam_title, score: row.score,
+    totalScore: row.total_score, passScore: row.pass_score,
+    timeUsed: row.time_used, submitTime: row.submit_time,
+    passed: row.passed,
+    user: { phone: row.phone, nickname: row.nickname, realName: row.real_name }
+  }));
 }
 
 /**
@@ -774,45 +779,46 @@ export async function getAllExamHistory(dbConn, options = {}) {
 export async function getAllProgress(dbConn, options = {}) {
   const { page, pageSize } = options;
 
-  const pageNum = parseInt(page) || 1;
-  const pageSizeNum = parseInt(pageSize) || 20;
+  if (page && pageSize) {
+    const pageNum = parseInt(page) || 1;
+    const pageSizeNum = parseInt(pageSize) || 20;
 
-  const countResult = await dbConn.query(
-    'SELECT COUNT(*) as total FROM daily_progress'
-  );
-  const total = parseInt(countResult.rows[0].total);
-  const totalPages = Math.ceil(total / pageSizeNum);
-  const offset = (pageNum - 1) * pageSizeNum;
+    const countResult = await dbConn.query(
+      'SELECT COUNT(*) as total FROM daily_progress'
+    );
+    const total = parseInt(countResult.rows[0].total);
+    const totalPages = Math.ceil(total / pageSizeNum);
+    const offset = (pageNum - 1) * pageSizeNum;
 
+    const rows = await dbConn.query(`
+      SELECT dp.id, dp.user_id, dp.date, dp.count, u.phone, u.nickname, u.real_name
+      FROM daily_progress dp
+      LEFT JOIN users u ON dp.user_id = u.id
+      ORDER BY dp.date DESC, dp.user_id
+      LIMIT $1 OFFSET $2
+    `, [pageSizeNum, offset]);
+
+    return {
+      data: (rows.rows || []).map(row => ({
+        id: row.id, userId: row.user_id, date: row.date, count: row.count,
+        user: { phone: row.phone, nickname: row.nickname, realName: row.real_name }
+      })),
+      pagination: { total, page: pageNum, pageSize: pageSizeNum, totalPages }
+    };
+  }
+
+  // 无分页参数：返回数组（向后兼容）
   const rows = await dbConn.query(`
-    SELECT 
-      dp.id,
-      dp.user_id,
-      dp.date,
-      dp.count,
-      u.phone,
-      u.nickname,
-      u.real_name
+    SELECT dp.id, dp.user_id, dp.date, dp.count, u.phone, u.nickname, u.real_name
     FROM daily_progress dp
     LEFT JOIN users u ON dp.user_id = u.id
     ORDER BY dp.date DESC, dp.user_id
-    LIMIT $1 OFFSET $2
-  `, [pageSizeNum, offset]);
-
-  return {
-    data: (rows.rows || []).map(row => ({
-      id: row.id,
-      userId: row.user_id,
-      date: row.date,
-      count: row.count,
-      user: {
-        phone: row.phone,
-        nickname: row.nickname,
-        realName: row.real_name
-      }
-    })),
-    pagination: { total, page: pageNum, pageSize: pageSizeNum, totalPages }
-  };
+    LIMIT 100
+  `);
+  return (rows.rows || []).map(row => ({
+    id: row.id, userId: row.user_id, date: row.date, count: row.count,
+    user: { phone: row.phone, nickname: row.nickname, realName: row.real_name }
+  }));
 }
 
 /**
