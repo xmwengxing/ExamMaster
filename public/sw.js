@@ -7,8 +7,8 @@
  * - 自动更新缓存
  */
 
-const CACHE_NAME = 'edumaster-v1.0.6-20260211';
-const RUNTIME_CACHE = 'edumaster-runtime-v1.0.6';
+const CACHE_NAME = 'edumaster-v1.1.0-20260502';
+const RUNTIME_CACHE = 'edumaster-runtime-v1.1.0';
 
 // 需要预缓存的静态资源
 const PRECACHE_URLS = [

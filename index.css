@@ -1,5 +1,8 @@
-/* Minimal placeholder stylesheet. For production, integrate Tailwind via PostCSS/build step.
-   This file prevents 404s and allows adding global overrides. */
+@import "@fortawesome/fontawesome-free/css/all.min.css";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 html, body, #root { height: 100%; }
 body { margin: 0; }
 
