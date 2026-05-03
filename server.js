@@ -16,7 +16,7 @@ import { corsOptions } from './src/config/cors.js';
 import { requestLogger, errorLogger } from './utils/logger.js';
 import { errorHandler } from './src/middleware/errorHandler.js';
 import { injectDatabase } from './src/middleware/database.js';
-import { globalLimiter, loginLimiter } from './src/middleware/rateLimiter.js';
+import { loginLimiter } from './src/middleware/rateLimiter.js';
 
 // 导入路由聚合器
 import { registerRoutes } from './src/routes/index.js';
@@ -45,8 +45,7 @@ app.use(injectDatabase);
 // 请求日志中间件
 app.use(requestLogger);
 
-// 限速中间件（纵深防御，Nginx 之后第二层）
-app.use('/api/', globalLimiter);
+// 限速中间件（仅登录防爆破，其余由 Nginx 负责）
 app.use('/api/auth/login', loginLimiter);
 
 // ========== 路由注册 ==========
