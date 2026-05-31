@@ -99,63 +99,67 @@ export class SimpleImportQueueService {
 
       this.processingTasks.set(taskId, { status: 'processing', progress: 0 });
 
-      // 读取JSON文件
-      const fileContent = await fs.readFile(filePath, 'utf-8');
-      const jsonData = JSON.parse(fileContent);
+      try {
+        // 读取JSON文件
+        const fileContent = await fs.readFile(filePath, 'utf-8');
+        const jsonData = JSON.parse(fileContent);
 
-      // 提取题目数据
-      let questions = [];
-      if (Array.isArray(jsonData)) {
-        questions = jsonData;
-      } else if (jsonData.questions && Array.isArray(jsonData.questions)) {
-        questions = jsonData.questions;
-      } else {
-        throw new Error('JSON文件格式错误：未找到题目数据');
+        // 提取题目数据
+        let questions = [];
+        if (Array.isArray(jsonData)) {
+          questions = jsonData;
+        } else if (jsonData.questions && Array.isArray(jsonData.questions)) {
+          questions = jsonData.questions;
+        } else {
+          throw new Error('JSON文件格式错误：未找到题目数据');
+        }
+
+        console.log('[SimpleImportQueue] 找到题目数量:', questions.length);
+
+        // 更新进度
+        await db.query(
+          `UPDATE import_tasks 
+           SET progress = $1
+           WHERE task_id = $2`,
+          [50, taskId]
+        );
+
+        // 这里应该调用实际的导入逻辑
+        const result = {
+          total: questions.length,
+          success: questions.length,
+          failed: 0,
+          message: '任务已完成，请在题库管理中使用批量导入功能导入题目'
+        };
+
+        // 更新状态为完成
+        await db.query(
+          `UPDATE import_tasks 
+           SET status = $1, progress = $2, result = $3, completed_at = NOW()
+           WHERE task_id = $4`,
+          ['completed', 100, JSON.stringify(result), taskId]
+        );
+
+        console.log('[SimpleImportQueue] 任务完成:', taskId);
+
+      } catch (error) {
+        console.error('[SimpleImportQueue] 任务失败:', error);
+
+        // 更新状态为失败
+        await db.query(
+          `UPDATE import_tasks 
+           SET status = $1, error_message = $2, completed_at = NOW()
+           WHERE task_id = $3`,
+          ['failed', error.message, taskId]
+        );
+      } finally {
+        // 确保清理 - 无论成功还是失败都要删除Map条目
+        this.processingTasks.delete(taskId);
       }
-
-      console.log('[SimpleImportQueue] 找到题目数量:', questions.length);
-
-      // 更新进度
-      await db.query(
-        `UPDATE import_tasks 
-         SET progress = $1
-         WHERE task_id = $2`,
-        [50, taskId]
-      );
-
-      // 这里应该调用实际的导入逻辑
-      // 由于没有指定题库ID，我们只是验证数据格式
-      const result = {
-        total: questions.length,
-        success: questions.length,
-        failed: 0,
-        message: '任务已完成，请在题库管理中使用批量导入功能导入题目'
-      };
-
-      // 更新状态为完成
-      await db.query(
-        `UPDATE import_tasks 
-         SET status = $1, progress = $2, result = $3, completed_at = NOW()
-         WHERE task_id = $4`,
-        ['completed', 100, JSON.stringify(result), taskId]
-      );
-
-      this.processingTasks.delete(taskId);
-
-      console.log('[SimpleImportQueue] 任务完成:', taskId);
-
     } catch (error) {
-      console.error('[SimpleImportQueue] 任务失败:', error);
-
-      // 更新状态为失败
-      await db.query(
-        `UPDATE import_tasks 
-         SET status = $1, error_message = $2, completed_at = NOW()
-         WHERE task_id = $3`,
-        ['failed', error.message, taskId]
-      );
-
-      this.processingTasks.delete(taskId);
+      // 外层catch处理processTask调用本身的错误（如data.taskId不存在等）
+      console.error('[SimpleImportQueue] processTask异常:', error);
+      this.processingTasks.delete(data.taskId);
     }
   }
 

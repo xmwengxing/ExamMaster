@@ -13,12 +13,17 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // 数据库配置
+const _dbPassword = process.env.DB_PASSWORD;
+if (!_dbPassword) {
+  console.error('FATAL: DB_PASSWORD environment variable is not set.');
+  process.exit(1);
+}
 const pool = new Pool({
   host: process.env.DB_HOST || 'localhost',
   port: process.env.DB_PORT || 5434,
   database: process.env.DB_NAME || 'edumaster',
   user: process.env.DB_USER || 'edumaster_user',
-  password: process.env.DB_PASSWORD || 'Tkl@s,dla=~7Jsa.40a1ebEp9V)OS1>B'
+  password: _dbPassword
 });
 
 async function fixErrorLogsTable() {

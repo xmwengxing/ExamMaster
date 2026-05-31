@@ -114,7 +114,12 @@ export class ProgressTrackerService {
     
     // 如果progress是字符串,解析为对象
     if (typeof progress === 'string') {
-      return JSON.parse(progress);
+      try {
+        return JSON.parse(progress);
+      } catch (e) {
+        console.error('[ProgressTracker] Failed to parse progress JSON:', e);
+        return {};
+      }
     }
 
     return progress;

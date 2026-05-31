@@ -354,8 +354,8 @@ export async function updateProgress(db, userId, courseId, data) {
   params.push(courseId);
 
   await db.execute(
-    `UPDATE course_enrollments SET ${sets.join(', ')} WHERE user_id = $${idx++} AND course_id = $${idx}`,
-    params
+    `UPDATE course_enrollments SET ${sets.join(', ')} WHERE user_id = $${idx} AND course_id = $${idx + 1}`,
+    [...params, userId, courseId]
   );
   return getMyProgress(db, userId, courseId);
 }
