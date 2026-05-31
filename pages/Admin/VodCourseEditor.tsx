@@ -39,6 +39,8 @@ const VodCourseEditor: React.FC<VodCourseEditorProps> = ({ course, chapters, onB
     setLocalChapters(updated || []);
   }, [course, getChapters]);
 
+  useEffect(() => { refreshChapters(); }, [refreshChapters]);
+
   // Video type label
   const videoTypeLabel = (t: string) => { switch (t) { case 'upload': return '📤 上传'; case 'embed': return '🌐 嵌入'; case 'link': return '🔗 外链'; default: return t; } };
 

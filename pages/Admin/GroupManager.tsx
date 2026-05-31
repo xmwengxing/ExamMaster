@@ -20,7 +20,8 @@ const defaultPermissions: GroupPermissions = {
   banks: [],
   exams: [],
   vod_courses: { mode: 'all', categories: [], courses: [] },
-  live_courses: { mode: 'all', categories: [], courses: [] }
+  live_courses: { mode: 'all', categories: [], courses: [] },
+  article_courses: { mode: 'all', categories: [], courses: [] }
 };
 
 const GroupManager: React.FC<GroupManagerProps> = ({ groups, students, banks, courses, listGroups, createGroup, updateGroup, deleteGroup, updateGroupPermissions, addStudentsToGroup, setStudentGroup, refreshAll }) => {
@@ -31,6 +32,7 @@ const GroupManager: React.FC<GroupManagerProps> = ({ groups, students, banks, co
   const [permData, setPermData] = useState<GroupPermissions>(defaultPermissions);
   const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [localGroupAssignments, setLocalGroupAssignments] = useState<Record<string, string | null>>({});
 
   useEffect(() => { setLocalGroups(groups || []); }, [groups]);
 
@@ -57,11 +59,16 @@ const GroupManager: React.FC<GroupManagerProps> = ({ groups, students, banks, co
     return Array.from(cats);
   }, [courses]);
 
+  const articleCategories = useMemo(() => {
+    const cats = new Set<string>();
+    (courses || []).filter((c: any) => c.courseType === 'article').forEach((c: any) => c.category && cats.add(c.category));
+    return Array.from(cats);
+  }, [courses]);
+
   const handleCreate = async () => {
     await createGroup(formData);
     setShowModal(null);
     setFormData({ name: '', description: '' });
-    await refreshAll();
   };
 
   const handleUpdate = async () => {
@@ -137,6 +144,17 @@ const GroupManager: React.FC<GroupManagerProps> = ({ groups, students, banks, co
     });
   };
 
+  const setArticleMode = (mode: GroupPermissions['article_courses']['mode']) => {
+    setPermData(prev => ({ ...prev, article_courses: { ...prev.article_courses, mode } }));
+  };
+
+  const toggleArticleCategory = (cat: string) => {
+    setPermData(prev => {
+      const cats = prev.article_courses.categories || [];
+      return { ...prev, article_courses: { ...prev.article_courses, categories: cats.includes(cat) ? cats.filter(c => c !== cat) : [...cats, cat] } };
+    });
+  };
+
   const modalTitle = showModal?.mode === 'create' ? '新建分组' : showModal?.mode === 'edit' ? '编辑分组' : showModal?.mode === 'perms' ? '编辑分组权限' : '管理分组学员';
 
   return (
@@ -175,6 +193,9 @@ const GroupManager: React.FC<GroupManagerProps> = ({ groups, students, banks, co
                     </span>
                     <span className="text-[10px] font-bold bg-gray-100 text-gray-500 px-2 py-1 rounded-lg">
                       直播: {g.permissions?.live_courses?.mode || '未设置'}
+                    </span>
+                    <span className="text-[10px] font-bold bg-gray-100 text-gray-500 px-2 py-1 rounded-lg">
+                      图文: {g.permissions?.article_courses?.mode || '未设置'}
                     </span>
                   </div>
                 </div>
@@ -277,6 +298,26 @@ const GroupManager: React.FC<GroupManagerProps> = ({ groups, students, banks, co
                   )}
                 </div>
 
+                <div>
+                  <h4 className="font-black text-sm text-gray-700 mb-3"><i className="fa-solid fa-file-alt mr-2 text-indigo-500"></i>图文课权限</h4>
+                  <div className="flex gap-2 mb-3">
+                    {(['all', 'category', 'specific', 'none'] as const).map(m => (
+                      <button key={m} onClick={() => setArticleMode(m)} className={`px-4 py-2 rounded-xl text-xs font-black transition-all ${permData.article_courses?.mode === m ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-500'}`}>
+                        {m === 'all' ? '全部' : m === 'category' ? '按分类' : m === 'specific' ? '指定课程' : '无'}
+                      </button>
+                    ))}
+                  </div>
+                  {permData.article_courses?.mode === 'category' && (
+                    <div className="flex flex-wrap gap-2">
+                      {articleCategories.map(cat => (
+                        <label key={cat} className={`flex items-center gap-1 px-3 py-1.5 rounded-lg cursor-pointer border-2 transition-all text-xs font-bold ${(permData.article_courses.categories || []).includes(cat) ? 'border-indigo-600 bg-indigo-50 text-indigo-600' : 'border-gray-100 text-gray-500'}`}>
+                          <input type="checkbox" checked={(permData.article_courses.categories || []).includes(cat)} onChange={() => toggleArticleCategory(cat)} className="w-3 h-3 rounded" /> {cat}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 <div className="flex gap-4 pt-4">
                   <button onClick={() => setShowModal(null)} className="flex-1 py-4 bg-gray-100 text-gray-500 rounded-2xl font-black">取消</button>
                   <button onClick={handleSavePerms} className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-lg shadow-indigo-100">保存权限</button>
@@ -288,15 +329,26 @@ const GroupManager: React.FC<GroupManagerProps> = ({ groups, students, banks, co
               <div className="space-y-4">
                 <p className="text-xs text-gray-400 font-bold">勾选学员以添加到该分组（已在此分组的学员将自动勾选）</p>
                 <div className="max-h-60 overflow-y-auto space-y-2">
-                  {students.filter(s => s.role === 'STUDENT').map(s => (
+                  {students.filter(s => s.role === 'STUDENT').map(s => {
+                    const effectiveGroupId = s.id in localGroupAssignments ? localGroupAssignments[s.id] : s.groupId;
+                    const isChecked = effectiveGroupId === editId;
+                    return (
                     <label key={s.id} className="flex items-center gap-3 p-3 rounded-xl border border-gray-50 hover:border-indigo-100 cursor-pointer">
-                      <input type="checkbox" checked={s.groupId === editId} onChange={async () => { await setStudentGroup(s.id, s.groupId === editId ? null : editId); await refreshAll(); }} className="w-4 h-4 rounded text-indigo-600" />
+                      <input type="checkbox" checked={isChecked} onChange={async () => {
+                        const newGroupId = effectiveGroupId === editId ? null : editId;
+                        setLocalGroupAssignments(prev => ({ ...prev, [s.id]: newGroupId }));
+                        try { await setStudentGroup(s.id, newGroupId); } catch(e) {
+                          console.error('Failed to set student group:', e);
+                          setLocalGroupAssignments(prev => ({ ...prev, [s.id]: s.groupId }));
+                        }
+                      }} className="w-4 h-4 rounded text-indigo-600" />
                       <div>
                         <div className="text-sm font-bold text-gray-700">{s.realName}</div>
                         <div className="text-[10px] text-gray-400">{s.phone}</div>
                       </div>
                     </label>
-                  ))}
+                    );
+                  })}
                 </div>
                 <div className="flex gap-4 pt-4">
                   <button onClick={() => setShowModal(null)} className="flex-1 py-4 bg-gray-100 text-gray-500 rounded-2xl font-black">完成</button>

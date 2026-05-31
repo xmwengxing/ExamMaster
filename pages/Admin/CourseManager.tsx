@@ -11,18 +11,19 @@ interface CourseManagerProps {
   createSession: (courseId: string, data: any) => Promise<any>;
   onEditVod?: (courseId: string) => void;
   onEditLive?: (courseId: string) => void;
+  onEditArticle?: (course: Course) => void;
   refreshAll: () => Promise<void>;
-  presetType?: 'vod' | 'live';
+  presetType?: 'vod' | 'live' | 'article';
 }
 
-const CourseManager: React.FC<CourseManagerProps> = ({ courses, listCourses, createCourse, updateCourse, deleteCourse, updateCourseStatus, createSession, onEditVod, onEditLive, refreshAll, presetType }) => {
+const CourseManager: React.FC<CourseManagerProps> = ({ courses, listCourses, createCourse, updateCourse, deleteCourse, updateCourseStatus, createSession, onEditVod, onEditLive, onEditArticle, refreshAll, presetType }) => {
   const [showModal, setShowModal] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [filterType, setFilterType] = useState<string>(presetType || '');
   const [filterCategory, setFilterCategory] = useState<string>('');
   const [filterStatus, setFilterStatus] = useState<string>('');
   const [form, setForm] = useState({
-    title: '', description: '', courseType: 'vod' as 'vod' | 'live',
+    title: '', description: '', courseType: 'vod' as 'vod' | 'live' | 'article',
     category: '', teacherName: '', teacherIntro: '', price: 0, sortOrder: 0, coverUrl: ''
   });
 
@@ -110,14 +111,21 @@ const CourseManager: React.FC<CourseManagerProps> = ({ courses, listCourses, cre
     switch (s) { case 'draft': return { text: '草稿', cls: 'bg-gray-100 text-gray-600' }; case 'published': return { text: '已发布', cls: 'bg-emerald-100 text-emerald-700' }; case 'archived': return { text: '已归档', cls: 'bg-amber-100 text-amber-700' }; default: return { text: s, cls: 'bg-gray-100 text-gray-600' }; }
   };
 
-  const typeLabel = (t: string) => t === 'vod' ? '📹 录播课' : '🔴 直播课';
+  const typeLabel = (t: string) => {
+    switch (t) {
+      case 'vod': return '📹 录播课';
+      case 'live': return '🔴 直播课';
+      case 'article': return '📝 图文课';
+      default: return t;
+    }
+  };
 
   return (
     <div className="animate-in fade-in duration-300">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h2 className="text-3xl font-black text-gray-900">{presetType === 'vod' ? '录播课管理' : presetType === 'live' ? '直播课管理' : '课程管理'}</h2>
-          <p className="text-sm text-gray-400 mt-1 font-bold">{presetType ? (presetType === 'vod' ? '管理录播课程、章节与课时' : '管理直播课程与腾讯会议场次') : '管理所有在线课程'}</p>
+          <h2 className="text-3xl font-black text-gray-900">{presetType === 'vod' ? '录播课管理' : presetType === 'live' ? '直播课管理' : presetType === 'article' ? '图文课程管理' : '课程管理'}</h2>
+          <p className="text-sm text-gray-400 mt-1 font-bold">{presetType ? (presetType === 'vod' ? '管理录播课程、章节与课时' : presetType === 'live' ? '管理直播课程与腾讯会议场次' : '管理图文课程章节与 Markdown 内容') : '管理所有在线课程'}</p>
         </div>
         <button onClick={openCreate} className="bg-indigo-600 text-white px-5 py-3 rounded-2xl font-black text-sm shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95">
           <i className="fa-solid fa-plus mr-2"></i> 新建课程
@@ -127,13 +135,14 @@ const CourseManager: React.FC<CourseManagerProps> = ({ courses, listCourses, cre
       <div className="flex gap-3 mb-6">
         {presetType ? (
           <span className="bg-indigo-50 text-indigo-600 border-none rounded-xl px-4 py-2.5 text-sm font-bold">
-            {presetType === 'vod' ? '📹 录播课' : '🔴 直播课'}
+            {presetType === 'vod' ? '📹 录播课' : presetType === 'live' ? '🔴 直播课' : '📝 图文课'}
           </span>
         ) : (
           <select value={filterType} onChange={e => setFilterType(e.target.value)} className="bg-gray-50 border-none rounded-xl px-4 py-2.5 text-sm font-bold outline-none">
             <option value="">全部类型</option>
             <option value="vod">录播课</option>
             <option value="live">直播课</option>
+            <option value="article">图文课</option>
           </select>
         )}
         <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} className="bg-gray-50 border-none rounded-xl px-4 py-2.5 text-sm font-bold outline-none">
@@ -154,7 +163,7 @@ const CourseManager: React.FC<CourseManagerProps> = ({ courses, listCourses, cre
           return (
             <div key={c.id} className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm hover:shadow-md transition-shadow">
               <div className="w-full h-32 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-xl mb-3 flex items-center justify-center overflow-hidden">
-                {c.coverUrl ? <img src={c.coverUrl} alt="" className="w-full h-full object-cover" /> : <i className={`${c.courseType === 'vod' ? 'fa-film' : 'fa-broadcast-tower'} text-4xl text-indigo-300`}></i>}
+                {c.coverUrl ? <img src={c.coverUrl} alt="" className="w-full h-full object-cover" /> : <i className={`${c.courseType === 'vod' ? 'fa-film' : c.courseType === 'live' ? 'fa-broadcast-tower' : 'fa-file-alt'} text-4xl text-indigo-300`}></i>}
               </div>
               <div className="flex items-center gap-2 mb-1">
                 <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${st.cls}`}>{st.text}</span>
@@ -169,6 +178,7 @@ const CourseManager: React.FC<CourseManagerProps> = ({ courses, listCourses, cre
                 <button onClick={() => openEdit(c)} className="flex-1 py-2 rounded-xl text-[10px] font-black bg-gray-50 text-gray-500 hover:bg-emerald-50 hover:text-emerald-600 transition-all">编辑</button>
                 {c.courseType === 'vod' && <button onClick={() => onEditVod?.(c.id)} className="flex-1 py-2 rounded-xl text-[10px] font-black bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-all">章节</button>}
                 {c.courseType === 'live' && <button onClick={() => onEditLive?.(c.id)} className="flex-1 py-2 rounded-xl text-[10px] font-black bg-rose-50 text-rose-600 hover:bg-rose-100 transition-all">场次</button>}
+                {c.courseType === 'article' && <button onClick={() => onEditArticle?.(c)} className="flex-1 py-2 rounded-xl text-[10px] font-black bg-amber-50 text-amber-600 hover:bg-amber-100 transition-all">内容</button>}
                 {c.status !== 'published' ? (
                   <button onClick={() => handleStatusChange(c.id, 'published')} className="flex-1 py-2 rounded-xl text-[10px] font-black bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-all">发布</button>
                 ) : (
@@ -181,7 +191,7 @@ const CourseManager: React.FC<CourseManagerProps> = ({ courses, listCourses, cre
         })}
         {filteredCourses.length === 0 && (
           <div className="col-span-full text-center py-16 text-gray-400">
-            <i className="fa-solid fa-video text-5xl mb-4 opacity-20"></i>
+            <i className={`${presetType === 'article' ? 'fa-file-alt' : 'fa-video'} text-5xl mb-4 opacity-20`}></i>
             <p className="font-black text-lg">暂无课程</p>
             <p className="text-sm mt-1">点击「新建课程」创建第一个在线课程</p>
           </div>
@@ -204,14 +214,15 @@ const CourseManager: React.FC<CourseManagerProps> = ({ courses, listCourses, cre
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">课程类型 *</label>
-                  {presetType ? (
-                    <div className="w-full bg-gray-100 border-none rounded-2xl px-5 py-4 font-bold text-gray-500 select-none">
-                      {presetType === 'vod' ? '📹 录播课' : '🔴 直播课'}
-                    </div>
+                    {presetType ? (
+                      <div className="w-full bg-gray-100 border-none rounded-2xl px-5 py-4 font-bold text-gray-500 select-none">
+                        {presetType === 'vod' ? '📹 录播课' : presetType === 'live' ? '🔴 直播课' : '📝 图文课'}
+                      </div>
                   ) : (
-                    <select value={form.courseType} onChange={e => setForm({...form, courseType: e.target.value as 'vod'|'live'})} className="w-full bg-gray-50 border-none rounded-2xl px-5 py-4 font-bold outline-none focus:ring-2 focus:ring-indigo-600/20">
+                    <select value={form.courseType} onChange={e => setForm({...form, courseType: e.target.value as 'vod'|'live'|'article'})} className="w-full bg-gray-50 border-none rounded-2xl px-5 py-4 font-bold outline-none focus:ring-2 focus:ring-indigo-600/20">
                       <option value="vod">录播课</option>
                       <option value="live">直播课</option>
+                      <option value="article">图文课</option>
                     </select>
                   )}
                 </div>
@@ -302,6 +313,16 @@ const CourseManager: React.FC<CourseManagerProps> = ({ courses, listCourses, cre
                   <p className="text-[11px] text-indigo-600 font-bold">
                     <i className="fa-solid fa-circle-info mr-1"></i>
                     发布课程后，可在「录播课管理」中添加章节和课时，上传或关联视频。
+                  </p>
+                </div>
+              )}
+
+              {/* 图文课专属提示 */}
+              {form.courseType === 'article' && (
+                <div className="bg-amber-50 border border-amber-100 rounded-2xl p-3">
+                  <p className="text-[11px] text-amber-700 font-bold">
+                    <i className="fa-solid fa-circle-info mr-1"></i>
+                    发布课程后，可在「图文课程」中使用 Markdown 编辑器添加章节和图文内容。
                   </p>
                 </div>
               )}

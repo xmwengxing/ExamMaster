@@ -82,6 +82,7 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./dist:/usr/share/nginx/html:ro
       - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ./uploads:/app/uploads:ro
     ports:
       - "9080:80"
     depends_on:

@@ -177,10 +177,10 @@ export async function createLesson(db, chapterId, data) {
   const courseId = courseRow?.course_id || '';
   
   await db.execute(
-    `INSERT INTO course_lessons (id, chapter_id, course_id, title, video_type, video_url, duration, is_free_preview, sort_order)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-    [id, chapterId, courseId, data.title, data.videoType || 'upload', data.videoUrl || '',
-     data.duration || 0, data.isFreePreview || false, data.sortOrder || 0]
+    `INSERT INTO course_lessons (id, chapter_id, course_id, title, lesson_type, video_type, video_url, duration, content, is_free_preview, sort_order)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+    [id, chapterId, courseId, data.title, data.lessonType || 'video', data.videoType || null, data.videoUrl || '',
+     data.duration || 0, data.content || null, data.isFreePreview || false, data.sortOrder || 0]
   );
   return rowToLesson(await db.getOne('SELECT * FROM course_lessons WHERE id = $1', [id]));
 }
@@ -191,13 +191,16 @@ export async function updateLesson(db, id, data) {
   let idx = 1;
 
   if (data.title !== undefined) { sets.push(`title = $${idx++}`); params.push(data.title); }
+  if (data.lessonType !== undefined) { sets.push(`lesson_type = $${idx++}`); params.push(data.lessonType); }
   if (data.videoType !== undefined) { sets.push(`video_type = $${idx++}`); params.push(data.videoType); }
   if (data.videoUrl !== undefined) { sets.push(`video_url = $${idx++}`); params.push(data.videoUrl); }
   if (data.duration !== undefined) { sets.push(`duration = $${idx++}`); params.push(data.duration); }
+  if (data.content !== undefined) { sets.push(`content = $${idx++}`); params.push(data.content); }
   if (data.isFreePreview !== undefined) { sets.push(`is_free_preview = $${idx++}`); params.push(data.isFreePreview); }
   if (data.sortOrder !== undefined) { sets.push(`sort_order = $${idx++}`); params.push(data.sortOrder); }
 
   if (sets.length > 0) {
+    sets.push(`updated_at = NOW()`);
     params.push(id);
     await db.execute(`UPDATE course_lessons SET ${sets.join(', ')} WHERE id = $${idx}`, params);
   }
@@ -364,46 +367,67 @@ export async function getStudentCoursePermission(db, userId) {
     "SELECT group_id FROM users WHERE id = $1 AND role = 'STUDENT'",
     [userId]
   );
-  if (!user?.group_id) return { vod: [], live: [] };
+  if (!user?.group_id) return { vod: [], live: [], article: [] };
 
   const group = await db.getOne('SELECT permissions FROM user_groups WHERE id = $1', [user.group_id]);
-  if (!group) return { vod: [], live: [] };
+  if (!group) return { vod: [], live: [], article: [] };
 
   const permissions = typeof group.permissions === 'string' ? JSON.parse(group.permissions) : group.permissions;
-  return { vod: permissions?.vod_courses || null, live: permissions?.live_courses || null };
+  return { vod: permissions?.vod_courses || null, live: permissions?.live_courses || null, article: permissions?.article_courses || null };
 }
 
 export async function getStudentAccessibleCourses(db, userId, courseType) {
   const perm = await getStudentCoursePermission(db, userId);
-  const coursePerm = courseType === 'vod' ? perm.vod : perm.live;
-  
-  if (!coursePerm || coursePerm.mode === 'none') return [];
 
-  let courses;
-  if (coursePerm.mode === 'all') {
-    courses = await db.getMany(
-      "SELECT * FROM courses WHERE course_type = $1 AND status = 'published' ORDER BY sort_order ASC, created_at DESC",
-      [courseType]
-    );
-  } else if (coursePerm.mode === 'category') {
-    const cats = coursePerm.categories || [];
-    if (cats.length === 0) return [];
-    const placeholders = cats.map((_, i) => `$${i + 2}`);
-    courses = await db.getMany(
-      `SELECT * FROM courses WHERE course_type = $1 AND status = 'published' AND category IN (${placeholders.join(',')}) ORDER BY sort_order ASC`,
-      [courseType, ...cats]
-    );
-  } else if (coursePerm.mode === 'specific') {
-    const ids = coursePerm.courses || [];
-    if (ids.length === 0) return [];
-    const placeholders = ids.map((_, i) => `$${i + 2}`);
-    courses = await db.getMany(
-      `SELECT * FROM courses WHERE course_type = $1 AND status = 'published' AND id IN (${placeholders.join(',')}) ORDER BY sort_order ASC`,
-      [courseType, ...ids]
-    );
+  // Helper: query courses for a single type based on permission
+  const queryByType = async (type, typePerm) => {
+    if (!typePerm || typePerm.mode === 'none') return [];
+    if (typePerm.mode === 'all') {
+      const rows = await db.getMany(
+        `SELECT * FROM courses WHERE course_type = $1 AND status = 'published' ORDER BY sort_order ASC, created_at DESC`,
+        [type]
+      );
+      return (rows || []).map(rowToCourse);
+    }
+    if (typePerm.mode === 'category') {
+      const cats = typePerm.categories || [];
+      if (cats.length === 0) return [];
+      const placeholders = cats.map((_, i) => `$${i + 2}`);
+      const rows = await db.getMany(
+        `SELECT * FROM courses WHERE course_type = $1 AND status = 'published' AND category IN (${placeholders.join(',')}) ORDER BY sort_order ASC`,
+        [type, ...cats]
+      );
+      return (rows || []).map(rowToCourse);
+    }
+    if (typePerm.mode === 'specific') {
+      const ids = typePerm.courses || [];
+      if (ids.length === 0) return [];
+      const placeholders = ids.map((_, i) => `$${i + 2}`);
+      const rows = await db.getMany(
+        `SELECT * FROM courses WHERE course_type = $1 AND status = 'published' AND id IN (${placeholders.join(',')}) ORDER BY sort_order ASC`,
+        [type, ...ids]
+      );
+      return (rows || []).map(rowToCourse);
+    }
+    return [];
+  };
+
+  // If specific type requested, query only that type
+  if (courseType) {
+    const coursePerm = courseType === 'vod' ? perm.vod : (courseType === 'live' ? perm.live : perm.article);
+    return await queryByType(courseType, coursePerm);
   }
 
-  return (courses || []).map(rowToCourse);
+  // No type specified: return all accessible courses from all three types
+  const [vodCourses, liveCourses, articleCourses] = await Promise.all([
+    queryByType('vod', perm.vod),
+    queryByType('live', perm.live),
+    queryByType('article', perm.article)
+  ]);
+
+  const all = [...vodCourses, ...liveCourses, ...articleCourses];
+  all.sort((a, b) => a.sortOrder - b.sortOrder || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  return all;
 }
 
 // ==================== 辅助函数 ====================
@@ -424,10 +448,12 @@ function rowToCourse(row) {
 function rowToLesson(row) {
   return {
     id: row.id, chapterId: row.chapter_id, courseId: row.course_id,
-    title: row.title, videoType: row.video_type,
-    videoUrl: row.video_url, duration: row.duration,
+    title: row.title, lessonType: row.lesson_type || 'video',
+    videoType: row.video_type, videoUrl: row.video_url,
+    duration: row.duration, content: row.content,
     isFreePreview: row.is_free_preview, sortOrder: row.sort_order,
-    createdAt: row.created_at?.toISOString?.() || row.created_at
+    createdAt: row.created_at?.toISOString?.() || row.created_at,
+    updatedAt: row.updated_at?.toISOString?.() || row.updated_at
   };
 }
 

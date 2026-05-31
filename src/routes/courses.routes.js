@@ -3,10 +3,17 @@
  */
 
 import express from 'express';
+import multer from 'multer';
 import * as coursesController from '../controllers/courses.controller.js';
 import { auth, adminAuth } from '../middleware/auth.js';
 
 const router = express.Router();
+
+// 图片上传内存存储 (用于图文课程)
+const upload = multer({ 
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 } // 10MB
+});
 
 // 课程分类
 router.get('/categories', auth, adminAuth, coursesController.listCategories);
@@ -22,7 +29,7 @@ router.delete('/:id', auth, adminAuth, coursesController.deleteCourse);
 router.put('/:id/status', auth, adminAuth, coursesController.updateCourseStatus);
 
 // 章节管理
-router.get('/:courseId/chapters', auth, adminAuth, coursesController.getChapters);
+router.get('/:courseId/chapters', auth, coursesController.getChapters);
 router.post('/:courseId/chapters', auth, adminAuth, coursesController.createChapter);
 router.put('/chapters/:id', auth, adminAuth, coursesController.updateChapter);
 router.delete('/chapters/:id', auth, adminAuth, coursesController.deleteChapter);
@@ -47,5 +54,12 @@ router.get('/my/accessible', auth, coursesController.getStudentCourses);
 router.get('/:courseId/progress', auth, coursesController.getMyProgress);
 router.post('/:courseId/enroll', auth, coursesController.enrollCourse);
 router.put('/:courseId/progress', auth, coursesController.updateProgress);
+
+// 图文课程图片上传
+router.post('/upload-image', auth, adminAuth, upload.single('image'), coursesController.uploadArticleImage);
+
+// 图文课程导入
+router.post('/import', auth, adminAuth, coursesController.importArticleCourses);
+router.post('/import/preview', auth, adminAuth, coursesController.previewImport);
 
 export default router;

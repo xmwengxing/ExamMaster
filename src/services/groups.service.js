@@ -154,7 +154,8 @@ function getDefaultPermissions() {
     banks: [],
     exams: [],
     vod_courses: { mode: 'all', categories: [], courses: [] },
-    live_courses: { mode: 'all', categories: [], courses: [] }
+    live_courses: { mode: 'all', categories: [], courses: [] },
+    article_courses: { mode: 'all', categories: [], courses: [] }
   };
 }
 
