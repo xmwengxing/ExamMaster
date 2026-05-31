@@ -71,7 +71,7 @@ export async function query(text, params) {
     // 记录慢查询
     if (duration > 1000) {
       logger.warn('慢查询警告', {
-        query: text.substring(0, 500),
+        query: text.substring(0, 200),
         duration: `${duration}ms`,
         rows: result.rowCount
       });

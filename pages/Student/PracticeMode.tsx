@@ -1,6 +1,5 @@
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import DOMPurify from 'dompurify';
 import { Question, QuestionType, PracticeMode, QuestionBank, PracticeRecord } from '../../types';
 import { useAppStore } from '../../store';
 import { getEffectiveApiKey, hasApiKey, getApiKeyMissingMessage, generateQuestionAnalysis } from '../../utils/deepseek';
@@ -1299,7 +1298,7 @@ const PracticeModeView: React.FC<PracticeModeProps> = ({
                    <i className="fa-solid fa-wand-magic-sparkles text-indigo-300"></i>
                    <span className="text-xs font-black text-indigo-300 uppercase tracking-widest">AI 深度复盘</span>
                  </div>
-                 <div className="markdown-body text-sm leading-relaxed text-indigo-50" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize((window as any).marked.parse(aiAnalysis) as string) }} />
+                 <div className="markdown-body text-sm leading-relaxed text-indigo-50" dangerouslySetInnerHTML={{ __html: (window as any).marked.parse(aiAnalysis) }} />
                  {groundingChunks.length > 0 && (
                    <div className="mt-6 pt-6 border-t border-indigo-800 flex flex-wrap gap-2">
                      {groundingChunks.map((chunk, i) => chunk.web && (

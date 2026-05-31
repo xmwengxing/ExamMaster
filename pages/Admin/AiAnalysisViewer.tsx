@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import DOMPurify from 'dompurify';
 import { useAppStore } from '../../store';
 import { QuestionType } from '../../types';
 
@@ -260,7 +259,7 @@ const AiAnalysisViewer: React.FC = () => {
                         <div className="bg-indigo-50/50 p-6 rounded-2xl border border-indigo-100">
                           <div 
                             className="markdown-body text-sm leading-relaxed text-gray-800"
-                            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize((window as any).marked?.parse(record.content) as string || record.content) }}
+                            dangerouslySetInnerHTML={{ __html: (window as any).marked?.parse(record.content) || record.content }}
                           />
                         </div>
                       </div>

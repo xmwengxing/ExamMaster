@@ -21,7 +21,8 @@ const defaultPermissions: GroupPermissions = {
   exams: [],
   vod_courses: { mode: 'all', categories: [], courses: [] },
   live_courses: { mode: 'all', categories: [], courses: [] },
-  article_courses: { mode: 'all', categories: [], courses: [] }
+  article_courses: { mode: 'all', categories: [], courses: [] },
+  interactive_courses: { mode: 'all', courses: [] }
 };
 
 const GroupManager: React.FC<GroupManagerProps> = ({ groups, students, banks, courses, listGroups, createGroup, updateGroup, deleteGroup, updateGroupPermissions, addStudentsToGroup, setStudentGroup, refreshAll }) => {
@@ -32,7 +33,96 @@ const GroupManager: React.FC<GroupManagerProps> = ({ groups, students, banks, co
   const [permData, setPermData] = useState<GroupPermissions>(defaultPermissions);
   const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [localGroupAssignments, setLocalGroupAssignments] = useState<Record<string, string | null>>({});
+  const [memberSearchTerm, setMemberSearchTerm] = useState('');
+  const [memberClassFilter, setMemberClassFilter] = useState('ALL');
+  const [memberPage, setMemberPage] = useState(1);
+  const [memberPageSize, setMemberPageSize] = useState(20);
+  const [membersTab, setMembersTab] = useState<'in-group' | 'all'>('in-group');
+  const [selectedForGroup, setSelectedForGroup] = useState<Set<string>>(new Set());
+  const [selectedForRemove, setSelectedForRemove] = useState<Set<string>>(new Set());
+
+  const allMemberClasses = useMemo(() => {
+    const classes = students.filter(s => s.role === 'STUDENT').map(s => s.className).filter(c => c && c.trim()).filter((v, i, a) => a.indexOf(v) === i).sort();
+    return classes;
+  }, [students]);
+
+  const filteredMembers = useMemo(() => {
+    const term = memberSearchTerm.toLowerCase();
+    const inGroup = membersTab === 'in-group';
+    return students.filter(s => {
+      if (s.role !== 'STUDENT') return false;
+      const inThisGroup = s.groupId === editId;
+      if (inGroup && !inThisGroup) return false;
+      if (!inGroup && inThisGroup) return false;
+      const matchSearch = s.realName?.toLowerCase().includes(term) || s.phone?.includes(term) || s.company?.toLowerCase().includes(term);
+      const matchClass = memberClassFilter === 'ALL' || s.className === memberClassFilter;
+      return matchSearch && matchClass;
+    });
+  }, [students, memberSearchTerm, memberClassFilter, membersTab, editId]);
+
+  const totalMemberPages = Math.ceil(filteredMembers.length / memberPageSize);
+  const paginatedMembers = useMemo(() => {
+    const start = (memberPage - 1) * memberPageSize;
+    return filteredMembers.slice(start, start + memberPageSize);
+  }, [filteredMembers, memberPage, memberPageSize]);
+
+  const paginatedIdsInGroup = useMemo(() => new Set(paginatedMembers.filter(s => s.groupId === editId).map(s => s.id)), [paginatedMembers, editId]);
+  const paginatedIdsNotInGroup = useMemo(() => new Set(paginatedMembers.filter(s => s.groupId !== editId).map(s => s.id)), [paginatedMembers, editId]);
+
+  const allInGroupSelected = useMemo(() => paginatedIdsInGroup.size > 0 && [...paginatedIdsInGroup].every(id => selectedForRemove.has(id)), [paginatedIdsInGroup, selectedForRemove]);
+  const allNotInGroupSelected = useMemo(() => paginatedIdsNotInGroup.size > 0 && [...paginatedIdsNotInGroup].every(id => selectedForGroup.has(id)), [paginatedIdsNotInGroup, selectedForGroup]);
+
+  const toggleMemberSelect = (id: string, willAdd: boolean) => {
+    if (willAdd) {
+      setSelectedForGroup(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+      setSelectedForRemove(prev => { const n = new Set(prev); n.delete(id); return n; });
+    } else {
+      setSelectedForRemove(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+      setSelectedForGroup(prev => { const n = new Set(prev); n.delete(id); return n; });
+    }
+  };
+
+  const toggleAllNotInGroupPage = () => {
+    setSelectedForGroup(prev => {
+      const n = new Set(prev);
+      if (allNotInGroupSelected) { [...paginatedIdsNotInGroup].forEach(id => n.delete(id)); }
+      else { [...paginatedIdsNotInGroup].forEach(id => n.add(id)); }
+      return n;
+    });
+  };
+
+  const toggleAllInGroupPage = () => {
+    setSelectedForRemove(prev => {
+      const n = new Set(prev);
+      if (allInGroupSelected) { [...paginatedIdsInGroup].forEach(id => n.delete(id)); }
+      else { [...paginatedIdsInGroup].forEach(id => n.add(id)); }
+      return n;
+    });
+  };
+
+  const handleSaveMembers = async () => {
+    if (!editId) return;
+    const addIds = [...selectedForGroup];
+    const removeIds = [...selectedForRemove];
+    try {
+      const removePromises = removeIds.map(id => setStudentGroup(id, null));
+      const addPromises = addIds.map(id => setStudentGroup(id, editId));
+      await Promise.all([...removePromises, ...addPromises]);
+      if (addIds.length > 0) alert(`已添加 ${addIds.length} 名学员`);
+      if (removeIds.length > 0) alert(`已移除 ${removeIds.length} 名学员`);
+      setSelectedForGroup(new Set());
+      setSelectedForRemove(new Set());
+    } catch(e) { console.error(e); alert('操作失败'); }
+  };
+
+  const handleCloseModal = () => {
+    setShowModal(null);
+    setSelectedForGroup(new Set());
+    setSelectedForRemove(new Set());
+    setMemberPage(1);
+  };
+
+  const totalSelected = selectedForGroup.size + selectedForRemove.size;
 
   useEffect(() => { setLocalGroups(groups || []); }, [groups]);
 
@@ -90,15 +180,6 @@ const GroupManager: React.FC<GroupManagerProps> = ({ groups, students, banks, co
     await updateGroupPermissions(editId, permData);
     setShowModal(null);
     setEditId(null);
-    await refreshAll();
-  };
-
-  const handleSaveMembers = async () => {
-    if (!editId) return;
-    await addStudentsToGroup(editId, selectedStudents);
-    setShowModal(null);
-    setEditId(null);
-    await refreshAll();
   };
 
   const openPermsModal = (group: UserGroup) => {
@@ -155,6 +236,31 @@ const GroupManager: React.FC<GroupManagerProps> = ({ groups, students, banks, co
     });
   };
 
+  const toggleVodCourse = (courseId: string) => {
+    setPermData(prev => {
+      const courses = prev.vod_courses.courses || [];
+      return { ...prev, vod_courses: { ...prev.vod_courses, courses: courses.includes(courseId) ? courses.filter(c => c !== courseId) : [...courses, courseId] } };
+    });
+  };
+
+  const toggleLiveCourse = (courseId: string) => {
+    setPermData(prev => {
+      const courses = prev.live_courses.courses || [];
+      return { ...prev, live_courses: { ...prev.live_courses, courses: courses.includes(courseId) ? courses.filter(c => c !== courseId) : [...courses, courseId] } };
+    });
+  };
+
+  const toggleArticleCourse = (courseId: string) => {
+    setPermData(prev => {
+      const courses = prev.article_courses.courses || [];
+      return { ...prev, article_courses: { ...prev.article_courses, courses: courses.includes(courseId) ? courses.filter(c => c !== courseId) : [...courses, courseId] } };
+    });
+  };
+
+  const setInteractiveMode = (mode: GroupPermissions['interactive_courses']['mode']) => {
+    setPermData(prev => ({ ...prev, interactive_courses: { ...prev.interactive_courses, mode } }));
+  };
+
   const modalTitle = showModal?.mode === 'create' ? '新建分组' : showModal?.mode === 'edit' ? '编辑分组' : showModal?.mode === 'perms' ? '编辑分组权限' : '管理分组学员';
 
   return (
@@ -184,6 +290,7 @@ const GroupManager: React.FC<GroupManagerProps> = ({ groups, students, banks, co
                     <span className="text-xs font-bold bg-indigo-50 text-indigo-600 px-3 py-1 rounded-full">{memberCount} 名学员</span>
                   </div>
                   {g.description && <p className="text-sm text-gray-400 mt-1">{g.description}</p>}
+                  {g.createdAt && <p className="text-[10px] text-gray-300 mt-1">创建于 {new Date(g.createdAt).toLocaleDateString('zh-CN')}</p>}
                   <div className="flex gap-2 mt-3">
                     <span className="text-[10px] font-bold bg-gray-100 text-gray-500 px-2 py-1 rounded-lg">
                       题库: {g.permissions?.banks?.length || 0} 个
@@ -221,12 +328,13 @@ const GroupManager: React.FC<GroupManagerProps> = ({ groups, students, banks, co
       {/* Modals */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
-          <div className="bg-white rounded-[2.5rem] w-full max-w-lg p-8 animate-in zoom-in-95 duration-200 shadow-2xl overflow-y-auto max-h-[90vh]">
-            <div className="flex justify-between items-center mb-6">
+          <div className="bg-white rounded-[2.5rem] w-full max-w-4xl p-8 animate-in zoom-in-95 duration-200 shadow-2xl flex flex-col overflow-hidden" style={{ maxHeight: '85vh' }}>
+            <div className="flex justify-between items-center mb-6 flex-shrink-0">
               <h3 className="text-2xl font-black text-gray-900">{modalTitle}</h3>
-              <button onClick={() => setShowModal(null)} className="text-gray-400 hover:text-gray-600"><i className="fa-solid fa-xmark text-xl"></i></button>
+              <button onClick={handleCloseModal} className="text-gray-400 hover:text-gray-600"><i className="fa-solid fa-xmark text-xl"></i></button>
             </div>
 
+            <div className="flex-1 overflow-y-auto space-y-4">
             {(showModal.mode === 'create' || showModal.mode === 'edit') && (
               <div className="space-y-4">
                 <div>
@@ -238,7 +346,7 @@ const GroupManager: React.FC<GroupManagerProps> = ({ groups, students, banks, co
                   <textarea value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} className="w-full bg-gray-50 border-none rounded-2xl px-5 py-4 font-bold outline-none focus:ring-2 focus:ring-indigo-600/20" rows={3} placeholder="分组说明（可选）" />
                 </div>
                 <div className="flex gap-4 pt-4">
-                  <button onClick={() => setShowModal(null)} className="flex-1 py-4 bg-gray-100 text-gray-500 rounded-2xl font-black">取消</button>
+                  <button onClick={handleCloseModal} className="flex-1 py-4 bg-gray-100 text-gray-500 rounded-2xl font-black">取消</button>
                   <button onClick={showModal.mode === 'create' ? handleCreate : handleUpdate} className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-lg shadow-indigo-100">确认保存</button>
                 </div>
               </div>
@@ -276,6 +384,15 @@ const GroupManager: React.FC<GroupManagerProps> = ({ groups, students, banks, co
                       ))}
                     </div>
                   )}
+                  {permData.vod_courses?.mode === 'specific' && (
+                    <div className="flex flex-wrap gap-2">
+                      {(courses || []).filter((c: any) => c.courseType === 'vod').map(c => (
+                        <label key={c.id} className={`flex items-center gap-1 px-3 py-1.5 rounded-lg cursor-pointer border-2 transition-all text-xs font-bold ${(permData.vod_courses.courses || []).includes(c.id) ? 'border-indigo-600 bg-indigo-50 text-indigo-600' : 'border-gray-100 text-gray-500'}`}>
+                          <input type="checkbox" checked={(permData.vod_courses.courses || []).includes(c.id)} onChange={() => toggleVodCourse(c.id)} className="w-3 h-3 rounded" /> {c.title || c.name}
+                        </label>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -292,6 +409,15 @@ const GroupManager: React.FC<GroupManagerProps> = ({ groups, students, banks, co
                       {liveCategories.map(cat => (
                         <label key={cat} className={`flex items-center gap-1 px-3 py-1.5 rounded-lg cursor-pointer border-2 transition-all text-xs font-bold ${(permData.live_courses.categories || []).includes(cat) ? 'border-indigo-600 bg-indigo-50 text-indigo-600' : 'border-gray-100 text-gray-500'}`}>
                           <input type="checkbox" checked={(permData.live_courses.categories || []).includes(cat)} onChange={() => toggleLiveCategory(cat)} className="w-3 h-3 rounded" /> {cat}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                  {permData.live_courses?.mode === 'specific' && (
+                    <div className="flex flex-wrap gap-2">
+                      {(courses || []).filter((c: any) => c.courseType === 'live').map(c => (
+                        <label key={c.id} className={`flex items-center gap-1 px-3 py-1.5 rounded-lg cursor-pointer border-2 transition-all text-xs font-bold ${(permData.live_courses.courses || []).includes(c.id) ? 'border-indigo-600 bg-indigo-50 text-indigo-600' : 'border-gray-100 text-gray-500'}`}>
+                          <input type="checkbox" checked={(permData.live_courses.courses || []).includes(c.id)} onChange={() => toggleLiveCourse(c.id)} className="w-3 h-3 rounded" /> {c.title || c.name}
                         </label>
                       ))}
                     </div>
@@ -316,6 +442,26 @@ const GroupManager: React.FC<GroupManagerProps> = ({ groups, students, banks, co
                       ))}
                     </div>
                   )}
+                  {permData.article_courses?.mode === 'specific' && (
+                    <div className="flex flex-wrap gap-2">
+                      {(courses || []).filter((c: any) => c.courseType === 'article').map(c => (
+                        <label key={c.id} className={`flex items-center gap-1 px-3 py-1.5 rounded-lg cursor-pointer border-2 transition-all text-xs font-bold ${(permData.article_courses.courses || []).includes(c.id) ? 'border-indigo-600 bg-indigo-50 text-indigo-600' : 'border-gray-100 text-gray-500'}`}>
+                          <input type="checkbox" checked={(permData.article_courses.courses || []).includes(c.id)} onChange={() => toggleArticleCourse(c.id)} className="w-3 h-3 rounded" /> {c.title || c.name}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <h4 className="font-black text-sm text-gray-700 mb-3"><i className="fa-solid fa-comments mr-2 text-indigo-500"></i>互动课权限</h4>
+                  <div className="flex gap-2 mb-3">
+                    {(['all', 'none'] as const).map(m => (
+                      <button key={m} onClick={() => setInteractiveMode(m)} className={`px-4 py-2 rounded-xl text-xs font-black transition-all ${permData.interactive_courses?.mode === m ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-500'}`}>
+                        {m === 'all' ? '全部可访问' : '无'}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 <div className="flex gap-4 pt-4">
@@ -324,34 +470,95 @@ const GroupManager: React.FC<GroupManagerProps> = ({ groups, students, banks, co
                 </div>
               </div>
             )}
+            </div>
 
             {showModal.mode === 'members' && (
               <div className="space-y-4">
-                <p className="text-xs text-gray-400 font-bold">勾选学员以添加到该分组（已在此分组的学员将自动勾选）</p>
-                <div className="max-h-60 overflow-y-auto space-y-2">
-                  {students.filter(s => s.role === 'STUDENT').map(s => {
-                    const effectiveGroupId = s.id in localGroupAssignments ? localGroupAssignments[s.id] : s.groupId;
-                    const isChecked = effectiveGroupId === editId;
-                    return (
-                    <label key={s.id} className="flex items-center gap-3 p-3 rounded-xl border border-gray-50 hover:border-indigo-100 cursor-pointer">
-                      <input type="checkbox" checked={isChecked} onChange={async () => {
-                        const newGroupId = effectiveGroupId === editId ? null : editId;
-                        setLocalGroupAssignments(prev => ({ ...prev, [s.id]: newGroupId }));
-                        try { await setStudentGroup(s.id, newGroupId); } catch(e) {
-                          console.error('Failed to set student group:', e);
-                          setLocalGroupAssignments(prev => ({ ...prev, [s.id]: s.groupId }));
-                        }
-                      }} className="w-4 h-4 rounded text-indigo-600" />
-                      <div>
-                        <div className="text-sm font-bold text-gray-700">{s.realName}</div>
-                        <div className="text-[10px] text-gray-400">{s.phone}</div>
-                      </div>
-                    </label>
-                    );
-                  })}
+                <div className="flex gap-2 mb-2">
+                  <button onClick={() => { setMembersTab('in-group'); setMemberPage(1); setSelectedForGroup(new Set()); setSelectedForRemove(new Set()); }} className={`px-4 py-2 rounded-xl text-xs font-black transition-all ${membersTab === 'in-group' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-500'}`}>
+                    本组成员 ({students.filter(s => s.role === 'STUDENT' && s.groupId === editId).length})
+                  </button>
+                  <button onClick={() => { setMembersTab('all'); setMemberPage(1); setSelectedForGroup(new Set()); setSelectedForRemove(new Set()); }} className={`px-4 py-2 rounded-xl text-xs font-black transition-all ${membersTab === 'all' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-500'}`}>
+                    所有学员
+                  </button>
                 </div>
-                <div className="flex gap-4 pt-4">
-                  <button onClick={() => setShowModal(null)} className="flex-1 py-4 bg-gray-100 text-gray-500 rounded-2xl font-black">完成</button>
+                <div className="flex gap-2">
+                  <input value={memberSearchTerm} onChange={e => { setMemberSearchTerm(e.target.value); setMemberPage(1); }} placeholder="搜索姓名/手机/单位" className="flex-1 bg-gray-50 border-none rounded-xl px-4 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-600/20" />
+                  <select value={memberClassFilter} onChange={e => { setMemberClassFilter(e.target.value); setMemberPage(1); }} className="bg-gray-50 border-none rounded-xl px-3 py-2 text-sm font-bold outline-none">
+                    <option value="ALL">全部班级</option>
+                    {allMemberClasses.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div className="max-h-[calc(60vh)] overflow-y-auto border border-gray-100 rounded-xl">
+                  <table className="w-full text-left">
+                    <thead className="bg-gray-50/80 text-[9px] font-black text-gray-400 uppercase sticky top-0">
+                      <tr>
+                        <th className="px-3 py-2 w-8">
+                          {membersTab === 'all' ? (
+                            <input type="checkbox" checked={allNotInGroupSelected} onChange={toggleAllNotInGroupPage} className="w-4 h-4 rounded" />
+                          ) : (
+                            <input type="checkbox" checked={allInGroupSelected} onChange={toggleAllInGroupPage} className="w-4 h-4 rounded" />
+                          )}
+                        </th>
+                        <th className="px-3 py-2">学员信息</th>
+                        <th className="px-3 py-2 text-center">班级</th>
+                        <th className="px-3 py-2 text-center">单位</th>
+                        <th className="px-3 py-2 text-center">当前状态</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {paginatedMembers.map(s => {
+                        const inGroup = s.groupId === editId;
+                        const isAdding = selectedForGroup.has(s.id);
+                        const isRemoving = selectedForRemove.has(s.id);
+                        return (
+                          <tr key={s.id} className={`hover:bg-indigo-50/20 ${isAdding ? 'bg-emerald-50' : isRemoving ? 'bg-rose-50' : ''}`}>
+                            <td className="px-3 py-2">
+                              <input type="checkbox" checked={inGroup ? isRemoving : isAdding} onChange={() => toggleMemberSelect(s.id, !inGroup)} className="w-4 h-4 rounded" />
+                            </td>
+                            <td className="px-3 py-2">
+                              <div className="text-sm font-bold text-gray-700">{s.realName}</div>
+                              <div className="text-[9px] text-gray-400">{s.phone}</div>
+                            </td>
+                            <td className="px-3 py-2 text-center text-xs text-gray-500">{s.className || '—'}</td>
+                            <td className="px-3 py-2 text-center text-xs text-gray-400">{s.company || '通用单位'}</td>
+                            <td className="px-3 py-2 text-center">
+                              {isAdding ? (
+                                <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">待添加</span>
+                              ) : isRemoving ? (
+                                <span className="text-[10px] font-black text-rose-600 bg-rose-50 px-2 py-0.5 rounded">待移除</span>
+                              ) : inGroup ? (
+                                <span className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">已分组</span>
+                              ) : (
+                                <span className="text-[10px] font-black text-gray-400 bg-gray-50 px-2 py-0.5 rounded">未分组</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {paginatedMembers.length === 0 && (
+                        <tr><td colSpan={5} className="text-center py-8 text-gray-400 text-xs">无学员</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="flex items-center justify-between text-xs font-bold">
+                  <span className="text-gray-400">共 {filteredMembers.length} 人 | 已选 {totalSelected} 人</span>
+                  <div className="flex items-center gap-2">
+                    <select value={memberPageSize} onChange={e => { setMemberPageSize(Number(e.target.value)); setMemberPage(1); }} className="bg-gray-50 border-none rounded-lg px-2 py-1 text-xs font-bold">
+                      <option value={20}>20条/页</option>
+                      <option value={50}>50条/页</option>
+                      <option value={100}>100条/页</option>
+                    </select>
+                    <button disabled={memberPage === 1} onClick={() => setMemberPage(p => p - 1)} className="w-7 h-7 rounded-lg bg-gray-100 text-gray-500 text-xs disabled:opacity-30"><i className="fa-solid fa-chevron-left"></i></button>
+                    <span className="text-xs">{memberPage}/{totalMemberPages}</span>
+                    <button disabled={memberPage === totalMemberPages} onClick={() => setMemberPage(p => p + 1)} className="w-7 h-7 rounded-lg bg-gray-100 text-gray-500 text-xs disabled:opacity-30"><i className="fa-solid fa-chevron-right"></i></button>
+                  </div>
+                </div>
+                <div className="flex gap-3 pt-2">
+                  <button onClick={handleCloseModal} className="flex-1 py-3 bg-gray-100 text-gray-500 rounded-2xl font-black text-sm hover:bg-gray-200 transition-all">取消</button>
+                  <button onClick={handleSaveMembers} disabled={totalSelected === 0} className="flex-1 py-3 bg-indigo-600 text-white rounded-2xl font-black text-sm shadow-lg shadow-indigo-100 disabled:opacity-30 hover:bg-indigo-700 transition-all">保存</button>
+                  <button onClick={async () => { await handleSaveMembers(); handleCloseModal(); }} disabled={totalSelected === 0} className="flex-1 py-3 bg-emerald-600 text-white rounded-2xl font-black text-sm shadow-lg shadow-emerald-100 disabled:opacity-30 hover:bg-emerald-700 transition-all">保存并关闭</button>
                 </div>
               </div>
             )}
