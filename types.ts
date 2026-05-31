@@ -271,12 +271,17 @@ export interface GroupPermissions {
     categories: string[];
     courses: string[];
   };
+  article_courses: {
+    mode: 'all' | 'category' | 'specific' | 'none';
+    categories: string[];
+    courses: string[];
+  };
 }
 
 export interface CourseCategory {
   id: string;
   name: string;
-  courseType: 'vod' | 'live';
+  courseType: 'vod' | 'live' | 'article';
   sortOrder: number;
   createdAt: string;
 }
@@ -286,7 +291,7 @@ export interface Course {
   title: string;
   description?: string;
   coverUrl?: string;
-  courseType: 'vod' | 'live';
+  courseType: 'vod' | 'live' | 'article';
   category?: string;
   teacherName?: string;
   teacherIntro?: string;
@@ -312,12 +317,15 @@ export interface CourseLesson {
   chapterId: string;
   courseId: string;
   title: string;
-  videoType: 'upload' | 'embed' | 'link';
+  lessonType: 'video' | 'article';
+  videoType?: 'upload' | 'embed' | 'link';
   videoUrl?: string;
   duration: number;
+  content?: string;
   isFreePreview: boolean;
   sortOrder: number;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface LiveSession {

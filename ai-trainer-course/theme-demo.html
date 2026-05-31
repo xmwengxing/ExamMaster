@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>主题对比 Demo — 人工智能训练师三级课件</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&family=Inter:wght@200;300;400;600;700;800&family=Manrope:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Patrick+Hand&family=Caveat&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #111;
+  color: #eee;
+  font-family: "Noto Sans SC", sans-serif;
+  padding: 24px;
+  min-height: 100vh;
+}
+h1 {
+  text-align: center;
+  font-size: 28px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  letter-spacing: 0.04em;
+}
+.subhead {
+  text-align: center;
+  color: #888;
+  font-size: 15px;
+  margin-bottom: 32px;
+}
+.comparison {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.panel {
+  flex: 0 0 370px;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+}
+.panel-header {
+  padding: 14px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+.panel-header .name { font-size: 18px; }
+.panel-header .tag { opacity: 0.55; font-size: 12px; margin-left: 10px; }
+
+.stage {
+  position: relative;
+  width: 100%;
+  height: 208px;   /* 370 * 9/16 */
+  overflow: hidden;
+  font-size: 68%;
+}
+.stage::after {
+  content: "";
+  position: absolute; inset: 0; pointer-events: none;
+  background-image: var(--surface-pattern, none);
+  background-size: var(--surface-pattern-size, auto);
+  mix-blend-mode: var(--surface-pattern-blend, normal);
+  opacity: var(--surface-pattern-opacity, 1);
+  z-index: 1;
+}
+.stage::before {
+  content: "";
+  position: absolute; inset: 0; pointer-events: none;
+  background: var(--surface-vignette, none);
+  z-index: 1;
+}
+.stage-content {
+  position: relative; z-index: 2;
+  padding: 28px 24px 20px;
+  display: flex; flex-direction: column; gap: 12px;
+  height: 100%;
+}
+.hero {
+  font-family: var(--font-display-cn, "Noto Sans SC");
+  font-size: 22px;
+  font-weight: var(--hero-title-weight, 700);
+  color: var(--text, #000);
+  letter-spacing: 0.03em;
+  line-height: 1.3;
+}
+.sub {
+  font-family: var(--font-display-cn, "Noto Sans SC");
+  font-size: 13px;
+  color: var(--text-mute, #666);
+  letter-spacing: 0.02em;
+}
+.card-demo {
+  display: flex; gap: 10px;
+  margin-top: auto;
+}
+.card {
+  flex: 1;
+  padding: 10px 12px;
+  background: var(--surface-2, #f0f0f0);
+  border: 1px solid var(--rule, #ddd);
+  border-radius: var(--r-card, 8px);
+  box-shadow: var(--card-shadow, none);
+  font-size: 11px;
+  color: var(--text-2, #333);
+}
+.card .num {
+  font-family: var(--hero-num-font, "Manrope");
+  font-weight: var(--hero-num-weight, 800);
+  font-style: var(--hero-num-style, normal);
+  letter-spacing: var(--hero-num-track, -0.02em);
+  font-size: 28px;
+  color: var(--accent, #4361ee);
+  line-height: 1;
+}
+.card .label { font-size: 11px; color: var(--text-mute, #888); margin-top: 2px; }
+.rule-line {
+  height: 0;
+  border-top: var(--rule-w, 1px) var(--rule-style, solid) var(--rule, #ddd);
+  width: 100%;
+}
+.accent-dot {
+  display: inline-block;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--accent, #4361ee);
+  margin-right: 6px;
+}
+.panel-footer {
+  padding: 12px 20px;
+  font-size: 12px;
+  display: flex; gap: 6px;
+  flex-wrap: wrap;
+}
+.mood-tag {
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  background: rgba(255,255,255,0.1);
+  color: #aaa;
+}
+
+/* ─ Theme 1: electric-studio ─ */
+.t1 .panel-header { background: #0a0a0a; color: #4361ee; }
+.t1 .stage { background: #ffffff; }
+.t1 .panel-footer { background: #0a0a0a; }
+.t1 {
+  --surface: #ffffff;
+  --surface-2: #f5f7fb;
+  --surface-3: #e8ecf3;
+  --text: #0a0a0a;
+  --text-2: #1f2530;
+  --text-mute: #5a6478;
+  --text-faint: #98a0b0;
+  --rule: #d8dde6;
+  --accent: #4361ee;
+  --accent-soft: rgba(67,97,238,0.10);
+  --font-display-cn: "Noto Sans SC", sans-serif;
+  --font-display-en: "Manrope", sans-serif;
+  --font-body: "Manrope", "Noto Sans SC", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+  --r-card: 12px;
+  --rule-w: 1px;
+  --rule-style: solid;
+  --hero-num-font: "Manrope", sans-serif;
+  --hero-num-style: normal;
+  --hero-num-weight: 800;
+  --hero-num-track: -0.035em;
+  --card-shadow: 0 1px 2px rgba(20,30,60,0.06), 0 12px 28px rgba(20,30,60,0.08);
+  --surface-pattern: linear-gradient(0deg, #4361ee 0%, #4361ee 4px, transparent 4px, transparent 100%);
+  --surface-pattern-size: 100% 100%;
+  --surface-pattern-blend: normal;
+  --surface-pattern-opacity: 1;
+  --hero-title-weight: 700;
+}
+
+/* ─ Theme 2: swiss-ikb ─ */
+.t2 .panel-header { background: #e8e8e6; color: #002fa7; }
+.t2 .stage { background: #fafaf8; }
+.t2 .panel-footer { background: #e8e8e6; color: #444; }
+.t2 {
+  --surface: #fafaf8;
+  --surface-2: #f0f0ee;
+  --surface-3: #d4d4d2;
+  --text: #0a0a0a;
+  --text-2: #2a2a2a;
+  --text-mute: #737373;
+  --text-faint: #a8a8a8;
+  --rule: #e0e0e0;
+  --accent: #002fa7;
+  --accent-soft: rgba(0,47,167,0.08);
+  --font-display-cn: "Noto Sans SC", sans-serif;
+  --font-display-en: "Inter", sans-serif;
+  --font-body: "Inter", "Noto Sans SC", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+  --r-card: 0px;
+  --rule-w: 1px;
+  --rule-style: solid;
+  --hero-num-font: "Inter", sans-serif;
+  --hero-num-style: normal;
+  --hero-num-weight: 200;
+  --hero-num-track: -0.04em;
+  --card-shadow: inset 0 0 0 1px var(--rule);
+  --surface-pattern:
+    linear-gradient(rgba(10,10,10,0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(10,10,10,0.045) 1px, transparent 1px);
+  --surface-pattern-size: 64px 64px;
+  --surface-pattern-blend: normal;
+  --surface-pattern-opacity: 0.85;
+  --hero-title-weight: 300;
+}
+
+/* ─ Theme 3: chalk-garden ─ */
+.t3 .panel-header { background: #16171c; color: #facc15; }
+.t3 .stage { background: #1e1e24; }
+.t3 .panel-footer { background: #16171c; }
+.t3 {
+  --surface: #1e1e24;
+  --surface-2: #28282f;
+  --surface-3: #34343c;
+  --text: #f4f4f5;
+  --text-2: #d4d4d8;
+  --text-mute: #a1a1aa;
+  --text-faint: #71717a;
+  --rule: rgba(255,255,255,0.20);
+  --accent: #facc15;
+  --accent-soft: rgba(250,204,21,0.14);
+  --font-display-cn: "Patrick Hand", "Noto Serif SC", cursive;
+  --font-display-en: "Patrick Hand", cursive;
+  --font-body: "Patrick Hand", "Noto Sans SC", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+  --r-card: 16px;
+  --rule-w: 2px;
+  --rule-style: dashed;
+  --hero-num-font: "Patrick Hand", cursive;
+  --hero-num-style: normal;
+  --hero-num-weight: 400;
+  --hero-num-track: 0;
+  --card-shadow: 0 0 0 1px rgba(255,255,255,0.08);
+  --surface-pattern: none;
+  --surface-pattern-size: auto;
+  --surface-pattern-blend: normal;
+  --surface-pattern-opacity: 1;
+  --surface-vignette: radial-gradient(ellipse at 50% 50%, transparent 0%, rgba(0,0,0,0.5) 100%);
+  --hero-title-weight: 400;
+  --text-shadow: 0 1px 0 rgba(255,255,255,0.08);
+}
+
+.recommendation {
+  margin-top: 36px;
+  padding: 24px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 12px;
+  max-width: 1180px;
+  margin-left: auto; margin-right: auto;
+}
+.recommendation h2 { font-size: 20px; margin-bottom: 14px; }
+.rec-row { display: flex; gap: 16px; flex-wrap: wrap; }
+.rec-card { flex: 1; min-width: 320px; padding: 20px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); }
+.rec-card h3 { font-size: 17px; margin-bottom: 6px; }
+.rec-card p { font-size: 13px; color: #999; line-height: 1.6; }
+.rec-recommend { border-color: #4361ee; background: rgba(67,97,238,0.08); }
+.rec-recommend h3 { color: #4361ee; }
+.rec-recommend::before { content: "推荐 ★"; font-size: 11px; color: #4361ee; font-weight: 700; letter-spacing: 0.08em; display: block; margin-bottom: 8px; }
+</style>
+</head>
+<body>
+
+<h1>主题对比 Demo — 人工智能训练师三级课件</h1>
+<p class="subhead">同一段画面在三种主题下的呈现效果对比</p>
+
+<div class="comparison">
+
+  <div class="panel t1">
+    <div class="panel-header">
+      <span class="name">electric-studio</span>
+      <span class="tag">电光企业</span>
+    </div>
+    <div class="stage">
+      <div class="stage-content">
+        <div class="hero">通用业务流程和业务数据</div>
+        <div class="sub">人工智能训练师 · 三级 · 翁老师</div>
+        <div class="rule-line"></div>
+        <div class="card-demo">
+          <div class="card">
+            <div class="num">95%</div>
+            <div class="label">实验室准确率</div>
+          </div>
+          <div class="card">
+            <div class="num">~0%</div>
+            <div class="label">业务上线效果</div>
+          </div>
+          <div class="card">
+            <div class="num">5</div>
+            <div class="label">全链路齿轮</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-footer">
+      <span class="mood-tag">净白底</span>
+      <span class="mood-tag">电光蓝 accent</span>
+      <span class="mood-tag">底部 4px 蓝条</span>
+      <span class="mood-tag">Manrope 字体</span>
+    </div>
+  </div>
+
+  <div class="panel t2">
+    <div class="panel-header">
+      <span class="name">swiss-ikb</span>
+      <span class="tag">瑞士克莱因蓝</span>
+    </div>
+    <div class="stage">
+      <div class="stage-content">
+        <div class="hero">通用业务流程和业务数据</div>
+        <div class="sub">人工智能训练师 · 三级 · 翁老师</div>
+        <div class="rule-line"></div>
+        <div class="card-demo">
+          <div class="card">
+            <div class="num">95%</div>
+            <div class="label">实验室准确率</div>
+          </div>
+          <div class="card">
+            <div class="num">~0%</div>
+            <div class="label">业务上线效果</div>
+          </div>
+          <div class="card">
+            <div class="num">5</div>
+            <div class="label">全链路齿轮</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-footer">
+      <span class="mood-tag">暖白底</span>
+      <span class="mood-tag">IBK 克莱因蓝</span>
+      <span class="mood-tag">1px 发丝网格</span>
+      <span class="mood-tag">Inter 200 超细字重</span>
+    </div>
+  </div>
+
+  <div class="panel t3">
+    <div class="panel-header">
+      <span class="name">chalk-garden</span>
+      <span class="tag">粉笔花园</span>
+    </div>
+    <div class="stage">
+      <div class="stage-content">
+        <div class="hero">通用业务流程和业务数据</div>
+        <div class="sub">人工智能训练师 · 三级 · 翁老师</div>
+        <div class="rule-line"></div>
+        <div class="card-demo">
+          <div class="card">
+            <div class="num">95%</div>
+            <div class="label">实验室准确率</div>
+          </div>
+          <div class="card">
+            <div class="num">~0%</div>
+            <div class="label">业务上线效果</div>
+          </div>
+          <div class="card">
+            <div class="num">5</div>
+            <div class="label">全链路齿轮</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-footer">
+      <span class="mood-tag">暗黑板底</span>
+      <span class="mood-tag">粉笔黄 accent</span>
+      <span class="mood-tag">Patrick Hand 手写</span>
+      <span class="mood-tag">虚线分割</span>
+    </div>
+  </div>
+
+</div>
+
+<div class="recommendation">
+  <h2>适用性分析</h2>
+  <div class="rec-row">
+    <div class="rec-card rec-recommend">
+      <h3>electric-studio · 电光企业</h3>
+      <p>净白底 + 电光蓝 accent。企业培训、B2B 课程的首选。底部 4px 蓝条是视觉签名——专业但不冷漠。适合「人工智能训练师」这种职业认证课的定位。</p>
+    </div>
+    <div class="rec-card">
+      <h3>swiss-ikb · 瑞士克莱因蓝</h3>
+      <p>极简现代主义。200 超细字重 + 发丝网格 + IKB 深蓝。AI/数据/技术类内容的气质很契合，但对教学场景偏冷感、距离感较强。</p>
+    </div>
+    <div class="rec-card">
+      <h3>chalk-garden · 粉笔花园</h3>
+      <p>暗黑板 + 手写字体 + 粉笔黄。教学课堂感最强，亲切放松。但暗底长时间观看可能不如浅底舒适，且 Patrick Hand 的手写感偏休闲。</p>
+    </div>
+  </div>
+</div>
+
+<p style="text-align:center;color:#666;margin-top:24px;font-size:13px;">在浏览器中打开此 HTML 文件即可预览 &nbsp;|&nbsp; 确认主题后，切换到计划模式进入 Phase 1</p>
+
+</body>
+</html>

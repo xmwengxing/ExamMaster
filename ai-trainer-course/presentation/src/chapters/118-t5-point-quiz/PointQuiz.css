@@ -1,0 +1,20 @@
+.t5q-root{font-family:var(--font-body)}
+.t5q-layout{display:flex;flex-direction:column;align-items:center;gap:36px;width:100%;max-width:1500px}
+.t5q-header{display:flex;flex-direction:column;align-items:center;gap:12px;animation:t5q-in .5s var(--ease-quart) both}
+.t5q-eyebrow{font-family:var(--font-display-cn);font-size:18px;color:var(--accent);letter-spacing:.08em;text-transform:uppercase}
+.t5q-title{font-family:var(--font-display-cn);font-size:40px;font-weight:400;color:var(--text);text-align:center}
+.t5q-intro{animation:t5q-in .5s var(--ease-quart) both}
+.t5q-intro span{font-family:var(--font-display-cn);font-size:20px;color:var(--text-mute);padding:12px 28px;background:var(--surface-2);border:1px dashed var(--rule);border-radius:10px}
+.t5q-cards{display:flex;flex-direction:column;gap:20px;width:100%}
+.t5q-card{padding:24px 32px;border-radius:16px;background:var(--surface-2);border:2px solid var(--rule);display:flex;flex-direction:column;gap:16px;transition:all .5s var(--ease-quart)}
+.t5q-card--active{border-color:var(--accent);background:var(--accent-soft)}
+.t5q-card-header{display:flex;align-items:center;gap:16px}
+.t5q-card-num{font-family:var(--font-display-cn);font-size:20px;font-weight:700;color:var(--accent);padding:4px 12px;background:var(--accent);color:var(--bg);border-radius:8px}
+.t5q-card-topic{font-family:var(--font-display-cn);font-size:18px;color:var(--text-mute)}
+.t5q-card-question{font-family:var(--font-display-cn);font-size:20px;color:var(--text)}
+.t5q-card-question span{font-style:italic}
+.t5q-card-options{display:flex;flex-direction:column;gap:8px}
+.t5q-card-options span{font-family:var(--font-display-cn);font-size:18px;color:var(--text-mute)}
+.t5q-complete{animation:t5q-in .5s var(--ease-quart) both}
+.t5q-complete span{font-family:var(--font-display-cn);font-size:22px;color:var(--accent);text-shadow:0 0 10px var(--accent-glow);padding:16px 32px;background:var(--accent-soft);border:2px solid var(--accent);border-radius:12px}
+@keyframes t5q-in{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}

@@ -1,0 +1,97 @@
+.rp-root { font-family: var(--font-body); }
+.rp-center {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 48px;
+}
+.rp-report-card {
+  width: 860px;
+  background: var(--surface-2);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-card, 16px);
+  overflow: hidden;
+  animation: rp-in 0.7s var(--ease-quart) both;
+}
+@keyframes rp-in {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.rp-card-header {
+  display: flex; justify-content: space-between;
+  align-items: center;
+  padding: 28px 40px;
+  background: var(--surface-3);
+  border-bottom: 1px solid var(--rule);
+}
+.rp-card-title {
+  font-family: var(--font-display-cn);
+  font-size: 28px; font-weight: 400;
+  color: var(--text);
+  text-shadow: var(--text-shadow);
+}
+.rp-card-badge {
+  font-family: var(--font-mono);
+  font-size: 16px; font-weight: 600;
+  letter-spacing: 0.1em;
+  padding: 6px 20px;
+  border-radius: 6px;
+  color: var(--text-mute);
+  border: 1px solid var(--rule);
+}
+.rp-badge-fail {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.rp-card-body {
+  padding: 36px 40px;
+  display: flex; flex-direction: column; gap: 22px;
+}
+.rp-row {
+  display: flex; justify-content: space-between;
+  align-items: center;
+  animation: rp-row-in 0.5s var(--ease-quart) both;
+}
+@keyframes rp-row-in {
+  from { opacity: 0; transform: translateX(-12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.rp-key {
+  font-size: 24px; color: var(--text-2);
+  text-shadow: var(--text-shadow);
+}
+.rp-val {
+  font-family: var(--font-mono);
+  font-size: 32px; font-weight: 600;
+}
+.rp-val-amber { color: var(--accent); }
+.rp-val-red   { color: var(--accent); }
+.rp-row-verdict {
+  margin-top: 8px; padding: 20px 28px;
+  background: var(--accent-soft);
+  border: 1px dashed var(--accent);
+  border-radius: 10px;
+  justify-content: center;
+}
+.rp-verdict {
+  font-family: var(--font-display-cn);
+  font-size: 32px; font-weight: 400;
+  color: var(--accent);
+  letter-spacing: 0.06em;
+  text-shadow: 0 0 12px var(--accent-glow);
+}
+.rp-commentary {
+  display: flex; flex-direction: column;
+  align-items: center; gap: 10px;
+  animation: rp-in 0.6s 0.2s var(--ease-quart) both;
+}
+.rp-comment-text {
+  font-family: var(--font-display-cn);
+  font-size: 52px; font-weight: 400;
+  color: var(--text-2);
+  text-shadow: var(--text-shadow);
+  letter-spacing: 0.04em;
+}
+.rp-comment-accent {
+  color: var(--accent);
+  text-shadow: 0 0 16px var(--accent-glow);
+}

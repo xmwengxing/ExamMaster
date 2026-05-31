@@ -1,0 +1,19 @@
+.t2nx-root { font-family: var(--font-body); }
+.t2nx-layout { display:flex; gap:60px; width:100%; max-width:1500px; align-items:flex-start; }
+.t2nx-left { flex:1.2; display:flex; flex-direction:column; }
+.t2nx-preview { display:flex; flex-direction:column; gap:24px; }
+.t2nx-preview-label { font-family:var(--font-mono); font-size:18px; letter-spacing:0.15em; color:var(--accent); text-shadow:0 0 8px var(--accent-glow); animation:t2nx-in 0.5s var(--ease-quart) both; }
+.t2nx-next-course { display:flex; flex-direction:column; gap:10px; }
+.t2nx-next-name { font-family:var(--font-display-cn); font-size:52px; font-weight:400; color:var(--text); text-shadow:var(--text-shadow); letter-spacing:0.06em; animation:t2nx-in 0.6s var(--ease-quart) both; }
+.t2nx-next-tag { font-family:var(--font-mono); font-size:20px; letter-spacing:0.12em; color:var(--accent); text-shadow:0 0 6px var(--accent-glow); animation:t2nx-in 0.5s var(--ease-quart) both; }
+.t2nx-topics { display:flex; flex-direction:column; gap:12px; margin-top:8px; animation:t2nx-in 0.6s var(--ease-quart) both; }
+.t2nx-topic { font-family:var(--font-display-cn); font-size:24px; color:var(--text-2); padding:10px 20px; background:var(--surface-2); border-radius:8px; border:1px dashed var(--rule); }
+.t2nx-right { flex:1; display:flex; flex-direction:column; gap:32px; padding-top:20px; }
+.t2nx-method { display:flex; flex-direction:column; gap:8px; padding:24px; border-radius:14px; background:var(--accent-soft); border:1px solid var(--accent); animation:t2nx-in 0.5s var(--ease-quart) both; }
+.t2nx-method-text { font-family:var(--font-display-cn); font-size:24px; color:var(--text); }
+.t2nx-method-rule { font-family:var(--font-display-cn); font-size:28px; color:var(--accent); text-shadow:0 0 10px var(--accent-glow); letter-spacing:0.04em; }
+.t2nx-farewell { display:flex; flex-direction:column; align-items:center; gap:14px; padding:32px; border-radius:16px; background:var(--surface-2); border:1px dashed var(--rule); animation:t2nx-in 0.6s var(--ease-quart) both; text-align:center; }
+.t2nx-farewell-name { font-family:var(--font-display-cn); font-size:42px; font-weight:400; color:var(--accent); text-shadow:0 0 12px var(--accent-glow); letter-spacing:0.08em; }
+.t2nx-farewell-text { font-family:var(--font-display-cn); font-size:24px; color:var(--text); line-height:1.5; }
+.t2nx-farewell-cta { font-family:var(--font-display-cn); font-size:20px; color:var(--text-mute); }
+@keyframes t2nx-in { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }

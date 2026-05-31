@@ -1,0 +1,9 @@
+.s4p-root{font-family:var(--font-body)}
+.s4p-center{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0}
+.s4p-qmark{margin-bottom:36px;animation:s4p-in 0.5s var(--ease-quart) both}
+@keyframes s4p-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.s4p-text{display:flex;flex-direction:column;align-items:center;gap:14px;animation:s4p-in 0.5s 0.15s var(--ease-quart) both}
+.s4p-title{font-family:var(--font-display-cn);font-size:56px;font-weight:400;color:var(--accent);text-shadow:0 0 16px var(--accent-glow);letter-spacing:0.06em}
+.s4p-desc{font-family:var(--font-display-cn);font-size:30px;color:var(--text-2);text-shadow:var(--text-shadow);letter-spacing:0.03em}
+.s4p-timer{margin-top:16px;font-family:var(--font-mono);font-size:24px;color:var(--text-mute);letter-spacing:0.1em;animation:s4p-in 0.5s var(--ease-quart) both}
+.s4p-encourage{margin-top:48px;font-family:var(--font-display-cn);font-size:36px;color:var(--accent);text-shadow:0 0 14px var(--accent-glow);letter-spacing:0.04em;animation:s4p-in 0.5s var(--ease-quart) both}

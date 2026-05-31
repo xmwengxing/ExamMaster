@@ -1,0 +1,24 @@
+.t4ch-root{font-family:var(--font-body)}
+.t4ch-layout{display:flex;gap:60px;width:100%;max-width:1500px;align-items:flex-start}
+.t4ch-left{flex:1;display:flex;flex-direction:column;gap:24px}
+.t4ch-header{display:flex;flex-direction:column;gap:8px;animation:t4ch-in 0.5s var(--ease-quart) both}
+.t4ch-num{font-family:var(--font-mono);font-size:18px;color:var(--accent);letter-spacing:0.1em}
+.t4ch-name{font-family:var(--font-display-cn);font-size:52px;font-weight:400;color:var(--accent);text-shadow:0 0 16px var(--accent-glow);letter-spacing:0.06em}
+.t4ch-unit{font-family:var(--font-display-cn);font-size:20px;color:var(--text-mute)}
+.t4ch-callcenter{display:flex;flex-direction:column;gap:14px;padding:24px;border-radius:12px;background:var(--surface-2);border:1px dashed var(--rule);animation:t4ch-in 0.5s var(--ease-quart) both}
+.t4ch-cc-title{font-family:var(--font-display-cn);font-size:22px;color:var(--text)}
+.t4ch-cc-channels{display:flex;gap:28px}
+.t4ch-cc-ch{display:flex;flex-direction:column;align-items:center;gap:8px;flex:1;padding:20px;border-radius:10px;background:var(--accent-soft);border:1px dashed var(--accent)}
+.t4ch-cc-icon{font-size:32px}
+.t4ch-cc-label{font-family:var(--font-mono);font-size:14px;color:var(--text-mute)}
+.t4ch-cc-role{font-family:var(--font-display-cn);font-size:28px;color:var(--accent);text-shadow:0 0 6px var(--accent-glow)}
+.t4ch-right{flex:1;display:flex;flex-direction:column;gap:20px}
+.t4ch-wrong{display:flex;flex-direction:column;gap:8px;padding:20px;border-radius:10px;background:var(--accent-soft);border:2px dashed var(--accent);animation:t4ch-in 0.5s var(--ease-quart) both}
+.t4ch-wrong-title{font-family:var(--font-display-cn);font-size:22px;color:var(--accent)}
+.t4ch-wrong-desc{font-family:var(--font-display-cn);font-size:20px;color:var(--text)}
+.t4ch-correct{display:flex;flex-direction:column;gap:8px;animation:t4ch-in 0.5s var(--ease-quart) both}
+.t4ch-correct-title{font-family:var(--font-display-cn);font-size:22px;color:var(--text);margin-bottom:4px}
+.t4ch-correct-item{font-family:var(--font-display-cn);font-size:20px;color:var(--text-2);padding:4px 0}
+.t4ch-rule{animation:t4ch-in 0.5s var(--ease-quart) both}
+.t4ch-rule-text{font-family:var(--font-display-cn);font-size:22px;color:var(--accent);text-shadow:0 0 8px var(--accent-glow);line-height:1.5}
+@keyframes t4ch-in{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}

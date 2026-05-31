@@ -1,0 +1,16 @@
+.s3c-root{font-family:var(--font-body)}
+.s3c-center{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0}
+.s3c-cards{display:flex;gap:40px;margin-bottom:48px}
+.s3c-card{display:flex;flex-direction:column;align-items:center;gap:18px;padding:40px 60px;border-radius:14px;opacity:0.18;transition:all 0.5s var(--ease-quart)}
+.s3c-card-on{opacity:1;background:var(--accent-soft);border:2px dashed var(--accent);animation:s3c-pop 0.5s var(--ease-overshoot) both}
+@keyframes s3c-pop{from{opacity:0;transform:scale(0.8)}to{opacity:1;transform:scale(1)}}
+.s3c-card-label{font-family:var(--font-display-cn);font-size:36px;font-weight:400;color:var(--text-2)}
+.s3c-card-big{font-family:var(--font-display-en);font-size:80px;font-weight:400;color:var(--accent);text-shadow:0 0 18px var(--accent-glow);letter-spacing:-0.02em;line-height:1}
+.s3c-bar-wrap{display:flex;flex-direction:column;align-items:center;gap:14px;animation:s3c-pop 0.5s 0.2s var(--ease-quart) both}
+.s3c-bar-label{font-family:var(--font-display-cn);font-size:24px;color:var(--text-mute);text-shadow:var(--text-shadow)}
+.s3c-bar-track{width:600px;height:12px;background:var(--surface-3);border-radius:6px;overflow:hidden}
+.s3c-bar-fill{width:100%;height:100%;background:var(--accent);border-radius:6px;transition:width 1.2s var(--ease-expo)}
+.s3c-bar-shrink{width:30%}
+.s3c-lesson{display:flex;flex-direction:column;align-items:center;gap:14px;animation:s3c-pop 0.6s var(--ease-quart) both}
+.s3c-lesson-line{font-family:var(--font-display-cn);font-size:48px;font-weight:400;color:var(--text-2);text-shadow:var(--text-shadow);letter-spacing:0.04em;text-align:center}
+.s3c-lesson-accent{color:var(--accent);text-shadow:0 0 16px var(--accent-glow)}

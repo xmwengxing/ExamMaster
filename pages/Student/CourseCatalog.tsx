@@ -7,12 +7,14 @@ interface CourseCatalogProps {
   hasVideo?: boolean;
   onSelectCourse: (course: Course) => void;
   onSelectLiveCourse: (course: Course) => void;
+  onSelectArticleCourse?: (course: Course) => void;
+  onSelectInteractive?: () => void;
   getStudentCourses: (type?: string) => Promise<Course[]>;
   getMyEnrollments: () => Promise<CourseEnrollment[]>;
 }
 
-const CourseCatalog: React.FC<CourseCatalogProps> = ({ courses, enrollments, hasVideo = true, onSelectCourse, onSelectLiveCourse, getStudentCourses, getMyEnrollments }) => {
-  const [activeTab, setActiveTab] = useState<'all' | 'vod' | 'live'>('all');
+const CourseCatalog: React.FC<CourseCatalogProps> = ({ courses, enrollments, hasVideo = true, onSelectCourse, onSelectLiveCourse, onSelectArticleCourse, onSelectInteractive, getStudentCourses, getMyEnrollments }) => {
+  const [activeTab, setActiveTab] = useState<'all' | 'vod' | 'live' | 'article'>('all');
   const [filterCategory, setFilterCategory] = useState('');
   const [showMy, setShowMy] = useState(false);
 
@@ -44,20 +46,20 @@ const CourseCatalog: React.FC<CourseCatalogProps> = ({ courses, enrollments, has
     <div className="animate-in fade-in duration-300">
       <div className="mb-8">
         <h2 className="text-3xl font-black text-gray-900">在线课程</h2>
-        <p className="text-sm text-gray-400 mt-1 font-bold">学习录播课程与参加直播课程</p>
+        <p className="text-sm text-gray-400 mt-1 font-bold">学习录播、直播与图文课程</p>
       </div>
 
       <div className="flex items-center justify-between mb-6">
         <div className="flex gap-2 bg-gray-100 p-1 rounded-2xl">
-          {(['all', 'vod', 'live'] as const).map(tab => (
+          {(['all', 'vod', 'live', 'article', 'interactive'] as const).map(tab => (
             <button
               key={tab}
-              onClick={() => setActiveTab(tab)}
+              onClick={() => tab === 'interactive' ? onSelectInteractive?.() : setActiveTab(tab)}
               className={`px-5 py-2.5 rounded-xl text-sm font-black transition-all ${
                 activeTab === tab ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
               }`}
             >
-              {tab === 'all' ? '全部' : tab === 'vod' ? '📹 录播课' : '🔴 直播课'}
+              {tab === 'all' ? '全部' : tab === 'vod' ? '📹 录播课' : tab === 'live' ? '🔴 直播课' : tab === 'article' ? '📝 图文课' : '🎓 交互式课堂'}
             </button>
           ))}
         </div>
@@ -81,18 +83,19 @@ const CourseCatalog: React.FC<CourseCatalogProps> = ({ courses, enrollments, has
               key={c.id}
               onClick={() => {
                 if (c.courseType === 'vod') onSelectCourse(c);
+                else if (c.courseType === 'article') onSelectArticleCourse?.(c);
                 else onSelectLiveCourse(c);
               }}
               className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all cursor-pointer hover:-translate-y-1"
             >
               <div className="w-full h-36 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-xl mb-3 flex items-center justify-center overflow-hidden relative">
                 {c.coverUrl ? <img src={c.coverUrl} alt="" className="w-full h-full object-cover" /> : (
-                  <i className={`${c.courseType === 'vod' ? 'fa-film' : 'fa-broadcast-tower'} text-4xl text-indigo-300`}></i>
+                  <i className={`${c.courseType === 'vod' ? 'fa-film' : c.courseType === 'article' ? 'fa-file-alt' : 'fa-broadcast-tower'} text-4xl text-indigo-300`}></i>
                 )}
                 <span className="absolute top-2 right-2 bg-white/90 backdrop-blur-sm text-[10px] font-black px-2 py-1 rounded-full shadow-sm">
-                  {c.courseType === 'vod' ? '📹 录播' : '🔴 直播'}
+                  {c.courseType === 'vod' ? '📹 录播' : c.courseType === 'article' ? '📝 图文' : '🔴 直播'}
                 </span>
-                {isEnrolled && c.courseType === 'vod' && (
+                {isEnrolled && c.courseType !== 'live' && (
                   <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-gray-200">
                     <div className="h-full bg-indigo-500 rounded-r-full transition-all" style={{ width: `${progress}%` }}></div>
                   </div>
@@ -106,7 +109,7 @@ const CourseCatalog: React.FC<CourseCatalogProps> = ({ courses, enrollments, has
               <p className="text-xs text-gray-400 line-clamp-2 mb-3">{c.description || '暂无简介'}</p>
               <div className="flex items-center justify-between">
                 <span className="text-[10px] text-gray-400 font-bold"><i className="fa-solid fa-user mr-1"></i>{c.studentCount || 0} 人学习</span>
-                {c.courseType === 'vod' && isEnrolled && (
+                {c.courseType !== 'live' && isEnrolled && (
                   <span className="text-[10px] font-black text-indigo-600">{progress}%</span>
                 )}
               </div>

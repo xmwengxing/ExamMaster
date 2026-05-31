@@ -2,6 +2,12 @@
 
 import * as coursesService from '../services/courses.service.js';
 import logger from '../../utils/logger.js';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // ==================== 分类 ====================
 export async function listCategories(req, res, next) {
@@ -227,4 +233,291 @@ export async function getStudentCourses(req, res, next) {
     const courses = await coursesService.getStudentAccessibleCourses(req.db, req.user.id, type);
     res.json(courses);
   } catch (error) { next(error); }
+}
+
+// ==================== 图文课程图片上传 ====================
+export async function uploadArticleImage(req, res, next) {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: '请选择要上传的图片' });
+    }
+    const uploadDir = path.join(path.dirname(__dirname), '..', 'uploads', 'article-images');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    const filename = `article-${Date.now()}-${req.file.originalname}`;
+    const filePath = path.join(uploadDir, filename);
+    fs.writeFileSync(filePath, req.file.buffer);
+    const url = `/uploads/article-images/${filename}`;
+    res.json({ url, filename });
+  } catch (error) { next(error); }
+}
+
+// ==================== 图文课程导入 ====================
+export async function importArticleCourses(req, res, next) {
+  try {
+    const { sourceDir, courseTitle, teacherName } = req.body;
+    if (!sourceDir || !fs.existsSync(sourceDir)) {
+      return res.status(400).json({ error: '源目录不存在: ' + (sourceDir || '未提供') });
+    }
+
+    const mkdocsPath = path.join(sourceDir, 'mkdocs.yml');
+    const articleDir = path.join(sourceDir, 'Article');
+    
+    if (!fs.existsSync(mkdocsPath)) {
+      return res.status(400).json({ error: '未找到 mkdocs.yml 配置文件' });
+    }
+    if (!fs.existsSync(articleDir)) {
+      return res.status(400).json({ error: `未找到 Article 目录: ${articleDir}` });
+    }
+
+    const results = await importFromSource(req.db, sourceDir, articleDir, {
+      courseTitle: courseTitle || '导入的图文课程',
+      teacherName: teacherName || ''
+    });
+
+    logger.info(`图文课程导入完成: ${JSON.stringify(results.summary)}`);
+    res.json(results);
+  } catch (error) { 
+    logger.error('图文课程导入失败:', error);
+    next(error); 
+  }
+}
+
+// ==================== 导入预览 ====================
+export async function previewImport(req, res, next) {
+  try {
+    const { sourceDir } = req.body;
+    if (!sourceDir || !fs.existsSync(sourceDir)) {
+      return res.status(400).json({ error: '源目录不存在' });
+    }
+
+    const mkdocsPath = path.join(sourceDir, 'mkdocs.yml');
+    if (!fs.existsSync(mkdocsPath)) {
+      return res.status(400).json({ error: '未找到 mkdocs.yml' });
+    }
+
+    const fs2 = await import('fs');
+    const yamlContent = fs2.readFileSync(mkdocsPath, 'utf-8');
+    const navItems = parseNavYaml(yamlContent);
+
+    const articleDir = path.join(sourceDir, 'Article');
+    let totalLessons = 0;
+    let totalImages = 0;
+    const chapters = [];
+
+    for (const item of navItems) {
+      if (item.isSection) {
+        const lessons = [];
+        for (const sub of item.children) {
+          const filePath = path.join(articleDir, sub.path);
+          if (fs2.existsSync(filePath)) {
+            const stat = fs2.statSync(filePath);
+            lessons.push({ title: sub.title, path: sub.path, size: stat.size });
+            totalLessons++;
+          }
+        }
+        chapters.push({ title: item.title, lessonCount: lessons.length });
+      } else {
+        const filePath = path.join(articleDir, item.path);
+        if (fs2.existsSync(filePath)) {
+          const stat = fs2.statSync(filePath);
+          // Count images in the same directory
+          const dir = path.dirname(filePath);
+          let imgCount = 0;
+          if (fs2.existsSync(dir)) {
+            imgCount = fs2.readdirSync(dir).filter(f => /\.(png|jpg|jpeg|gif|svg)$/i.test(f)).length;
+            totalImages += imgCount;
+          }
+          chapters.push({ title: item.title, lessonCount: 1, imageCount: imgCount });
+          totalLessons++;
+        }
+      }
+    }
+
+    res.json({ chapters, totalLessons, totalImages });
+  } catch (error) { next(error); }
+}
+
+// 简易 YAML nav 解析（只解析 mkdocs.yml 的 nav 部分）
+function parseNavYaml(content) {
+  const result = [];
+  const lines = content.split('\n');
+  let inNav = false;
+  let currentItem = null;
+
+  for (const line of lines) {
+    if (line.trim().startsWith('nav:')) {
+      inNav = true;
+      continue;
+    }
+    if (!inNav) continue;
+    if (line.trim().startsWith('#') || line.trim() === '') continue;
+    // Check if we're still in nav section (not indented less than top-level item)
+    if (!line.startsWith(' ') && !line.startsWith('-') && !line.startsWith('  ') && line.trim() !== '') {
+      // End of nav section
+      if (currentItem && currentItem.title) result.push(currentItem);
+      break;
+    }
+
+    const trimmed = line.trimStart();
+    if (trimmed.startsWith('- ')) {
+      if (currentItem && currentItem.title) result.push(currentItem);
+      currentItem = parseNavLine(trimmed.substring(2));
+    } else if (trimmed.startsWith('-') && currentItem && !currentItem.children) {
+      // Sub-item
+      const subText = trimmed.startsWith('- ') ? trimmed.substring(2) : trimmed.substring(1).trim();
+      const subItem = parseNavLine(subText);
+      if (subItem) {
+        if (!currentItem.children) {
+          currentItem.children = [];
+          currentItem.isSection = true;
+        }
+        currentItem.children.push(subItem);
+      }
+    }
+  }
+  if (currentItem && currentItem.title) result.push(currentItem);
+
+  return result.filter(i => i.title && !['首页', 'index'].includes(i.title.toLowerCase()));
+}
+
+function parseNavLine(text) {
+  const match = text.match(/^\s*(.+?)\s*:\s*(.+?\.md)\s*$/);
+  if (match) {
+    return { title: match[1].trim(), path: match[2].trim().replace(/['"]/g, '') };
+  }
+  const match2 = text.match(/^\s*(.+?)\s*:\s*$/);
+  if (match2) {
+    return { title: match2[1].trim(), path: '', children: [], isSection: true };
+  }
+  const directMatch = text.match(/^\s*(.+?\.md)\s*$/);
+  if (directMatch) {
+    return { path: directMatch[1].trim().replace(/['"]/g, '') };
+  }
+  return { title: text.replace(/['":]/g, '').trim(), path: '' };
+}
+
+// 执行导入
+async function importFromSource(db, sourceDir, articleDir, options) {
+  const fs2 = await import('fs');
+  const mkdocsPath = path.join(sourceDir, 'mkdocs.yml');
+  const yamlContent = fs2.readFileSync(mkdocsPath, 'utf-8');
+  const navItems = parseNavYaml(yamlContent);
+
+  // Upload images (use /tmp which is writable by nodejs user)
+  const uploadsDir = '/tmp/uploads/article-images/python';
+  if (!fs2.existsSync(uploadsDir)) {
+    fs2.mkdirSync(uploadsDir, { recursive: true });
+  }
+
+  // Create course
+  const courseId = `course-${Date.now()}`;
+  const now = new Date().toISOString();
+  const title = options.courseTitle || '小白学Python';
+
+  await db.execute(
+    `INSERT INTO courses (id, title, description, cover_url, course_type, category, teacher_name, teacher_intro, 
+     price, status, sort_order, student_count, created_at, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+     ON CONFLICT (id) DO UPDATE SET title = $2, updated_at = $14`,
+    [courseId, title, options.teacherName ? `由 ${options.teacherName} 主讲的 Python 入门教程` : 'Python 入门到进阶图文教程',
+     '', 'article', 'Python学习', options.teacherName || '水哥', '',
+     0, 'published', 0, 0, now, now]
+  );
+
+  let chapterCount = 0;
+  let lessonCount = 0;
+  let imageCount = 0;
+
+  for (const item of navItems) {
+    if (item.isSection) {
+      // Chapter with sub-lessons
+      if (!item.children || item.children.length === 0) continue;
+      
+      const chapterId = `chapter-${Date.now()}-${chapterCount}`;
+      await db.execute(
+        'INSERT INTO course_chapters (id, course_id, title, description, sort_order) VALUES ($1,$2,$3,$4,$5)',
+        [chapterId, courseId, item.title, '', chapterCount]
+      );
+      chapterCount++;
+
+      let lessonSort = 0;
+      for (const sub of item.children) {
+        const filePath = path.join(articleDir, sub.path);
+        if (!fs2.existsSync(filePath)) continue;
+
+        let content = fs2.readFileSync(filePath, 'utf-8');
+        content = copyImagesAndUpdatePaths(content, path.dirname(filePath), uploadsDir);
+
+        const lessonTitle = sub.title || path.basename(sub.path, '.md');
+
+        const lessonId = `lesson-${Date.now()}-${lessonCount}`;
+        await db.execute(
+          `INSERT INTO course_lessons (id, chapter_id, course_id, title, lesson_type, content, is_free_preview, sort_order, updated_at)
+           VALUES ($1,$2,$3,$4,'article',$5,true,$6,$7)`,
+          [lessonId, chapterId, courseId, lessonTitle, content, lessonSort, now]
+        );
+        lessonCount++;
+        lessonSort++;
+      }
+    } else if (item.path) {
+      // Single-lesson chapter (one .md file is the chapter itself)
+      const filePath = path.join(articleDir, item.path);
+      if (!fs2.existsSync(filePath)) continue;
+
+      const chapterId = `chapter-${Date.now()}-${chapterCount}`;
+      await db.execute(
+        'INSERT INTO course_chapters (id, course_id, title, description, sort_order) VALUES ($1,$2,$3,$4,$5)',
+        [chapterId, courseId, item.title, '', chapterCount]
+      );
+      chapterCount++;
+
+      let content = fs2.readFileSync(filePath, 'utf-8');
+      content = copyImagesAndUpdatePaths(content, path.dirname(filePath), uploadsDir);
+
+      const lessonTitle = item.title;
+
+      const lessonId = `lesson-${Date.now()}-${lessonCount}`;
+      await db.execute(
+        `INSERT INTO course_lessons (id, chapter_id, course_id, title, lesson_type, content, is_free_preview, sort_order, updated_at)
+         VALUES ($1,$2,$3,$4,'article',$5,true,$6,$7)`,
+        [lessonId, chapterId, courseId, lessonTitle, content, 0, now]
+      );
+      lessonCount++;
+    }
+  }
+
+  return {
+    courseId,
+    summary: { chapters: chapterCount, lessons: lessonCount, images: imageCount }
+  };
+}
+
+function copyImagesAndUpdatePaths(content, sourceDir, uploadsDir) {
+  const imgRegex = /!\[([^\]]*)\]\(([^)]+\.(?:png|jpg|jpeg|gif|svg))\)/gi;
+  
+  content = content.replace(imgRegex, (match, alt, imgPath) => {
+    // Skip external URLs
+    if (imgPath.startsWith('http://') || imgPath.startsWith('https://')) {
+      return match;
+    }
+    
+    const relPath = imgPath.replace(/^\.\//, '');
+    const srcFile = path.join(sourceDir, relPath);
+    
+    if (fs.existsSync(srcFile)) {
+      const destFile = path.join(uploadsDir, relPath);
+      const destDir = path.dirname(destFile);
+      if (!fs.existsSync(destDir)) {
+        fs.mkdirSync(destDir, { recursive: true });
+      }
+      fs.copyFileSync(srcFile, destFile);
+      const urlPath = `/uploads/article-images/python/${relPath}`;
+      return `![${alt}](${urlPath})`;
+    }
+    return match;
+  });
+  
+  return content;
 }

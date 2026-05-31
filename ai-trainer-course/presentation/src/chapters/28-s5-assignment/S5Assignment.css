@@ -1,0 +1,15 @@
+.s5a-root{font-family:var(--font-body)}
+.s5a-center{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0}
+.s5a-card{display:flex;flex-direction:column;align-items:center;gap:24px;padding:44px 64px;background:var(--surface-2);border:1px dashed var(--rule);border-radius:16px;animation:s5a-in 0.5s var(--ease-quart) both}
+@keyframes s5a-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.s5a-badge{font-family:var(--font-mono);font-size:17px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--accent);background:var(--accent-soft);padding:6px 20px;border-radius:6px}
+.s5a-title{font-family:var(--font-display-cn);font-size:38px;font-weight:400;color:var(--text);text-shadow:var(--text-shadow);letter-spacing:0.04em;text-align:center}
+.s5a-download{display:flex;align-items:center;gap:12px}
+.s5a-link{font-family:var(--font-display-cn);font-size:24px;color:var(--accent);text-decoration:underline;text-underline-offset:5px;letter-spacing:0.03em}
+.s5a-qr{width:130px;height:130px;display:flex;align-items:center;justify-content:center;background:var(--surface-3);border:1px dashed var(--rule);border-radius:10px}
+.s5a-qr-text{font-family:var(--font-mono);font-size:17px;color:var(--text-mute);letter-spacing:0.06em}
+.s5a-checklist{display:flex;flex-direction:column;gap:18px;margin-top:36px}
+.s5a-check-row{display:flex;align-items:center;gap:18px;opacity:0.2;transition:all 0.4s;animation:s5a-in 0.4s var(--ease-quart) both}
+.s5a-check-on{opacity:1}
+.s5a-check-num{font-family:var(--font-display-en);font-size:28px;font-weight:600;color:var(--accent);min-width:28px;text-align:center}
+.s5a-check-text{font-family:var(--font-display-cn);font-size:26px;color:var(--text-2);text-shadow:var(--text-shadow)}

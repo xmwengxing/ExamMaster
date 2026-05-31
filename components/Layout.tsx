@@ -82,6 +82,8 @@ const Layout: React.FC<LayoutProps> = ({ children, user, activeTab, onTabChange,
       submenu: [
         { id: 'vod-course-editor', icon: 'fa-film', label: '录播课管理' },
         { id: 'live-course-manager', icon: 'fa-broadcast-tower', label: '直播课管理' },
+        { id: 'article-course-editor', icon: 'fa-file-alt', label: '图文课程' },
+        { id: 'interactive-course-manager', icon: 'fa-display', label: '交互式课堂' },
       ]
     },
     { 
@@ -162,7 +164,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, activeTab, onTabChange,
                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
                       (tab.id === 'banks' && ['banks', 'question-bank-converter', 'import-manager', 'tags', 'ai-analysis'].includes(activeTab)) ||
                       (tab.id === 'students' && ['students', 'groups', 'registration-materials', 'supervisor'].includes(activeTab)) ||
-                      (tab.id === 'courses-admin' && ['vod-course-editor', 'live-course-manager'].includes(activeTab)) ||
+                      (tab.id === 'courses-admin' && ['vod-course-editor', 'live-course-manager', 'article-course-editor', 'article-import', 'interactive-course-manager'].includes(activeTab)) ||
                       (tab.id === 'vocational' && ['major-forms', 'occupation-management'].includes(activeTab)) ||
                       (tab.id === 'settings' && ['settings', 'settings-content', 'settings-security', 'logs'].includes(activeTab))
                         ? 'bg-indigo-50 text-indigo-600 font-bold' 

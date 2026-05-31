@@ -1,0 +1,14 @@
+.t5e-root{font-family:var(--font-body)}
+.t5e-layout{display:flex;flex-direction:column;align-items:center;gap:20px;width:100%}
+.t5e-hint{animation:t5e-in .5s var(--ease-quart) both}
+.t5e-hint-text{font-family:var(--font-display-cn);font-size:22px;color:var(--text-mute);letter-spacing:.04em}
+.t5e-scene{width:900px;height:500px;border-radius:16px;overflow:hidden;background:radial-gradient(ellipse at center, #1e2030 0%, #0e0e16 100%);border:1px solid rgba(255,255,255,.08);position:relative;display:flex;align-items:center;justify-content:center;animation:t5e-in .6s var(--ease-quart) both;touch-action:none}
+.t5e-cloud{width:0;height:0;position:relative;transform-style:preserve-3d;transition:transform .05s linear}
+.t5e-dot{position:absolute;border-radius:50%;transition:opacity .15s,box-shadow .15s;will-change:opacity}
+.t5e-dot-hovered{z-index:10}
+.t5e-controls{display:flex;gap:20px;animation:t5e-in .5s var(--ease-quart) both}
+.t5e-ctrl-btn{display:flex;align-items:center;gap:10px;padding:12px 28px;border-radius:10px;border:1px dashed var(--rule);background:var(--surface-2);cursor:pointer;font-family:var(--font-display-cn);font-size:18px;color:var(--text-mute);transition:all .3s}
+.t5e-ctrl-btn:hover{border-color:var(--accent);color:var(--text)}
+.t5e-ctrl-active{border-color:var(--accent);background:var(--accent-soft);color:var(--accent);text-shadow:0 0 6px var(--accent-glow);border-style:solid}
+.t5e-ctrl-dot{width:20px;height:20px;border-radius:50%;display:inline-block}
+@keyframes t5e-in{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}

@@ -1,0 +1,14 @@
+.t4qz-root{font-family:var(--font-body)}
+.t4qz-layout{display:flex;flex-direction:column;align-items:center;gap:32px;width:100%;max-width:1300px}
+.t4qz-title{font-family:var(--font-display-cn);font-size:40px;font-weight:400;color:var(--accent);text-shadow:0 0 14px var(--accent-glow);letter-spacing:0.06em;animation:t4qz-in 0.5s var(--ease-quart) both}
+.t4qz-questions{display:flex;flex-direction:column;gap:28px;width:100%}
+.t4qz-q{display:flex;gap:24px;padding:28px;border-radius:14px;background:var(--surface-2);border:1px dashed var(--rule);transition:all 0.5s var(--ease-quart)}
+.t4qz-q-off{opacity:0.1}
+.t4qz-q-on{opacity:1;animation:t4qz-in 0.5s var(--ease-quart) both}
+.t4qz-q-num{font-family:var(--font-display-en);font-size:40px;color:var(--accent);text-shadow:0 0 10px var(--accent-glow)}
+.t4qz-q-body{flex:1;display:flex;flex-direction:column;gap:18px}
+.t4qz-q-text{font-family:var(--font-display-cn);font-size:28px;color:var(--text);line-height:1.4}
+.t4qz-q-opts{display:flex;gap:20px}
+.t4qz-opt{font-family:var(--font-display-cn);font-size:24px;color:var(--text-2);padding:10px 22px;border-radius:8px;background:var(--surface-2);border:1px dashed var(--rule)}
+.t4qz-opt-right{color:var(--accent);border-color:var(--accent);background:var(--accent-soft);text-shadow:0 0 6px var(--accent-glow)}
+@keyframes t4qz-in{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}

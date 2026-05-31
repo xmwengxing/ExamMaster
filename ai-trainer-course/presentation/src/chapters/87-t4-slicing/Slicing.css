@@ -1,0 +1,23 @@
+.t4sl-root{font-family:var(--font-body)}
+.t4sl-layout{display:flex;gap:60px;width:100%;max-width:1500px;align-items:flex-start}
+.t4sl-left{flex:1.2;display:flex;flex-direction:column;gap:20px}
+.t4sl-header{display:flex;flex-direction:column;gap:8px;animation:t4sl-in 0.5s var(--ease-quart) both}
+.t4sl-title{font-family:var(--font-display-cn);font-size:42px;font-weight:400;color:var(--accent);text-shadow:0 0 12px var(--accent-glow)}
+.t4sl-sub{font-family:var(--font-display-en);font-size:18px;color:var(--text-mute)}
+.t4sl-wrong{display:flex;flex-direction:column;gap:10px;padding:20px;border-radius:10px;background:var(--accent-soft);border:2px dashed var(--accent);animation:t4sl-in 0.5s var(--ease-quart) both}
+.t4sl-wrong-label{font-family:var(--font-display-cn);font-size:20px;color:var(--accent)}
+.t4sl-wrong-demo{display:flex;align-items:center;gap:4px;justify-content:center}
+.t4sl-demo-word{font-family:var(--font-display-cn);font-size:32px;color:var(--text);padding:8px 16px;background:var(--surface-2);border-radius:6px}
+.t4sl-demo-cut{font-family:var(--font-display-cn);font-size:32px;color:var(--accent);text-shadow:0 0 8px var(--accent-glow);padding:8px 12px;background:var(--accent-soft);border-radius:6px;border:1px solid var(--accent)}
+.t4sl-wrong-note{font-family:var(--font-display-cn);font-size:16px;color:var(--text-mute);text-align:center}
+.t4sl-right-demo{display:flex;flex-direction:column;gap:10px;animation:t4sl-in 0.5s var(--ease-quart) both}
+.t4sl-right-label{font-family:var(--font-display-cn);font-size:20px;color:var(--text)}
+.t4sl-overlap-demo{display:flex;flex-direction:column;align-items:center;gap:8px}
+.t4sl-overlap-label{font-family:var(--font-mono);font-size:14px;color:var(--accent)}
+.t4sl-right-panel{flex:1;display:flex;flex-direction:column;gap:24px;padding-top:20px}
+.t4sl-params{display:flex;flex-direction:column;gap:10px;padding:24px;border-radius:12px;background:var(--surface-2);border:1px dashed var(--rule);animation:t4sl-in 0.5s var(--ease-quart) both}
+.t4sl-params-title{font-family:var(--font-display-cn);font-size:22px;color:var(--text)}
+.t4sl-params-item{font-family:var(--font-display-cn);font-size:22px;color:var(--text-2);padding:6px 0}
+.t4sl-next{animation:t4sl-in 0.5s var(--ease-quart) both}
+.t4sl-next-text{font-family:var(--font-display-cn);font-size:24px;color:var(--text-2)}
+@keyframes t4sl-in{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}

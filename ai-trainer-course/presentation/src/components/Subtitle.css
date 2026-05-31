@@ -1,0 +1,28 @@
+.sub-bar {
+  position: absolute;
+  bottom: 24px; left: 48px; right: 48px;
+  z-index: 10;
+  padding: 14px 40px;
+  background: rgba(0,0,0,0.78);
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  pointer-events: none;
+  animation: sub-slide 0.3s var(--ease-quart) both;
+}
+.sub-text { position: relative; display: block; min-height: 84px; }
+.sub-chunk {
+  position: absolute; top: 0; left: 0; right: 0;
+  text-align: center; opacity: 0; z-index: 0;
+  transition: opacity 0.35s var(--ease-quart);
+  font-family: var(--font-display-cn);
+  font-size: 28px; font-weight: 400; color: #fff;
+  line-height: 1.4; letter-spacing: 0.05em;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+  word-break: keep-all; overflow-wrap: break-word;
+  padding-bottom: 2px;
+}
+.sub-on { opacity: 1; z-index: 1; }
+@keyframes sub-slide {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}

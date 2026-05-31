@@ -1587,6 +1587,14 @@ export const useAppStore = () => {
       return result;
     },
 
+    // 图文课程导入
+    previewImport: async (sourceDir: string) => {
+      return await fetchApi('/courses/import/preview', { method: 'POST', body: JSON.stringify({ sourceDir }) });
+    },
+    importArticleCourse: async (data: { sourceDir: string; courseTitle: string; teacherName: string }) => {
+      return await fetchApi('/courses/import', { method: 'POST', body: JSON.stringify(data) });
+    },
+
     // 章节
     getChapters: async (courseId: string) => {
       return await fetchApi(`/courses/${courseId}/chapters`);

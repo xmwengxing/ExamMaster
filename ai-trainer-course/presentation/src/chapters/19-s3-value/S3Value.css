@@ -1,0 +1,15 @@
+.s3v-root{font-family:var(--font-body)}
+.s3v-center{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0}
+.s3v-question{font-family:var(--font-display-cn);font-size:48px;font-weight:400;color:var(--text-2);text-shadow:var(--text-shadow);letter-spacing:0.04em;margin-bottom:44px;animation:s3v-in 0.5s var(--ease-quart) both}
+@keyframes s3v-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.s3v-stack{display:flex;flex-direction:column;align-items:center;gap:24px}
+.s3v-strike{font-family:var(--font-display-cn);font-size:38px;font-weight:400;color:var(--text-faint);text-shadow:var(--text-shadow);position:relative;animation:s3v-in 0.5s var(--ease-quart) both}
+.s3v-strike::after{content:'';position:absolute;left:-8px;right:-8px;top:50%;height:3px;background:var(--accent);transform:scaleX(0);transform-origin:left;animation:s3v-stk 0.4s 0.2s var(--ease-expo) forwards}
+@keyframes s3v-stk{to{transform:scaleX(1)}}
+.s3v-strike2::after{animation-delay:0.35s}
+.s3v-true{display:flex;flex-direction:column;align-items:center;gap:14px;animation:s3v-in 0.6s 0.2s var(--ease-quart) both}
+.s3v-true-label{font-family:var(--font-mono);font-size:18px;letter-spacing:0.15em;text-transform:uppercase;color:var(--accent)}
+.s3v-true-line{font-family:var(--font-display-cn);font-size:64px;font-weight:400;color:var(--accent);text-shadow:0 0 18px var(--accent-glow);letter-spacing:0.06em}
+.s3v-motto{display:flex;flex-direction:column;align-items:center;gap:12px;margin-top:48px;animation:s3v-in 0.6s 0.3s var(--ease-quart) both}
+.s3v-motto-line{font-family:var(--font-display-cn);font-size:52px;font-weight:400;color:var(--text);text-shadow:var(--text-shadow);letter-spacing:0.04em}
+.s3v-motto-accent{font-size:64px;color:var(--accent);text-shadow:0 0 20px var(--accent-glow)}

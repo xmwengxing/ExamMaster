@@ -1,0 +1,19 @@
+.s3k-root{font-family:var(--font-body)}
+.s3k-center{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0}
+.s3k-header{display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:48px;animation:s3k-in 0.5s var(--ease-quart) both}
+@keyframes s3k-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.s3k-label{font-family:var(--font-display-cn);font-size:40px;color:var(--text-2);text-shadow:var(--text-shadow);letter-spacing:0.03em}
+.s3k-keyword{font-family:var(--font-display-cn);font-size:80px;font-weight:400;color:var(--accent);text-shadow:0 0 20px var(--accent-glow);letter-spacing:0.08em;animation:s3k-pop 0.5s var(--ease-overshoot) both}
+@keyframes s3k-pop{from{opacity:0;transform:scale(0.7)}to{opacity:1;transform:scale(1)}}
+.s3k-systems{display:flex;align-items:center;gap:36px}
+.s3k-sys{display:flex;flex-direction:column;align-items:center;gap:16px;padding:36px 52px;background:var(--surface-2);border:1px dashed var(--rule);border-radius:14px;min-width:240px;opacity:0.25;transition:all 0.5s}
+.s3k-sys-on{opacity:1;animation:s3k-in 0.5s var(--ease-quart) both}
+.s3k-sys-name{font-family:var(--font-display-cn);font-size:26px;font-weight:400;color:var(--text);text-shadow:var(--text-shadow)}
+.s3k-sys-data{font-family:var(--font-mono);font-size:17px;color:var(--text-mute);letter-spacing:0.06em}
+.s3k-crack{flex-shrink:0}
+.s3k-crack path{animation:s3k-draw 1s var(--ease-expo) both}
+@keyframes s3k-draw{from{stroke-dashoffset:240}to{stroke-dashoffset:0}}
+.s3k-discover{display:flex;flex-direction:column;align-items:center;gap:14px;margin-top:36px;animation:s3k-in 0.5s 0.2s var(--ease-quart) both}
+.s3k-discover-q{font-family:var(--font-display-cn);font-size:32px;color:var(--text-mute);text-shadow:var(--text-shadow)}
+.s3k-discover-a{font-family:var(--font-display-cn);font-size:44px;font-weight:400;color:var(--accent);text-shadow:0 0 14px var(--accent-glow);letter-spacing:0.05em}
+.s3k-punch{margin-top:32px;font-family:var(--font-display-cn);font-size:36px;color:var(--text-2);text-shadow:var(--text-shadow);letter-spacing:0.04em;animation:s3k-in 0.5s var(--ease-quart) both}

@@ -1,0 +1,24 @@
+.t2po-root { font-family: var(--font-body); }
+.t2po-center { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:34px; }
+.t2po-pipeline { display:flex; align-items:center; gap:4px; }
+.t2po-node-group { display:flex; align-items:center; gap:0; }
+.t2po-node { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
+  width:130px; height:100px; border-radius:12px; transition:all 0.5s var(--ease-quart); }
+.t2po-node-off { background:var(--surface-2); border:1px dashed var(--rule); opacity:0.25; }
+.t2po-node-on { background:var(--surface-2); border:1px dashed var(--rule); opacity:1; animation:t2po-in 0.4s var(--ease-quart) both; }
+.t2po-node-accent.t2po-node-on { border-color:var(--accent); background:var(--accent-soft);
+  box-shadow:0 0 20px var(--accent-glow); animation:t2po-accent 0.5s var(--ease-expo) both; }
+@keyframes t2po-in { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+@keyframes t2po-accent { 0%{box-shadow:0 0 0 var(--accent-glow)} 50%{box-shadow:0 0 40px var(--accent-glow)} 100%{box-shadow:0 0 20px var(--accent-glow)} }
+.t2po-node-label { font-family:var(--font-display-cn); font-size:30px; font-weight:400; color:var(--text); }
+.t2po-node-accent.t2po-node-on .t2po-node-label { color:var(--accent); text-shadow:0 0 10px var(--accent-glow); }
+.t2po-node-sub { font-family:var(--font-mono); font-size:12px; letter-spacing:0.1em; color:var(--text-mute); text-transform:uppercase; }
+.t2po-arrow svg { opacity:0.2; transition:opacity 0.5s; }
+.t2po-arrow-on svg { opacity:1; }
+.t2po-quality,.t2po-title,.t2po-bridge { animation:t2po-in 0.5s var(--ease-quart) both; }
+.t2po-quality-tag { font-family:var(--font-display-cn); font-size:24px; color:var(--text-2); letter-spacing:0.04em; }
+.t2po-warning { display:flex; align-items:center; gap:14px; animation:t2po-in 0.5s var(--ease-quart) both; }
+.t2po-warning-icon { font-size:36px; }
+.t2po-warning-text { font-family:var(--font-display-cn); font-size:28px; color:var(--accent); text-shadow:0 0 10px var(--accent-glow); letter-spacing:0.05em; }
+.t2po-title-text { font-family:var(--font-display-cn); font-size:40px; font-weight:400; color:var(--text); text-shadow:var(--text-shadow); letter-spacing:0.06em; }
+.t2po-bridge-text { font-family:var(--font-display-cn); font-size:30px; color:var(--accent); text-shadow:0 0 12px var(--accent-glow); letter-spacing:0.05em; }

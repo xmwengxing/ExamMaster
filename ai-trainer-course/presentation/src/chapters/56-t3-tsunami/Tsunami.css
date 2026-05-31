@@ -1,0 +1,27 @@
+.t3ts-root{font-family:var(--font-body)}
+.t3ts-layout{display:flex;gap:60px;width:100%;max-width:1500px;align-items:flex-start}
+.t3ts-left{flex:1;display:flex;flex-direction:column;gap:24px}
+.t3ts-intro{display:flex;flex-direction:column;gap:16px}
+.t3ts-tag{font-family:var(--font-mono);font-size:18px;letter-spacing:0.18em;color:var(--accent);text-shadow:0 0 8px var(--accent-glow);animation:t3ts-in 0.6s var(--ease-quart) both}
+.t3ts-instructor{font-family:var(--font-display-cn);font-size:56px;font-weight:400;color:var(--text);text-shadow:var(--text-shadow);letter-spacing:0.08em;animation:t3ts-in 0.7s .2s var(--ease-quart) both}
+.t3ts-lesson{font-family:var(--font-display-cn);font-size:28px;color:var(--text-2);letter-spacing:0.05em;animation:t3ts-in 0.5s var(--ease-quart) both}
+.t3ts-project-card{display:flex;flex-direction:column;gap:16px;padding:28px;border-radius:14px;background:var(--surface-2);border:1px dashed var(--rule);animation:t3ts-in 0.5s var(--ease-quart) both}
+.t3ts-project-name{font-family:var(--font-display-cn);font-size:28px;color:var(--accent);text-shadow:0 0 8px var(--accent-glow)}
+.t3ts-project-stats{display:flex;flex-direction:column;gap:8px}
+.t3ts-stat{font-family:var(--font-display-cn);font-size:20px;color:var(--text-2)}
+.t3ts-stat-big{font-family:var(--font-display-en);font-size:42px;color:var(--accent);text-shadow:0 0 14px var(--accent-glow)}
+.t3ts-right{flex:1;display:flex;flex-direction:column;gap:24px;padding-top:10px}
+.t3ts-cost-alert{display:flex;flex-direction:column;gap:16px;padding:24px;border-radius:14px;background:var(--accent-soft);border:2px dashed var(--accent);animation:t3ts-in 0.6s var(--ease-quart) both}
+.t3ts-cost-label{font-family:var(--font-mono);font-size:15px;letter-spacing:0.1em;color:var(--accent)}
+.t3ts-cost-items{display:flex;flex-direction:column;gap:16px}
+.t3ts-cost-row{display:flex;align-items:center;gap:14px}
+.t3ts-cost-name{font-family:var(--font-display-cn);font-size:20px;color:var(--text);min-width:80px}
+.t3ts-cost-bar{height:28px;border-radius:8px;border:2px dashed var(--accent);background:var(--accent-soft);transition:width .8s var(--ease-overshoot)}
+.t3ts-bar-red{border-color:var(--accent);background:var(--accent-soft)}
+.t3ts-cost-num{font-family:var(--font-display-en);font-size:24px;color:var(--accent);text-shadow:0 0 8px var(--accent-glow)}
+.t3ts-impact{display:flex;flex-direction:column;gap:10px;animation:t3ts-in 0.5s var(--ease-quart) both}
+.t3ts-impact-item{font-family:var(--font-display-cn);font-size:28px;color:var(--accent);text-shadow:0 0 10px var(--accent-glow);padding:12px 20px;background:var(--accent-soft);border-radius:10px;border:1px dashed var(--accent)}
+.t3ts-root-cause{display:flex;flex-direction:column;gap:8px;padding:20px;border-radius:12px;background:var(--surface-2);border:1px dashed var(--rule);animation:t3ts-in 0.5s var(--ease-quart) both}
+.t3ts-root-label{font-family:var(--font-mono);font-size:14px;color:var(--text-mute);letter-spacing:0.1em}
+.t3ts-root-text{font-family:var(--font-display-cn);font-size:26px;color:var(--text);line-height:1.4}
+@keyframes t3ts-in{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}

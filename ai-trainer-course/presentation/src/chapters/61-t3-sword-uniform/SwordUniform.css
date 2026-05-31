@@ -1,0 +1,22 @@
+.t3su-root{font-family:var(--font-body)}
+.t3su-layout{display:flex;gap:60px;width:100%;max-width:1500px;align-items:flex-start}
+.t3su-left{flex:1;display:flex;flex-direction:column;gap:24px}
+.t3su-header{display:flex;flex-direction:column;gap:8px;animation:t3su-in 0.5s var(--ease-quart) both}
+.t3su-num{font-family:var(--font-display-en);font-size:40px;color:var(--accent);text-shadow:0 0 12px var(--accent-glow)}
+.t3su-name{font-family:var(--font-display-cn);font-size:52px;font-weight:400;color:var(--accent);text-shadow:0 0 16px var(--accent-glow);letter-spacing:0.08em}
+.t3su-freq{font-family:var(--font-mono);font-size:18px;color:var(--text-mute)}
+.t3su-fit{display:flex;flex-direction:column;gap:14px;animation:t3su-in 0.5s var(--ease-quart) both}
+.t3su-fit-label{font-family:var(--font-display-cn);font-size:24px;color:var(--text)}
+.t3su-fit-items{display:flex;flex-direction:column;gap:10px}
+.t3su-fit-item{font-family:var(--font-display-cn);font-size:22px;color:var(--text-2);padding:12px 20px;border-radius:8px;background:var(--surface-2);border:1px dashed var(--rule)}
+.t3su-right{flex:1;display:flex;flex-direction:column;gap:24px}
+.t3su-contradiction{display:flex;flex-direction:column;gap:12px;padding:24px;border-radius:12px;background:var(--accent-soft);border:1px solid var(--accent);animation:t3su-in 0.5s var(--ease-quart) both}
+.t3su-ct-title{font-family:var(--font-display-cn);font-size:22px;color:var(--accent);text-shadow:0 0 6px var(--accent-glow)}
+.t3su-ct-pair{display:flex;flex-direction:column;gap:8px;font-family:var(--font-display-cn);font-size:22px;color:var(--text)}
+.t3su-highway{display:flex;flex-direction:column;gap:10px;padding:24px;border-radius:12px;background:var(--surface-2);border:2px dashed var(--accent);animation:t3su-in 0.6s var(--ease-quart) both}
+.t3su-hw-title{font-family:var(--font-display-cn);font-size:22px;color:var(--accent)}
+.t3su-hw-scene{font-family:var(--font-display-cn);font-size:22px;color:var(--text)}
+.t3su-hw-data{font-family:var(--font-mono);font-size:16px;color:var(--text-mute)}
+.t3su-rule{animation:t3su-in 0.5s var(--ease-quart) both}
+.t3su-rule-text{font-family:var(--font-display-cn);font-size:26px;color:var(--accent);text-shadow:0 0 8px var(--accent-glow);padding:16px 24px;background:var(--accent-soft);border-radius:10px;display:block;text-align:center}
+@keyframes t3su-in{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}

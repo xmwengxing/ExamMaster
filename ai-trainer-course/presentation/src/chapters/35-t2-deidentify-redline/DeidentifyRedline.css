@@ -1,0 +1,27 @@
+.t2dr-root { font-family: var(--font-body); }
+.t2dr-center { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:28px; }
+.t2dr-pii-stage { display:flex; flex-direction:column; align-items:center; }
+.t2dr-chat-preview { width:520px; border-radius:14px; overflow:hidden; background:var(--surface-2); border:1px dashed var(--rule); animation:t2dr-in 0.5s var(--ease-quart) both; }
+.t2dr-chat-header { padding:14px 20px; background:var(--surface-2); border-bottom:1px dashed var(--rule); }
+.t2dr-chat-title { font-family:var(--font-mono); font-size:14px; letter-spacing:0.08em; color:var(--text-mute); }
+.t2dr-chat-body { display:flex; flex-direction:column; }
+.t2dr-pii-row { display:flex; justify-content:space-between; align-items:center; padding:14px 24px; border-bottom:1px dashed var(--rule); transition:all 0.5s var(--ease-quart); }
+.t2dr-pii-dim { opacity:0.25; }
+.t2dr-pii-hl { opacity:1; background:var(--accent-soft); }
+.t2dr-pii-label { font-family:var(--font-mono); font-size:14px; letter-spacing:0.08em; color:var(--accent); }
+.t2dr-pii-value { font-family:var(--font-display-cn); font-size:20px; color:var(--text); }
+.t2dr-redline-stage { display:flex; flex-direction:column; align-items:center; gap:16px; animation:t2dr-in 0.6s var(--ease-quart) both; }
+.t2dr-redline-bar { width:600px; height:0; border-top:4px solid var(--accent); box-shadow:0 0 24px var(--accent-glow); animation:t2dr-line 0.8s var(--ease-expo) both; }
+@keyframes t2dr-line { from{width:0;opacity:0} to{width:600px;opacity:1} }
+.t2dr-redline-icon { font-size:40px; animation:t2dr-pulse 1.5s var(--ease-quart) infinite; }
+@keyframes t2dr-pulse { 0%,100%{opacity:0.7;transform:scale(1)} 50%{opacity:1;transform:scale(1.2)} }
+.t2dr-redline-text { font-family:var(--font-display-cn); font-size:26px; font-weight:400; color:var(--accent); text-shadow:0 0 14px var(--accent-glow); letter-spacing:0.04em; text-align:center; }
+.t2dr-legal { display:flex; flex-direction:column; align-items:center; gap:6px; animation:t2dr-in 0.5s var(--ease-quart) both; }
+.t2dr-legal-title { font-family:var(--font-display-cn); font-size:28px; color:var(--accent); text-shadow:0 0 10px var(--accent-glow); letter-spacing:0.06em; }
+.t2dr-legal-desc { font-family:var(--font-display-cn); font-size:18px; color:var(--text-2); }
+.t2dr-motto { display:flex; align-items:center; gap:16px; animation:t2dr-in 0.5s var(--ease-quart) both; }
+.t2dr-motto-number { font-family:var(--font-display-en); font-size:32px; color:var(--accent); text-shadow:0 0 10px var(--accent-glow); }
+.t2dr-motto-text { font-family:var(--font-display-cn); font-size:34px; font-weight:400; color:var(--accent); text-shadow:0 0 16px var(--accent-glow); letter-spacing:0.05em; }
+.t2dr-next { animation:t2dr-in 0.5s var(--ease-quart) both; }
+.t2dr-next-text { font-family:var(--font-display-cn); font-size:24px; color:var(--text-2); }
+@keyframes t2dr-in { from{opacity:0;transform:translateY(14px)} to{opacity:1;transform:translateY(0)} }

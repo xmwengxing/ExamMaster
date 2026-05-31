@@ -1,0 +1,27 @@
+.t4hs-root{font-family:var(--font-body)}
+.t4hs-layout{display:flex;gap:60px;width:100%;max-width:1500px;align-items:flex-start}
+.t4hs-left{flex:1.1;display:flex;flex-direction:column;gap:20px}
+.t4hs-q-title{font-family:var(--font-display-cn);font-size:34px;font-weight:400;color:var(--accent);text-shadow:0 0 10px var(--accent-glow);animation:t4hs-in 0.5s var(--ease-quart) both}
+.t4hs-scenarios{display:flex;flex-direction:column;gap:16px}
+.t4hs-scene{display:flex;flex-direction:column;gap:10px;padding:20px 24px;border-radius:12px;transition:all 0.5s var(--ease-quart)}
+.t4hs-scene-off{opacity:0.1}
+.t4hs-scene-on{opacity:1;animation:t4hs-in 0.4s var(--ease-quart) both}
+.t4hs-scene{background:var(--surface-2);border:1px dashed var(--rule)}
+.t4hs-scene-alt{background:var(--accent-soft);border:2px solid var(--accent)}
+.t4hs-scene-label{font-family:var(--font-mono);font-size:14px;color:var(--text-mute)}
+.t4hs-scene-flow{display:flex;align-items:center;gap:16px}
+.t4hs-scene-text{font-family:var(--font-display-cn);font-size:24px;color:var(--text-2)}
+.t4hs-scene-arrow{font-family:var(--font-display-en);font-size:24px;color:var(--accent)}
+.t4hs-scene-result{font-family:var(--font-display-cn);font-size:24px;color:var(--accent);text-shadow:0 0 6px var(--accent-glow)}
+.t4hs-scene-tag{font-family:var(--font-display-cn);font-size:18px;color:var(--text-mute)}
+.t4hs-scene-tag-good{color:var(--accent)}
+.t4hs-right{flex:1;display:flex;flex-direction:column;gap:24px}
+.t4hs-stutter{display:flex;flex-direction:column;gap:12px;padding:24px;border-radius:12px;background:var(--surface-2);border:2px dashed var(--accent);animation:t4hs-in 0.5s var(--ease-quart) both}
+.t4hs-stutter-label{font-family:var(--font-display-cn);font-size:20px;color:var(--accent)}
+.t4hs-stutter-demo{display:flex;flex-direction:column;gap:10px}
+.t4hs-stutter-wrong{font-family:var(--font-display-cn);font-size:22px;color:var(--text-faint);text-decoration:line-through}
+.t4hs-stutter-right{font-family:var(--font-display-cn);font-size:22px;color:var(--accent);text-shadow:0 0 6px var(--accent-glow)}
+.t4hs-stutter-note{font-family:var(--font-display-cn);font-size:16px;color:var(--text-mute)}
+.t4hs-next{animation:t4hs-in 0.5s var(--ease-quart) both}
+.t4hs-next-text{font-family:var(--font-display-cn);font-size:24px;color:var(--text-2)}
+@keyframes t4hs-in{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}

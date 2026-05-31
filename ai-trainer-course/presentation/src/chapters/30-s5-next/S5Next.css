@@ -1,0 +1,13 @@
+.s5n-root{font-family:var(--font-body)}
+.s5n-center{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0}
+.s5n-label{font-family:var(--font-mono);font-size:20px;letter-spacing:0.18em;text-transform:uppercase;color:var(--text-mute);margin-bottom:20px;animation:s5n-in 0.5s var(--ease-quart) both}
+@keyframes s5n-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.s5n-title{font-family:var(--font-display-cn);font-size:56px;font-weight:400;color:var(--text);text-shadow:var(--text-shadow);letter-spacing:0.06em;animation:s5n-in 0.5s var(--ease-quart) both}
+.s5n-transform{display:flex;align-items:center;gap:28px;margin-top:36px;animation:s5n-in 0.5s 0.2s var(--ease-quart) both}
+.s5n-before,.s5n-after{display:flex;flex-direction:column;align-items:center;gap:14px}
+.s5n-tf-label{font-family:var(--font-display-cn);font-size:24px;color:var(--text-mute);text-shadow:var(--text-shadow)}
+.s5n-accent{color:var(--accent);font-weight:600;text-shadow:0 0 10px var(--accent-glow)}
+.s5n-arrow{font-family:var(--font-display-en);font-size:36px;color:var(--accent)}
+.s5n-farewell{display:flex;flex-direction:column;align-items:center;gap:10px;margin-top:48px;animation:s5n-in 0.5s 0.4s var(--ease-quart) both}
+.s5n-fw-line{font-family:var(--font-display-cn);font-size:40px;color:var(--text-2);text-shadow:var(--text-shadow);letter-spacing:0.05em}
+.s5n-fw-bye{font-size:52px;color:var(--accent);text-shadow:0 0 18px var(--accent-glow)}

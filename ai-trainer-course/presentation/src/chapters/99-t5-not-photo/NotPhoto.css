@@ -1,0 +1,23 @@
+.t5np-root{font-family:var(--font-body)}
+.t5np-layout{display:flex;gap:60px;width:100%;max-width:1500px;align-items:flex-start}
+.t5np-left{flex:1;display:flex;flex-direction:column;gap:20px}
+.t5np-mistake{display:flex;flex-direction:column;gap:8px;padding:24px;border-radius:12px;background:var(--accent-soft);border:2px dashed var(--accent);animation:t5np-in .5s var(--ease-quart) both}
+.t5np-mistake-label{font-family:var(--font-display-cn);font-size:20px;color:var(--accent)}
+.t5np-mistake-text{font-family:var(--font-display-cn);font-size:34px;color:var(--text-faint);text-decoration:line-through}
+.t5np-compare{display:flex;gap:20px;animation:t5np-in .5s var(--ease-quart) both}
+.t5np-card{display:flex;flex-direction:column;gap:10px;padding:22px 24px;border-radius:12px;flex:1}
+.t5np-card-camera{background:var(--surface-2);border:1px dashed var(--rule)}
+.t5np-card-lidar{background:var(--accent-soft);border:2px solid var(--accent)}
+.t5np-card-title{font-family:var(--font-display-cn);font-size:24px;color:var(--text)}
+.t5np-card-lidar .t5np-card-title{color:var(--accent);text-shadow:0 0 8px var(--accent-glow)}
+.t5np-card-principle{font-family:var(--font-display-cn);font-size:18px;color:var(--text-2)}
+.t5np-card-trait{font-family:var(--font-display-cn);font-size:18px;color:var(--text-mute);line-height:1.4}
+.t5np-right{flex:1;display:flex;flex-direction:column;gap:24px}
+.t5np-metaphor{display:flex;flex-direction:column;gap:10px;padding:24px;border-radius:12px;background:var(--surface-2);border:1px dashed var(--rule);animation:t5np-in .5s var(--ease-quart) both}
+.t5np-meta-title{font-family:var(--font-display-cn);font-size:22px;color:var(--text)}
+.t5np-meta-text{font-family:var(--font-display-cn);font-size:22px;color:var(--text-2);padding:4px 0}
+.t5np-consequence{animation:t5np-in .5s var(--ease-quart) both}
+.t5np-cons-text{font-family:var(--font-display-cn);font-size:26px;color:var(--accent);text-shadow:0 0 8px var(--accent-glow);padding:16px 24px;background:var(--accent-soft);border-radius:10px;display:block;text-align:center}
+.t5np-next{animation:t5np-in .5s var(--ease-quart) both}
+.t5np-next-text{font-family:var(--font-display-cn);font-size:24px;color:var(--text-2)}
+@keyframes t5np-in{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}

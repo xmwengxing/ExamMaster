@@ -1,0 +1,13 @@
+.s4f-root{font-family:var(--font-body)}
+.s4f-center{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0}
+.s4f-label{font-family:var(--font-mono);font-size:18px;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-mute);margin-bottom:36px}
+.s4f-pipeline{display:flex;align-items:center;gap:0;padding:28px 40px;background:var(--surface-2);border:1px dashed var(--rule);border-radius:14px}
+.s4f-pipe-group{display:flex;align-items:center;gap:0}
+.s4f-node{display:flex;flex-direction:column;align-items:center;gap:10px;padding:20px 24px;border-radius:10px;min-width:140px;transition:all 0.4s}
+.s4f-node-off{background:transparent;opacity:0.15}
+.s4f-node-on{background:var(--accent-soft);border:2px dashed var(--accent);opacity:1;animation:s4f-pop 0.35s var(--ease-overshoot) both}
+@keyframes s4f-pop{from{opacity:0;transform:scale(0.85)}to{opacity:1;transform:scale(1)}}
+.s4f-node-num{font-family:var(--font-display-en);font-size:30px;font-weight:400;color:var(--accent)}
+.s4f-node-label{font-family:var(--font-display-cn);font-size:22px;font-weight:400;color:var(--text-2);text-shadow:var(--text-shadow)}
+.s4f-arrow{flex-shrink:0;margin:0 3px}
+.s4f-verdict{margin-top:36px;font-family:var(--font-display-cn);font-size:32px;color:var(--text-mute);text-shadow:var(--text-shadow);letter-spacing:0.04em;animation:s4f-pop 0.5s 0.2s var(--ease-quart) both}

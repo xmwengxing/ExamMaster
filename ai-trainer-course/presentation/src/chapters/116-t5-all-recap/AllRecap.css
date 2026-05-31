@@ -1,0 +1,13 @@
+.t5ar-root{font-family:var(--font-body)}
+.t5ar-layout{display:flex;flex-direction:column;align-items:center;gap:40px;width:100%;max-width:1500px}
+.t5ar-title{font-family:var(--font-display-cn);font-size:40px;font-weight:400;color:var(--text);text-align:center;animation:t5ar-in .5s var(--ease-quart) both}
+.t5ar-modules{display:flex;flex-direction:column;gap:16px;width:100%}
+.t5ar-module{display:flex;align-items:center;gap:24px;padding:20px 28px;border-radius:14px;background:var(--surface-2);border:2px solid var(--rule);opacity:0;transform:translateX(-20px);transition:all .5s var(--ease-quart)}
+.t5ar-module--on{opacity:1;transform:translateX(0)}
+.t5ar-module-icon{font-size:36px;flex-shrink:0}
+.t5ar-module-body{display:flex;flex-direction:column;gap:6px}
+.t5ar-module-title{font-family:var(--font-display-cn);font-size:22px;color:var(--text)}
+.t5ar-module-desc{font-family:var(--font-display-cn);font-size:16px;color:var(--text-mute)}
+.t5ar-core{animation:t5ar-in .5s var(--ease-quart) both}
+.t5ar-core-text{font-family:var(--font-display-cn);font-size:24px;color:var(--accent);text-shadow:0 0 12px var(--accent-glow);padding:20px 40px;background:var(--accent-soft);border:2px solid var(--accent);border-radius:14px;display:block;text-align:center}
+@keyframes t5ar-in{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}

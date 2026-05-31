@@ -1,0 +1,27 @@
+.t3rd-root{font-family:var(--font-body)}
+.t3rd-layout{display:flex;gap:60px;width:100%;max-width:1500px;align-items:flex-start}
+.t3rd-left{flex:1;display:flex;flex-direction:column;gap:24px}
+.t3rd-concept{display:flex;flex-direction:column;gap:14px;animation:t3rd-in 0.5s var(--ease-quart) both}
+.t3rd-title{font-family:var(--font-display-cn);font-size:52px;font-weight:400;color:var(--accent);text-shadow:0 0 16px var(--accent-glow);letter-spacing:0.08em}
+.t3rd-formula{font-family:var(--font-mono);font-size:22px;color:var(--text);}
+.t3rd-essence{font-family:var(--font-display-cn);font-size:22px;color:var(--text-2);padding:12px 20px;background:var(--accent-soft);border-radius:8px;border:1px dashed var(--accent)}
+.t3rd-ratio{display:flex;flex-direction:column;gap:14px;animation:t3rd-in 0.5s var(--ease-quart) both}
+.t3rd-ratio-label{font-family:var(--font-display-cn);font-size:22px;color:var(--text)}
+.t3rd-ratio-examples{display:flex;gap:20px}
+.t3rd-ratio-ex{display:flex;flex-direction:column;gap:6px;padding:18px 24px;border-radius:10px;flex:1}
+.t3rd-ratio-low{background:var(--surface-2);border:1px dashed var(--rule)}
+.t3rd-ratio-high{background:var(--accent-soft);border:1px solid var(--accent)}
+.t3rd-ratio-scene{font-family:var(--font-display-cn);font-size:18px;color:var(--text-mute)}
+.t3rd-ratio-pct{font-family:var(--font-display-en);font-size:36px;color:var(--accent);text-shadow:0 0 8px var(--accent-glow)}
+.t3rd-right{flex:1;display:flex;flex-direction:column;gap:28px}
+.t3rd-swords{display:flex;flex-direction:column;gap:14px}
+.t3rd-sword{display:flex;align-items:center;gap:20px;padding:20px 24px;border-radius:12px;background:var(--surface-2);border:1px dashed var(--rule);transition:all 0.5s var(--ease-quart)}
+.t3rd-sword-off{opacity:0.12}
+.t3rd-sword-on{opacity:1;animation:t3rd-in 0.4s var(--ease-quart) both}
+.t3rd-sword-icon{font-size:32px}
+.t3rd-sword-body{display:flex;flex-direction:column;gap:4px}
+.t3rd-sword-name{font-family:var(--font-display-cn);font-size:26px;color:var(--text)}
+.t3rd-sword-freq{font-family:var(--font-mono);font-size:15px;color:var(--text-mute)}
+.t3rd-next{animation:t3rd-in 0.5s var(--ease-quart) both}
+.t3rd-next-text{font-family:var(--font-display-cn);font-size:26px;color:var(--text-2)}
+@keyframes t3rd-in{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}

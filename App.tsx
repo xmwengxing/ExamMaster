@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { useAppStore } from './store';
-import { UserRole, PracticeMode, QuestionType, ExamRecord, Question, QuestionBank } from './types';
+import { UserRole, PracticeMode, QuestionType, ExamRecord, Question, QuestionBank, Course } from './types';
 import Layout from './components/Layout';
 import StudentHome from './pages/Student/Home';
 import PracticeModeView from './pages/Student/PracticeMode';
@@ -39,9 +39,14 @@ import ContentManager from './pages/Admin/ContentManager';
 import SecurityManager from './pages/Admin/SecurityManager';
 import VodCourseEditor from './pages/Admin/VodCourseEditor';
 import LiveCourseManager from './pages/Admin/LiveCourseManager';
+import ArticleCourseEditor from './pages/Admin/ArticleCourseEditor';
+import ArticleImport from './pages/Admin/ArticleImport';
+import InteractiveCourseManager from './pages/Admin/InteractiveCourseManager';
 import CourseCatalog from './pages/Student/CourseCatalog';
 import VodCourseDetail from './pages/Student/VodCourseDetail';
 import LiveCourseDetail from './pages/Student/LiveCourseDetail';
+import ArticleCourseDetail from './pages/Student/ArticleCourseDetail';
+import InteractiveCourseViewer from './pages/Student/InteractiveCourseViewer';
 import { 
   RegistrationTypeSelector, 
   EducationRegistrationForm, 
@@ -57,6 +62,7 @@ const App: React.FC = () => {
   const [pendingPractice, setPendingPractice] = useState<{ mode: PracticeMode, params: any, existingRecord: any } | null>(null);
   const [adminEditVodCourse, setAdminEditVodCourse] = useState<string | null>(null);
   const [adminEditLiveCourse, setAdminEditLiveCourse] = useState<string | null>(null);
+  const [adminEditArticleCourse, setAdminEditArticleCourse] = useState<Course | null>(null);
 
   // 动态更新页面标题
   useEffect(() => {
@@ -448,6 +454,16 @@ const App: React.FC = () => {
           }
           return <CourseManager courses={store.courses || []} listCourses={store.listCourses} createCourse={store.createCourse} updateCourse={store.updateCourse} deleteCourse={store.deleteCourse} updateCourseStatus={store.updateCourseStatus} createSession={store.createSession} onEditVod={(id) => setAdminEditVodCourse(id)} onEditLive={(id) => setAdminEditLiveCourse(id)} refreshAll={store.refreshAll} presetType="live" />;
         }
+        case 'article-course-editor': {
+          if (adminEditArticleCourse) {
+            return <ArticleCourseEditor course={adminEditArticleCourse} chapters={[]} onBack={() => setAdminEditArticleCourse(null)} getCourse={store.getCourse} getChapters={store.getChapters} createChapter={store.createChapter} updateChapter={store.updateChapter} deleteChapter={store.deleteChapter} reorderChapters={store.reorderChapters} createLesson={store.createLesson} updateLesson={store.updateLesson} deleteLesson={store.deleteLesson} reorderLessons={store.reorderLessons} />;
+          }
+          return <CourseManager courses={store.courses || []} listCourses={store.listCourses} createCourse={store.createCourse} updateCourse={store.updateCourse} deleteCourse={store.deleteCourse} updateCourseStatus={store.updateCourseStatus} createSession={store.createSession} onEditVod={(id) => setAdminEditVodCourse(id)} onEditLive={(id) => setAdminEditLiveCourse(id)} onEditArticle={(c) => setAdminEditArticleCourse(c)} refreshAll={store.refreshAll} presetType="article" />;
+        }
+        case 'interactive-course-manager':
+          return <InteractiveCourseManager />;
+        case 'article-import':
+          return <ArticleImport onBack={() => setActiveTab('article-course-editor')} refreshAll={store.refreshAll} />;
         default: return <AdminDashboard />;
       }
     }
@@ -500,7 +516,7 @@ const App: React.FC = () => {
         handleNavigate('practice-mode', { mode: PracticeMode.MOCK, exam: e, questions: finalQuestions });
       }} onStartMock={(c) => handleNavigate('practice-mode', { mode: PracticeMode.MOCK, ...c })} onDeleteHistory={store.deleteExamHistory} />;
       case 'videos': return <VideoList videos={store.currentUser!.studentPerms?.includes('VIDEO') ? (store.systemConfig?.videos || []) : []} onBack={() => setActiveTab('home')} />;
-      case 'courses': return <CourseCatalog courses={store.courses || []} enrollments={store.enrollments || []} hasVideo={store.currentUser?.studentPerms?.includes('VIDEO')} onSelectCourse={(c) => handleNavigate('vod-course-detail', { courseId: c.id })} onSelectLiveCourse={(c) => handleNavigate('live-course-detail', { courseId: c.id })} getStudentCourses={store.getStudentCourses} getMyEnrollments={store.getMyEnrollments} />;
+      case 'courses': return <CourseCatalog courses={store.courses || []} enrollments={store.enrollments || []} hasVideo={store.currentUser?.studentPerms?.includes('VIDEO')} onSelectCourse={(c) => handleNavigate('vod-course-detail', { courseId: c.id })} onSelectLiveCourse={(c) => handleNavigate('live-course-detail', { courseId: c.id })} onSelectArticleCourse={(c) => handleNavigate('article-course-detail', { courseId: c.id })} onSelectInteractive={() => setActiveTab('interactive-courses')} getStudentCourses={store.getStudentCourses} getMyEnrollments={store.getMyEnrollments} />;
       case 'vod-course-detail': {
         const vodCourse = (store.courses || []).find(c => c.id === activeParams?.courseId);
         if (!vodCourse) return <CourseCatalog courses={store.courses || []} enrollments={store.enrollments || []} onSelectCourse={(c) => handleNavigate('vod-course-detail', { courseId: c.id })} onSelectLiveCourse={(c) => handleNavigate('live-course-detail', { courseId: c.id })} getStudentCourses={store.getStudentCourses} getMyEnrollments={store.getMyEnrollments} />;
@@ -511,7 +527,13 @@ const App: React.FC = () => {
         if (!liveCourse) return <CourseCatalog courses={store.courses || []} enrollments={store.enrollments || []} onSelectCourse={(c) => handleNavigate('vod-course-detail', { courseId: c.id })} onSelectLiveCourse={(c) => handleNavigate('live-course-detail', { courseId: c.id })} getStudentCourses={store.getStudentCourses} getMyEnrollments={store.getMyEnrollments} />;
         return <LiveCourseDetail course={liveCourse} onBack={() => setActiveTab('courses')} listSessions={store.listSessions} getMyProgress={store.getMyProgress} enrollCourse={store.enrollCourse} refreshAll={store.refreshAll} />;
       }
-      case 'discussions': return <Discussions questionId={activeParams?.questionId} />;
+      case 'article-course-detail': {
+        const articleCourse = (store.courses || []).find(c => c.id === activeParams?.courseId);
+        if (!articleCourse) return <CourseCatalog courses={store.courses || []} enrollments={store.enrollments || []} onSelectCourse={(c) => handleNavigate('vod-course-detail', { courseId: c.id })} onSelectLiveCourse={(c) => handleNavigate('live-course-detail', { courseId: c.id })} onSelectArticleCourse={(c) => handleNavigate('article-course-detail', { courseId: c.id })} getStudentCourses={store.getStudentCourses} getMyEnrollments={store.getMyEnrollments} />;
+        return <ArticleCourseDetail course={articleCourse} onBack={() => setActiveTab('courses')} getChapters={store.getChapters} getMyProgress={store.getMyProgress} updateProgress={store.updateProgress} enrollCourse={store.enrollCourse} refreshAll={store.refreshAll} />;
+      }
+      case 'interactive-courses':
+        return <InteractiveCourseViewer />;
       case 'account': return <AccountSettings onBack={() => setActiveTab('home')} onChangePassword={store.changePassword} onResetData={store.resetUserData} onLogout={store.logout} onDeleteAccount={store.logout} currentUser={store.currentUser} onUpdateApiKey={async (apiKey) => { await store.updateProfile({ deepseekApiKey: apiKey }); }} />;
       case 'practical-practice': return <PracticalPractice onBackToPractice={() => setActiveTab('practice')} />;
       case 'registration': return <RegistrationTypeSelector onNavigate={setActiveTab} />;

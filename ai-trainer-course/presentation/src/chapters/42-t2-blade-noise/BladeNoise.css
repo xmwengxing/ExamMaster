@@ -1,0 +1,25 @@
+.bn-root { font-family: var(--font-body); }
+.bn-layout { display:flex; gap:80px; width:100%; max-width:1500px; align-items:flex-start; }
+.bn-left { flex:1.2; display:flex; flex-direction:column; gap:32px; }
+.bn-knife-header { display:flex; align-items:baseline; gap:20px; animation:bn-in 0.5s var(--ease-quart) both; }
+.bn-knife-num { font-family:var(--font-display-en); font-size:48px; color:var(--accent); text-shadow:0 0 16px var(--accent-glow); }
+.bn-knife-name { font-family:var(--font-display-cn); font-size:56px; font-weight:400; color:var(--accent); text-shadow:0 0 16px var(--accent-glow); letter-spacing:0.08em; }
+.bn-log-view { display:flex; flex-direction:column; gap:18px; }
+.bn-log-row { display:flex; align-items:center; gap:16px; padding:18px 24px; border-radius:10px; background:var(--surface-2); border:1px dashed var(--rule); animation:bn-in 0.5s var(--ease-quart) both; }
+.bn-log-note { background:var(--accent-soft); border-color:var(--accent); }
+.bn-log-op { font-size:24px; }
+.bn-log-tag { font-family:var(--font-mono); font-size:26px; color:var(--text); transition:all 0.5s; }
+.bn-strikethrough { text-decoration:line-through; opacity:0.4; }
+.bn-log-reason { font-family:var(--font-display-cn); font-size:20px; color:var(--text-mute); }
+.bn-after { display:flex; flex-direction:column; gap:12px; animation:bn-in 0.5s var(--ease-quart) both; }
+.bn-after-label { font-family:var(--font-mono); font-size:16px; color:var(--accent); letter-spacing:0.12em; }
+.bn-after-box { padding:20px 24px; border-radius:10px; background:var(--accent-soft); border:1px solid var(--accent); }
+.bn-after-text { font-family:var(--font-display-cn); font-size:20px; color:var(--text); line-height:1.6; }
+.bn-right { flex:1; display:flex; flex-direction:column; gap:28px; padding-top:100px; }
+.bn-principle { display:flex; flex-direction:column; gap:12px; padding:24px; border-radius:12px; background:var(--surface-2); border:1px dashed var(--rule); animation:bn-in 0.5s var(--ease-quart) both; }
+.bn-principle-title { font-family:var(--font-display-cn); font-size:24px; color:var(--text); }
+.bn-principle-text { font-family:var(--font-display-cn); font-size:20px; color:var(--text-2); line-height:1.5; }
+.bn-insight { display:flex; flex-direction:column; gap:10px; animation:bn-in 0.6s var(--ease-quart) both; }
+.bn-insight-title { font-family:var(--font-display-cn); font-size:22px; color:var(--accent); text-shadow:0 0 6px var(--accent-glow); }
+.bn-insight-text { font-family:var(--font-display-cn); font-size:20px; color:var(--text-2); line-height:1.5; }
+@keyframes bn-in { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }

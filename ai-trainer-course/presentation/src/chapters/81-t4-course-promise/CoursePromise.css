@@ -1,0 +1,18 @@
+.t4cp-root{font-family:var(--font-body)}
+.t4cp-layout{display:flex;gap:60px;width:100%;max-width:1500px;align-items:flex-start}
+.t4cp-left{flex:1.2;display:flex;flex-direction:column;gap:24px}
+.t4cp-title{display:flex;flex-direction:column;gap:10px;animation:t4cp-in 0.5s var(--ease-quart) both}
+.t4cp-main{font-family:var(--font-display-cn);font-size:44px;font-weight:400;color:var(--accent);text-shadow:0 0 14px var(--accent-glow);letter-spacing:0.06em}
+.t4cp-sub{font-family:var(--font-display-cn);font-size:20px;color:var(--text-mute)}
+.t4cp-abilities{display:flex;flex-direction:column;gap:14px}
+.t4cp-ab{display:flex;gap:18px;padding:20px 24px;border-radius:12px;background:var(--surface-2);border:1px dashed var(--rule);transition:all 0.5s var(--ease-quart)}
+.t4cp-ab-off{opacity:0.1}
+.t4cp-ab-on{opacity:1;animation:t4cp-in 0.4s var(--ease-quart) both}
+.t4cp-ab-icon{font-size:32px}
+.t4cp-ab-body{display:flex;flex-direction:column;gap:4px}
+.t4cp-ab-title{font-family:var(--font-display-cn);font-size:26px;color:var(--text)}
+.t4cp-ab-desc{font-family:var(--font-display-cn);font-size:18px;color:var(--text-mute)}
+.t4cp-right{flex:1;display:flex;flex-direction:column;padding-top:80px}
+.t4cp-start{animation:t4cp-in 0.5s var(--ease-quart) both}
+.t4cp-start-text{font-family:var(--font-display-cn);font-size:32px;color:var(--accent);text-shadow:0 0 12px var(--accent-glow)}
+@keyframes t4cp-in{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}

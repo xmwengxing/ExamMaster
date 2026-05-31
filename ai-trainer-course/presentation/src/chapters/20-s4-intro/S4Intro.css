@@ -1,0 +1,8 @@
+.s4i-root{font-family:var(--font-body)}
+.s4i-center{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0}
+.s4i-title-block{display:flex;flex-direction:column;align-items:center;gap:24px;animation:s4i-in 0.6s var(--ease-quart) both}
+@keyframes s4i-in{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+.s4i-main{font-family:var(--font-display-cn);font-size:96px;font-weight:400;color:var(--text);text-shadow:var(--text-shadow);letter-spacing:0.08em}
+.s4i-rule{width:160px;height:0;border-top:3px dashed var(--accent)}
+.s4i-sub{font-family:var(--font-display-cn);font-size:40px;font-weight:400;color:var(--text-2);text-shadow:var(--text-shadow);letter-spacing:0.05em;text-align:center}
+.s4i-hint{margin-top:48px;font-family:var(--font-display-cn);font-size:32px;color:var(--accent);text-shadow:0 0 12px var(--accent-glow);letter-spacing:0.04em;animation:s4i-in 0.5s 0.2s var(--ease-quart) both}

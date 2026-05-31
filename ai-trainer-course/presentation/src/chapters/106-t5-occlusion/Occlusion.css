@@ -1,0 +1,22 @@
+.t5oc-root{font-family:var(--font-body)}
+.t5oc-layout{display:flex;gap:60px;width:100%;max-width:1500px;align-items:flex-start}
+.t5oc-left{flex:1;display:flex;flex-direction:column;gap:24px}
+.t5oc-header{display:flex;flex-direction:column;gap:8px;animation:t5oc-in .5s var(--ease-quart) both}
+.t5oc-num{font-family:var(--font-mono);font-size:18px;color:var(--accent);letter-spacing:.1em}
+.t5oc-name{font-family:var(--font-display-cn);font-size:42px;font-weight:400;color:var(--accent);text-shadow:0 0 14px var(--accent-glow);letter-spacing:.06em}
+.t5oc-demo{animation:t5oc-in .5s var(--ease-quart) both}
+.t5oc-comparison{display:flex;flex-direction:column;gap:14px}
+.t5oc-comp{display:flex;flex-direction:column;gap:8px;padding:20px 24px;border-radius:10px}
+.t5oc-comp-camera{background:var(--surface-2);border:1px dashed var(--rule)}
+.t5oc-comp-lidar{background:var(--accent-soft);border:2px solid var(--accent)}
+.t5oc-comp-label{font-family:var(--font-display-cn);font-size:24px;color:var(--text)}
+.t5oc-comp-lidar .t5oc-comp-label{color:var(--accent);text-shadow:0 0 6px var(--accent-glow)}
+.t5oc-comp-text{font-family:var(--font-display-cn);font-size:20px;color:var(--text-2);line-height:1.5}
+.t5oc-right{flex:1;display:flex;flex-direction:column;gap:24px}
+.t5oc-phenomenon{display:flex;flex-direction:column;gap:8px;padding:24px;border-radius:12px;background:var(--accent-soft);border:1px solid var(--accent);animation:t5oc-in .5s var(--ease-quart) both}
+.t5oc-phen-title{font-family:var(--font-display-cn);font-size:22px;color:var(--accent);text-shadow:0 0 6px var(--accent-glow)}
+.t5oc-phen-desc{font-family:var(--font-display-cn);font-size:24px;color:var(--text)}
+.t5oc-phen-note{font-family:var(--font-display-cn);font-size:18px;color:var(--text-mute)}
+.t5oc-rule{animation:t5oc-in .5s var(--ease-quart) both}
+.t5oc-rule-text{font-family:var(--font-display-cn);font-size:24px;color:var(--accent);text-shadow:0 0 8px var(--accent-glow);padding:16px 24px;background:var(--accent-soft);border-radius:10px;display:block;text-align:center;line-height:1.4}
+@keyframes t5oc-in{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
