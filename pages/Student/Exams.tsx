@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
+import DOMPurify from 'dompurify';
 import { Exam, ExamRecord, QuestionBank, PracticeMode, QuestionType, Question } from '../../types';
 import { useAppStore } from '../../store';
 import { getEffectiveApiKey, hasApiKey, getApiKeyMissingMessage, generateQuestionAnalysis } from '../../utils/deepseek';
@@ -105,7 +106,7 @@ const QuestionReviewItem: React.FC<{ question: Question, userAnswer: string[], i
 
       {aiAnalysis && (
         <div className="mt-4 p-6 bg-indigo-50/50 rounded-2xl border border-indigo-100 animate-in slide-in-from-top-2">
-          <div className="markdown-body text-sm" dangerouslySetInnerHTML={{ __html: (window as any).marked.parse(aiAnalysis) }} />
+          <div className="markdown-body text-sm" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize((window as any).marked.parse(aiAnalysis) as string) }} />
           {groundingChunks.length > 0 && (
             <div className="mt-4 pt-4 border-t border-indigo-100 flex flex-wrap gap-2">
               {groundingChunks.map((chunk, i) => chunk.web && (

@@ -11,12 +11,17 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // 数据库连接配置
+const _dbPassword = process.env.DB_PASSWORD;
+if (!_dbPassword) {
+  console.error('FATAL: DB_PASSWORD environment variable is not set.');
+  process.exit(1);
+}
 const pool = new Pool({
   host: process.env.DB_HOST || 'localhost',
   port: process.env.DB_PORT || 5433,
   database: process.env.DB_NAME || 'edumaster',
   user: process.env.DB_USER || 'edumaster_user',
-  password: process.env.DB_PASSWORD || 'edumaster_password_2024',
+  password: _dbPassword,
 });
 
 // 期望的表列表

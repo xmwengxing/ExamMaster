@@ -4,8 +4,7 @@
 import jwt from 'jsonwebtoken';
 import logger from '../../utils/logger.js';
 
-// JWT 密钥（从环境变量读取）
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+import { JWT_SECRET } from '../config/jwt.js';
 
 /**
  * 基础认证中间件

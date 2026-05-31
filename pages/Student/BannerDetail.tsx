@@ -1,5 +1,6 @@
 
 import React from 'react';
+import DOMPurify from 'dompurify';
 import { BannerItem } from '../../types';
 
 interface BannerDetailProps {
@@ -48,7 +49,9 @@ const BannerDetail: React.FC<BannerDetailProps> = ({ banner, onBack }) => {
           <div 
             className="rich-text-content prose prose-indigo max-w-none text-gray-600 font-medium leading-relaxed"
             dangerouslySetInnerHTML={{ 
-              __html: banner.detailContent || '<p class="text-gray-400 italic">暂无详细说明</p>' 
+              __html: banner.detailContent 
+                ? DOMPurify.sanitize(banner.detailContent, { ALLOWED_TAGS: ['p','br','strong','em','u','s','span','div','img','ul','ol','li','h1','h2','h3','h4','h5','h6'], ALLOWED_ATTR: ['style','src','alt','class'] })
+                : '<p class="text-gray-400 italic">暂无详细说明</p>'
             }}
           />
 

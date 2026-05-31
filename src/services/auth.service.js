@@ -7,8 +7,7 @@ import db from '../../db.js';
 import logger from '../../utils/logger.js';
 import { UnauthorizedError, ValidationError, NotFoundError } from '../middleware/errorHandler.js';
 
-// JWT 密钥
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+import { JWT_SECRET } from '../config/jwt.js';
 
 /**
  * 用户登录
@@ -90,8 +89,9 @@ export async function login(phone, password, role, ip = 'unknown') {
     { expiresIn: '7d' }
   );
   
-  // 移除密码字段
-  const { password: _, ...safeUser } = user;
+  // 移除密码字段 - 避免与外层password参数重名
+  const { password: _, ...userWithoutPassword } = user;
+  const safeUser = { ...userWithoutPassword };
   
   // 转换字段名为 camelCase（前端兼容）
   const userResponse = {
