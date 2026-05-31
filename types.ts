@@ -276,6 +276,10 @@ export interface GroupPermissions {
     categories: string[];
     courses: string[];
   };
+  interactive_courses: {
+    mode: 'all' | 'none';
+    courses: string[];
+  };
 }
 
 export interface CourseCategory {

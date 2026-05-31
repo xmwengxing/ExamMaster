@@ -6,8 +6,10 @@ import jwt from 'jsonwebtoken';
 import db from '../../db.js';
 import logger from '../../utils/logger.js';
 import { UnauthorizedError, ValidationError, NotFoundError } from '../middleware/errorHandler.js';
+import { getEffectiveBankIds } from './groups.service.js';
 
-import { JWT_SECRET } from '../config/jwt.js';
+// JWT 密钥
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 
 /**
  * 用户登录
@@ -89,17 +91,21 @@ export async function login(phone, password, role, ip = 'unknown') {
     { expiresIn: '7d' }
   );
   
-  // 移除密码字段 - 避免与外层password参数重名
-  const { password: _, ...userWithoutPassword } = user;
-  const safeUser = { ...userWithoutPassword };
-  
+  // 移除密码字段
+  const { password: _, ...safeUser } = user;
+
+  // 学员：合并直接权限 + 分组权限；管理员：只用直接权限
+  const allowedBankIds = user.role === 'STUDENT'
+    ? await getEffectiveBankIds(db, user.id)
+    : (safeUser.allowed_bank_ids || []);
+
   // 转换字段名为 camelCase（前端兼容）
   const userResponse = {
     ...safeUser,
     lastLogin: now,
     loginHistory: loginHistory,
     studentPerms: safeUser.student_perms || [],
-    allowedBankIds: safeUser.allowed_bank_ids || [],
+    allowedBankIds,
     realName: safeUser.real_name,
     lastActivity: safeUser.last_activity,
     deepseekApiKey: safeUser.deepseek_api_key,

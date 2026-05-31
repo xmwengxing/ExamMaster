@@ -453,20 +453,19 @@ export async function deleteComment(commentId, userId, isAdmin = false) {
   }
   
   // 递归删除子评论
-  const MAX_DEPTH = 100;
-  async function deleteCommentAndChildren(cId, depth = 0) {
-    if (depth > MAX_DEPTH) {
-      throw new Error(`Comment deletion exceeded max depth ${MAX_DEPTH}`);
-    }
+  async function deleteCommentAndChildren(cId) {
+    // 查找所有子评论
     const children = await db.getMany(
       "SELECT id FROM comments WHERE parent_id = $1",
       [cId]
     );
     
+    // 递归删除子评论
     for (const child of children) {
-      await deleteCommentAndChildren(child.id, depth + 1);
+      await deleteCommentAndChildren(child.id);
     }
     
+    // 删除当前评论
     await db.execute("DELETE FROM comments WHERE id = $1", [cId]);
   }
   
@@ -499,11 +498,11 @@ export async function toggleDiscussionLike(discussionId, userId) {
   if (like) {
     // 已点赞，取消点赞
     await db.execute(
-      "DELETE FROM discussion_likes WHERE user_id = $1 AND discussion_id = $2 AND comment_id IS NULL",
+      "DELETE FROM discussion_likes WHERE user_id = $1 AND discussion_id = $2",
       [userId, discussionId]
     );
     
-    // 减少点赞数（使用条件更新防止负数）
+    // 减少点赞数
     await db.execute(
       "UPDATE discussions SET like_count = GREATEST(0, like_count - 1) WHERE id = $1",
       [discussionId]
@@ -511,12 +510,10 @@ export async function toggleDiscussionLike(discussionId, userId) {
     
     return { success: true, liked: false };
   } else {
-    // 未点赞，添加点赞（使用ON CONFLICT防止竞态重复）
+    // 未点赞，添加点赞
     const now = new Date().toISOString();
     await db.execute(
-      `INSERT INTO discussion_likes (user_id, discussion_id, comment_id, created_at) 
-       VALUES ($1, $2, NULL, $3)
-       ON CONFLICT (user_id, discussion_id, comment_id) DO NOTHING`,
+      "INSERT INTO discussion_likes (user_id, discussion_id, comment_id, created_at) VALUES ($1, $2, NULL, $3)",
       [userId, discussionId, now]
     );
     

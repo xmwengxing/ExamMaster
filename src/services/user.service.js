@@ -2,6 +2,7 @@
 // 处理用户资料、进度统计等业务逻辑
 
 import bcrypt from 'bcryptjs';
+import { getEffectiveBankIds } from './groups.service.js';
 
 /**
  * 获取用户资料
@@ -16,6 +17,11 @@ async function getUserProfile(db, userId) {
     return null;
   }
   
+  // 学员：合并直接权限 + 分组权限；管理员：只用直接权限
+  const allowedBankIds = user.role === 'STUDENT'
+    ? await getEffectiveBankIds(db, userId)
+    : (user.allowed_bank_ids || []);
+
   // 转换为 camelCase 格式，不返回密码
   return {
     id: user.id,
@@ -35,7 +41,7 @@ async function getUserProfile(db, userId) {
     educationLevel: user.education_level,
     className: user.class_name,
     studentPerms: user.student_perms || [],
-    allowedBankIds: user.allowed_bank_ids || [],
+    allowedBankIds,
     permissions: user.permissions || [],  // 添加管理员权限字段
     lastLogin: user.last_login,
     lastActivity: user.last_activity,

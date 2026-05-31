@@ -108,18 +108,8 @@ export async function generateContent(prompt, userId) {
   });
   
   if (!response.ok) {
-    const contentType = response.headers.get('content-type') || '';
-    let errorMessage = `AI API error: ${response.status} ${response.statusText}`;
-    if (contentType.includes('application/json')) {
-      try {
-        const error = await response.json();
-        errorMessage = error.error?.message || errorMessage;
-      } catch { /* ignore parse failure */ }
-    } else {
-      const text = await response.text().catch(() => '');
-      errorMessage += text ? ` - ${text.substring(0, 100)}` : '';
-    }
-    throw new Error(errorMessage);
+    const error = await response.json();
+    throw new Error(error.error?.message || 'AI API 调用失败');
   }
   
   const data = await response.json();
@@ -195,18 +185,8 @@ ${userAnswer}
   });
   
   if (!response.ok) {
-    const contentType = response.headers.get('content-type') || '';
-    let errorMessage = `AI API error: ${response.status} ${response.statusText}`;
-    if (contentType.includes('application/json')) {
-      try {
-        const error = await response.json();
-        errorMessage = error.error?.message || errorMessage;
-      } catch { /* ignore parse failure */ }
-    } else {
-      const text = await response.text().catch(() => '');
-      errorMessage += text ? ` - ${text.substring(0, 100)}` : '';
-    }
-    throw new Error(errorMessage);
+    const error = await response.json();
+    throw new Error(error.error?.message || 'AI API 调用失败');
   }
   
   const data = await response.json();
@@ -281,10 +261,8 @@ export async function getAllAnalysis(options) {
   let paramIndex = 1;
   
   if (search) {
-    // Escape LIKE wildcards to prevent pattern injection
-    const escapedSearch = search.replace(/[%_\\]/g, '\\$&');
     whereClause += ` AND (q.content LIKE $${paramIndex} OR u.nickname LIKE $${paramIndex + 1} OR u.real_name LIKE $${paramIndex + 2})`;
-    const searchPattern = `%${escapedSearch}%`;
+    const searchPattern = `%${search}%`;
     params.push(searchPattern, searchPattern, searchPattern);
     paramIndex += 3;
   }

@@ -100,6 +100,7 @@ export async function createStudent(dbConn, studentData) {
   // 生成学员ID
   const id = `student-${Date.now()}`;
   
+  // 加密密码
   const hashedPassword = await bcrypt.hash(password || phone.slice(-6), 10);
   
   // 确保权限字段是数组
@@ -894,34 +895,24 @@ export async function batchSetStudentPerms(dbConn, data) {
   const entries = Object.entries(data);
   console.log('[Admin] Batch updating', entries.length, 'students');
   
-  const errors = [];
-  
   // 使用事务批量更新
   await dbConn.transaction(async (client) => {
     for (const [id, payload] of entries) {
-      try {
-        console.log('[Admin] Updating student:', id, 'perms:', payload.studentPerms, 'bankIds:', payload.allowedBankIds);
-        
-        const studentPerms = JSON.stringify(payload.studentPerms || []);
-        const allowedBankIds = JSON.stringify(payload.allowedBankIds || []);
-        
-        await client.query(
-          'UPDATE users SET student_perms = $1, allowed_bank_ids = $2 WHERE id = $3',
-          [studentPerms, allowedBankIds, id]
-        );
-      } catch (err) {
-        console.error(`[Admin] Failed to update student ${id}:`, err);
-        errors.push({ id, error: err.message });
-      }
+      console.log('[Admin] Updating student:', id, 'perms:', payload.studentPerms, 'bankIds:', payload.allowedBankIds);
+      
+      // 将数组转换为 JSON 字符串（JSONB 字段需要）
+      const studentPerms = JSON.stringify(payload.studentPerms || []);
+      const allowedBankIds = JSON.stringify(payload.allowedBankIds || []);
+      
+      await client.query(
+        'UPDATE users SET student_perms = $1, allowed_bank_ids = $2 WHERE id = $3',
+        [studentPerms, allowedBankIds, id]
+      );
     }
   });
   
-  if (errors.length > 0) {
-    console.warn('[Admin] Batch update completed with errors:', errors);
-  } else {
-    console.log('[Admin] Batch update complete');
-  }
-  return { success: true, errors };
+  console.log('[Admin] Batch update complete');
+  return { success: true };
 }
 
 /**

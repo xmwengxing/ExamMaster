@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { 
   User, UserRole, QuestionBank, Question, Exam, 
   ExamRecord, PracticeRecord, QuestionType, LoginLog, 
@@ -24,27 +24,17 @@ const debounce = <T extends (...args: any[]) => any>(
   };
 };
 
-// 错误事件节流机制 - 带大小限制和TTL清理
+// 错误事件节流机制
 const errorEventCache = new Map<string, number>();
-const ERROR_CACHE_MAX_SIZE = 100;
 const ERROR_THROTTLE_MS = 1000;
 
 const dispatchErrorEvent = (eventName: string, detail: any) => {
   const key = `${eventName}:${JSON.stringify(detail)}`;
+  const lastTime = errorEventCache.get(key) || 0;
   const now = Date.now();
   
-  // 定期清理过期条目（每50次调用清理一次）
-  if (errorEventCache.size > ERROR_CACHE_MAX_SIZE) {
-    for (const [k, ts] of errorEventCache.entries()) {
-      if (now - ts > ERROR_THROTTLE_MS * 10) {
-        errorEventCache.delete(k);
-      }
-    }
-  }
-  
-  const lastTime = errorEventCache.get(key) || 0;
   if (now - lastTime < ERROR_THROTTLE_MS) {
-    return;
+    return; // 跳过重复事件
   }
   
   errorEventCache.set(key, now);
@@ -390,37 +380,34 @@ export const useAppStore = () => {
   }, []); // 移除 activeBank 依赖，避免无限循环
 
   // 按需加载题库题目（简化版：仅使用内存缓存）
-  const pendingLoadRef = useRef<string | null>(null);
   const loadBankQuestions = useCallback(async (bankId: string, forceReload: boolean = false) => {
-    // 防止并发请求同一个题库
-    if (pendingLoadRef.current === bankId && !forceReload) {
-      console.log(`[loadBankQuestions] 请求中，跳过重复: ${bankId}`);
-      return;
-    }
-    pendingLoadRef.current = bankId;
-    
     try {
+      // 立即设置加载状态
       setIsLoadingQuestions(true);
       
+      // 检查内存缓存（除非强制重新加载）
       if (!forceReload) {
         const memoryCache = questionsMemoryCache.get(bankId);
         if (memoryCache) {
           console.log(`[loadBankQuestions] 内存缓存命中: ${bankId} (${memoryCache.data.length} 题)`);
+          // 从缓存加载时，添加短暂延迟以显示加载状态（提升用户体验）
           await new Promise(resolve => setTimeout(resolve, 300));
           setQuestions(memoryCache.data);
           setIsLoadingQuestions(false);
-          pendingLoadRef.current = null;
           return memoryCache.data;
         }
       }
       
+      // 从服务器加载
       console.log(`[loadBankQuestions] 从服务器加载: ${bankId}${forceReload ? ' (强制刷新)' : ''}`);
       const questions = await fetchApi(`/questions?bankId=${bankId}`);
       
       console.log(`[loadBankQuestions] 加载成功: ${bankId} (${questions.length} 题)`);
       
+      // 更新内存缓存
       questionsMemoryCache.set(bankId, { data: questions, timestamp: Date.now() });
       
+      // 清理内存缓存（保留最近5个题库）
       if (questionsMemoryCache.size > 5) {
         const entries = Array.from(questionsMemoryCache.entries());
         entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
@@ -431,15 +418,16 @@ export const useAppStore = () => {
         });
       }
       
+      // 关键修复：确保状态更新
       setQuestions(questions);
       setIsLoadingQuestions(false);
-      pendingLoadRef.current = null;
+      
       return questions;
     } catch (error) {
       console.error('[loadBankQuestions] 加载失败:', error);
+      // 加载失败时不清空现有题目，保持UI稳定
       setIsLoadingQuestions(false);
-      pendingLoadRef.current = null;
-      throw error;
+      throw error; // 抛出错误让调用者处理
     }
   }, []);
 
@@ -467,13 +455,7 @@ export const useAppStore = () => {
     }
   }, [loadBankQuestions]);
 
-  // 初始化加载 - 只在挂载时执行一次，不依赖refreshAll避免循环
-  const initRef = useRef(false);
-  useEffect(() => {
-    if (initRef.current) return;
-    initRef.current = true;
-    refreshAll();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { refreshAll(); }, [refreshAll]);
 
   // Heartbeat interval - send heartbeat every 2 minutes to update online status
   useEffect(() => {

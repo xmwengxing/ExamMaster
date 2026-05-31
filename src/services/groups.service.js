@@ -149,13 +149,49 @@ export async function setStudentGroup(db, userId, groupId) {
   return { success: true };
 }
 
+/**
+ * 获取学员有效的题库权限（直接assigned + 分组继承的并集）
+ * @param {Object} db - 数据库实例
+ * @param {string} userId - 学员ID
+ * @returns {Promise<string[]>} 合并后的题库ID数组
+ */
+export async function getEffectiveBankIds(db, userId) {
+  const user = await db.getOne(
+    'SELECT allowed_bank_ids, group_id FROM users WHERE id = $1 AND role = $2',
+    [userId, 'STUDENT']
+  );
+  if (!user) return [];
+
+  const directBankIds = user.allowed_bank_ids || [];
+  const directSet = new Set(Array.isArray(directBankIds) ? directBankIds : []);
+
+  if (!user.group_id) return [...directSet];
+
+  const group = await db.getOne('SELECT permissions FROM user_groups WHERE id = $1', [user.group_id]);
+  if (!group) return [...directSet];
+
+  let permissions;
+  try {
+    permissions = typeof group.permissions === 'string' ? JSON.parse(group.permissions) : (group.permissions || {});
+  } catch {
+    permissions = {};
+  }
+
+  const groupBankIds = permissions?.banks || [];
+  const groupSet = new Set(Array.isArray(groupBankIds) ? groupBankIds : []);
+
+  const merged = new Set([...directSet, ...groupSet]);
+  return [...merged];
+}
+
 function getDefaultPermissions() {
   return {
     banks: [],
     exams: [],
     vod_courses: { mode: 'all', categories: [], courses: [] },
     live_courses: { mode: 'all', categories: [], courses: [] },
-    article_courses: { mode: 'all', categories: [], courses: [] }
+    article_courses: { mode: 'all', categories: [], courses: [] },
+    interactive_courses: { mode: 'all', courses: [] }
   };
 }
 

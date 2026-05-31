@@ -72,9 +72,9 @@ export async function toggleFavorite(db, userId, questionId) {
     );
     return { isFavorited: false };
   } else {
-    // 未收藏，执行添加收藏（使用ON CONFLICT防止竞态重复）
+    // 未收藏，执行添加收藏
     await db.execute(
-      'INSERT INTO favorites (user_id, question_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+      'INSERT INTO favorites (user_id, question_id) VALUES ($1, $2)',
       [userId, questionId]
     );
     return { isFavorited: true };

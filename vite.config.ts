@@ -35,6 +35,8 @@ export default defineConfig(({ mode }) => {
               'react-vendor': ['react', 'react-dom'],
               // 图表库单独打包
               'chart-vendor': ['recharts'],
+              // AntD 组件库单独打包
+              'antd-vendor': ['antd'],
               // Markdown 库
               'markdown-vendor': ['marked'],
             }

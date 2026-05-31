@@ -354,8 +354,8 @@ export async function updateProgress(db, userId, courseId, data) {
   params.push(courseId);
 
   await db.execute(
-    `UPDATE course_enrollments SET ${sets.join(', ')} WHERE user_id = $${idx} AND course_id = $${idx + 1}`,
-    [...params, userId, courseId]
+    `UPDATE course_enrollments SET ${sets.join(', ')} WHERE user_id = $${idx++} AND course_id = $${idx}`,
+    params
   );
   return getMyProgress(db, userId, courseId);
 }
@@ -373,7 +373,12 @@ export async function getStudentCoursePermission(db, userId) {
   if (!group) return { vod: [], live: [], article: [] };
 
   const permissions = typeof group.permissions === 'string' ? JSON.parse(group.permissions) : group.permissions;
-  return { vod: permissions?.vod_courses || null, live: permissions?.live_courses || null, article: permissions?.article_courses || null };
+  return {
+    vod: permissions?.vod_courses || null,
+    live: permissions?.live_courses || null,
+    article: permissions?.article_courses || null,
+    interactive: permissions?.interactive_courses || null
+  };
 }
 
 export async function getStudentAccessibleCourses(db, userId, courseType) {

@@ -2,6 +2,7 @@
 // 处理题库相关的 HTTP 请求
 
 import * as bankService from '../services/bank.service.js';
+import { getEffectiveBankIds } from '../services/groups.service.js';
 import logger from '../../utils/logger.js';
 
 /**
@@ -15,13 +16,7 @@ export async function getAllBanks(req, res, next) {
     
     // 如果是学员，只返回授权的题库
     if (req.user.role === 'STUDENT') {
-      // 从数据库查询学员的授权题库列表
-      const userRow = await req.db.getOne(
-        'SELECT allowed_bank_ids FROM users WHERE id = $1',
-        [req.user.id]
-      );
-      
-      const allowedBankIds = userRow?.allowed_bank_ids || [];
+      const allowedBankIds = await getEffectiveBankIds(req.db, req.user.id);
       const filteredBanks = banks.filter(bank => allowedBankIds.includes(bank.id));
       
       logger.info('[Banks] 学员获取题库列表:', {

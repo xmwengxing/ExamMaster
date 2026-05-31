@@ -1,6 +1,5 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import DOMPurify from 'dompurify';
 import { PracticalTask, PracticalPartType, PracticalTaskRecord } from '../../types';
 import { useAppStore } from '../../store';
 import { getEffectiveApiKey, hasApiKey, getApiKeyMissingMessage, generatePracticalEvaluation } from '../../utils/deepseek';
@@ -221,7 +220,7 @@ const PracticalPractice: React.FC<PracticalPracticeProps> = ({ onBackToPractice 
 
                 {part.type === PracticalPartType.STEM ? (
                   <div className="text-gray-800 text-sm md:text-lg font-medium leading-relaxed markdown-body whitespace-pre-wrap overflow-x-auto" 
-                       dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize((window as any).marked.parse(part.content) as string) }} />
+                       dangerouslySetInnerHTML={{ __html: (window as any).marked.parse(part.content) }} />
                 ) : part.type === PracticalPartType.CODE ? (
                   <div className="bg-gray-800 text-gray-100 p-4 md:p-6 rounded-xl md:rounded-2xl font-mono text-sm overflow-x-auto shadow-inner whitespace-pre-wrap">
                     {hasPlaceholders ? (
@@ -344,7 +343,7 @@ const PracticalPractice: React.FC<PracticalPracticeProps> = ({ onBackToPractice 
                     <div className="w-full h-px bg-white/10 mb-4 md:mb-6"></div>
                     <div 
                       className="markdown-body prose prose-invert max-w-none text-xs md:text-sm leading-relaxed overflow-x-auto"
-                      dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize((window as any).marked.parse(aiEvaluation.content) as string) }}
+                      dangerouslySetInnerHTML={{ __html: (window as any).marked.parse(aiEvaluation.content) }}
                     />
                   </div>
                 )}
@@ -394,7 +393,7 @@ const PracticalPractice: React.FC<PracticalPracticeProps> = ({ onBackToPractice 
 
                       {part.type === PracticalPartType.STEM ? (
                         <div className="text-gray-700 text-sm md:text-base font-medium leading-relaxed markdown-body overflow-x-auto" 
-                             dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize((window as any).marked.parse(part.content) as string) }} />
+                             dangerouslySetInnerHTML={{ __html: (window as any).marked.parse(part.content) }} />
                       ) : part.type === PracticalPartType.CODE ? (
                         <div className="bg-gray-800 text-gray-100 p-4 md:p-6 rounded-xl md:rounded-2xl font-mono text-sm overflow-x-auto shadow-inner whitespace-pre-wrap">
                           {hasPlaceholders ? (
@@ -433,7 +432,7 @@ const PracticalPractice: React.FC<PracticalPracticeProps> = ({ onBackToPractice 
                         <div className={`p-3 md:p-6 bg-white/80 rounded-xl md:rounded-2xl border border-amber-100 text-amber-950 font-medium text-xs md:text-sm markdown-body leading-relaxed ${
                           isCodeContent ? 'overflow-x-auto' : ''
                         }`}>
-                          <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize((window as any).marked.parse(part.content) as string) }} />
+                          <div dangerouslySetInnerHTML={{ __html: (window as any).marked.parse(part.content) }} />
                         </div>
                       )}
                     </div>

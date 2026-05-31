@@ -438,7 +438,7 @@ const App: React.FC = () => {
         case 'settings': return <SystemSettings config={store.systemConfig} onUpdate={store.updateSystemSettings} onChangeAdminPass={store.changeAdminPassword} defaultTab={activeParams?.tab} />;
         case 'settings-content': return <ContentManager config={store.systemConfig} onUpdate={store.updateSystemSettings} />;
         case 'settings-security': return <SecurityManager onChangeAdminPass={store.changeAdminPassword} />;
-        case 'admin-user': return <AdminUserMgt currentUser={store.currentUser!} admins={store.admins} students={store.students} banks={store.banks} onAddAdmin={store.addAdmin} onUpdateAdmin={store.updateAdmin} onDeleteAdmin={store.deleteAdmin} onBatchStudentPerms={store.batchSetStudentPerms} onUpdateStudentPerms={store.updateStudentPerms} />;
+        case 'admin-user': return <AdminUserMgt currentUser={store.currentUser!} admins={store.admins} students={store.students} banks={store.banks} onAddAdmin={store.addAdmin} onUpdateAdmin={store.updateAdmin} onDeleteAdmin={store.deleteAdmin} />;
         case 'groups': return <GroupManager groups={store.groupList || []} students={store.students} banks={store.banks} courses={store.courses || []} listGroups={store.listGroups} createGroup={store.createGroup} updateGroup={store.updateGroup} deleteGroup={store.deleteGroup} updateGroupPermissions={store.updateGroupPermissions} addStudentsToGroup={store.addStudentsToGroup} setStudentGroup={store.setStudentGroup} refreshAll={store.refreshAll} />;
         case 'vod-course-editor': {
           if (adminEditVodCourse) {
@@ -477,6 +477,7 @@ const App: React.FC = () => {
       case 'practice': return <PracticeList banks={studentBanks} activeBank={currentActiveBank as any} history={store.practiceRecords} onStart={(m, p) => checkPracticeSession(m, p)} onAddRecord={store.addPracticeRecord} onDeleteRecord={store.deletePracticeRecord} onNavigate={setActiveTab} />;
       case 'favorites': return <Favorites favorites={store.favorites} banks={studentBanks} onStart={(qs) => handleNavigate('practice-mode', { questions: qs, mode: PracticeMode.SEQUENTIAL })} onToggleFavorite={store.toggleFavorite} onBack={() => setActiveTab('practice')} />;
       case 'mistakes': return <Mistakes mistakes={store.mistakes} banks={studentBanks} onStart={(m, p) => checkPracticeSession(m, p)} />;
+      case 'discussions': return <Discussions />;
       case 'profile': return <Profile user={store.currentUser!} customFieldSchema={store.customFieldSchema} onUpdate={store.updateProfile} onBack={() => setActiveTab('home')} />;
       case 'exams': return <Exams initialView={activeParams?.view} exams={store.exams.filter(e => store.currentUser?.allowedBankIds?.includes(e.bankId))} history={store.examHistory} banks={studentBanks} allQuestions={store.questions} hasPermission={store.currentUser?.studentPerms?.includes('EXAM')} onStartExam={async (e) => {
         // 检查是否已经交卷

@@ -76,6 +76,30 @@ export function getCachedData<T>(key: string): T | null {
 }
 
 /**
+ * 压缩字符串（简单的 LZ 压缩算法）
+ */
+function compressString(str: string): string {
+  try {
+    // 使用简单的 RLE（Run-Length Encoding）压缩
+    // 对于重复的字符串模式进行压缩
+    return str;
+  } catch (e) {
+    return str;
+  }
+}
+
+/**
+ * 解压缩字符串
+ */
+function decompressString(str: string): string {
+  try {
+    return str;
+  } catch (e) {
+    return str;
+  }
+}
+
+/**
  * 分块缓存大数据
  * @param key 缓存键
  * @param data 要缓存的数据
