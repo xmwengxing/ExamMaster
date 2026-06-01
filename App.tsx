@@ -276,13 +276,9 @@ const App: React.FC = () => {
 
   const filteredBanksForStudent = useMemo(() => {
     if (!store.currentUser || store.currentUser.role === UserRole.ADMIN) return store.banks;
-    if (!store.currentUser.studentPerms?.includes('BANK')) return [];
-    // Banks are now controlled by group permissions (stored in allowedBankIds from group)
-    // For backward compatibility, fall back to individual allowedBankIds
-    const allowedIds = store.currentUser.allowedBankIds || [];
-    return allowedIds.length > 0 
-      ? store.banks.filter(b => allowedIds.includes(b.id))
-      : store.banks; // If no group banks configured, show all
+    // Banks are now controlled by group permissions (server returns already-filtered list)
+    // Server-side getEffectiveBankIds handles direct + group permissions
+    return store.banks;
   }, [store.currentUser, store.banks]);
 
   if (store.isLoading) {
@@ -472,14 +468,14 @@ const App: React.FC = () => {
       case 'home': return <StudentHome user={store.currentUser!} banks={studentBanks} activeBank={currentActiveBank as any} banners={store.systemConfig?.banners || []} announcement={store.systemConfig?.announcement || '欢迎使用'} announcementDuration={store.systemConfig?.announcementDuration ?? 20} onBankChange={store.setActiveBank} onNavigate={(tab, params) => {
         if (tab === 'practice-mode') checkPracticeSession(params.mode, params);
         else handleNavigate(tab, params);
-      }} onLogout={store.logout} hasBank={store.currentUser?.studentPerms?.includes('BANK')} hasVideo={store.currentUser?.studentPerms?.includes('VIDEO')} hasPractical={true} questionCounts={{[QuestionType.SINGLE]:0,[QuestionType.MULTIPLE]:0,[QuestionType.JUDGE]:0}} />;
+      }} onLogout={store.logout} hasBank={true} hasVideo={true} hasPractical={true} questionCounts={{[QuestionType.SINGLE]:0,[QuestionType.MULTIPLE]:0,[QuestionType.JUDGE]:0}} />;
       case 'banner-detail': return <BannerDetail banner={activeParams?.banner} onBack={() => setActiveTab('home')} />;
       case 'practice': return <PracticeList banks={studentBanks} activeBank={currentActiveBank as any} history={store.practiceRecords} onStart={(m, p) => checkPracticeSession(m, p)} onAddRecord={store.addPracticeRecord} onDeleteRecord={store.deletePracticeRecord} onNavigate={setActiveTab} />;
       case 'favorites': return <Favorites favorites={store.favorites} banks={studentBanks} onStart={(qs) => handleNavigate('practice-mode', { questions: qs, mode: PracticeMode.SEQUENTIAL })} onToggleFavorite={store.toggleFavorite} onBack={() => setActiveTab('practice')} />;
       case 'mistakes': return <Mistakes mistakes={store.mistakes} banks={studentBanks} onStart={(m, p) => checkPracticeSession(m, p)} />;
       case 'discussions': return <Discussions />;
       case 'profile': return <Profile user={store.currentUser!} customFieldSchema={store.customFieldSchema} onUpdate={store.updateProfile} onBack={() => setActiveTab('home')} />;
-      case 'exams': return <Exams initialView={activeParams?.view} exams={store.exams.filter(e => store.currentUser?.allowedBankIds?.includes(e.bankId))} history={store.examHistory} banks={studentBanks} allQuestions={store.questions} hasPermission={store.currentUser?.studentPerms?.includes('EXAM')} onStartExam={async (e) => {
+      case 'exams': return <Exams initialView={activeParams?.view} exams={store.exams} history={store.examHistory} banks={studentBanks} allQuestions={store.questions} hasPermission={true} onStartExam={async (e) => {
         // 检查是否已经交卷
         const existingRecord = store.examHistory.find(h => h.examId === e.id && h.userId === store.currentUser?.id && h.isFinished);
         if (existingRecord && !e.initialIndex) {

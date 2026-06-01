@@ -162,8 +162,8 @@ export async function getEffectiveBankIds(db, userId) {
   );
   if (!user) return [];
 
-  const directBankIds = user.allowed_bank_ids || [];
-  const directSet = new Set(Array.isArray(directBankIds) ? directBankIds : []);
+  const directBankIds = Array.isArray(user.allowed_bank_ids) ? user.allowed_bank_ids : [];
+  const directSet = new Set(directBankIds);
 
   if (!user.group_id) return [...directSet];
 
@@ -177,16 +177,47 @@ export async function getEffectiveBankIds(db, userId) {
     permissions = {};
   }
 
-  const groupBankIds = permissions?.banks || [];
-  const groupSet = new Set(Array.isArray(groupBankIds) ? groupBankIds : []);
-
-  const merged = new Set([...directSet, ...groupSet]);
+  const groupBankIds = await resolveGroupBankIds(db, permissions);
+  const merged = new Set([...directSet, ...groupBankIds]);
   return [...merged];
+}
+
+/**
+ * 解析分组的题库权限
+ * 兼容旧格式（banks 是 string[]）和新格式（banks 是 { mode, banks }）
+ */
+async function resolveGroupBankIds(db, permissions) {
+  const raw = permissions?.banks;
+  let mode, ids;
+  if (Array.isArray(raw)) {
+    if (raw.length === 0) {
+      mode = 'none';
+      ids = [];
+    } else {
+      mode = 'specific';
+      ids = raw;
+    }
+  } else if (raw && typeof raw === 'object') {
+    mode = raw.mode || 'none';
+    ids = Array.isArray(raw.banks) ? raw.banks : [];
+  } else {
+    mode = 'none';
+    ids = [];
+  }
+
+  if (mode === 'all') {
+    const rows = await db.getMany('SELECT id FROM banks');
+    return (rows || []).map(r => r.id);
+  }
+  if (mode === 'specific') {
+    return ids;
+  }
+  return [];
 }
 
 function getDefaultPermissions() {
   return {
-    banks: [],
+    banks: { mode: 'all', banks: [] },
     exams: [],
     vod_courses: { mode: 'all', categories: [], courses: [] },
     live_courses: { mode: 'all', categories: [], courses: [] },
