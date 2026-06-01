@@ -259,7 +259,10 @@ export interface UserGroup {
 }
 
 export interface GroupPermissions {
-  banks: string[];
+  banks: {
+    mode: 'all' | 'specific' | 'none';
+    banks: string[];
+  };
   exams: string[];
   vod_courses: {
     mode: 'all' | 'category' | 'specific' | 'none';

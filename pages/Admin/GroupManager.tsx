@@ -16,8 +16,26 @@ interface GroupManagerProps {
   refreshAll: () => Promise<void>;
 }
 
+function normalizePermissions(perms: any): GroupPermissions {
+  const base = perms || {};
+  let banks = base.banks;
+  if (Array.isArray(banks)) {
+    banks = banks.length === 0 ? { mode: 'none', banks: [] } : { mode: 'specific', banks };
+  } else if (!banks || typeof banks !== 'object') {
+    banks = { mode: 'all', banks: [] };
+  }
+  return {
+    banks,
+    exams: Array.isArray(base.exams) ? base.exams : [],
+    vod_courses: base.vod_courses || { mode: 'all', categories: [], courses: [] },
+    live_courses: base.live_courses || { mode: 'all', categories: [], courses: [] },
+    article_courses: base.article_courses || { mode: 'all', categories: [], courses: [] },
+    interactive_courses: base.interactive_courses || { mode: 'all', courses: [] }
+  };
+}
+
 const defaultPermissions: GroupPermissions = {
-  banks: [],
+  banks: { mode: 'all', banks: [] },
   exams: [],
   vod_courses: { mode: 'all', categories: [], courses: [] },
   live_courses: { mode: 'all', categories: [], courses: [] },
@@ -184,7 +202,7 @@ const GroupManager: React.FC<GroupManagerProps> = ({ groups, students, banks, co
 
   const openPermsModal = (group: UserGroup) => {
     setEditId(group.id);
-    setPermData(group.permissions || defaultPermissions);
+    setPermData(normalizePermissions(group.permissions));
     setShowModal({ mode: 'perms' });
   };
 
@@ -198,9 +216,18 @@ const GroupManager: React.FC<GroupManagerProps> = ({ groups, students, banks, co
 
   const togglePerm = (key: 'banks' | 'exams', id: string) => {
     setPermData(prev => {
+      if (key === 'banks') {
+        const cur = prev.banks?.banks || [];
+        const next = cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id];
+        return { ...prev, banks: { ...prev.banks, mode: 'specific', banks: next } };
+      }
       const arr = prev[key] || [];
       return { ...prev, [key]: arr.includes(id) ? arr.filter(x => x !== id) : [...arr, id] };
     });
+  };
+
+  const setBanksMode = (mode: 'all' | 'specific' | 'none') => {
+    setPermData(prev => ({ ...prev, banks: { mode, banks: prev.banks?.banks || [] } }));
   };
 
   const setVodMode = (mode: GroupPermissions['vod_courses']['mode']) => {
@@ -293,7 +320,7 @@ const GroupManager: React.FC<GroupManagerProps> = ({ groups, students, banks, co
                   {g.createdAt && <p className="text-[10px] text-gray-300 mt-1">创建于 {new Date(g.createdAt).toLocaleDateString('zh-CN')}</p>}
                   <div className="flex gap-2 mt-3">
                     <span className="text-[10px] font-bold bg-gray-100 text-gray-500 px-2 py-1 rounded-lg">
-                      题库: {g.permissions?.banks?.length || 0} 个
+                      题库: {g.permissions?.banks?.mode === 'all' ? '全部' : g.permissions?.banks?.mode === 'specific' ? `${g.permissions?.banks?.banks?.length || 0} 个` : '无'}
                     </span>
                     <span className="text-[10px] font-bold bg-gray-100 text-gray-500 px-2 py-1 rounded-lg">
                       录播: {g.permissions?.vod_courses?.mode || '未设置'}
@@ -356,14 +383,23 @@ const GroupManager: React.FC<GroupManagerProps> = ({ groups, students, banks, co
               <div className="space-y-6">
                 <div>
                   <h4 className="font-black text-sm text-gray-700 mb-3"><i className="fa-solid fa-database mr-2 text-indigo-500"></i>题库练习权限</h4>
-                  <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto">
-                    {(banks || []).map((b: any) => (
-                      <label key={b.id} className={`flex items-center gap-2 p-2 rounded-xl cursor-pointer border-2 transition-all ${(permData.banks || []).includes(b.id) ? 'border-indigo-600 bg-indigo-50' : 'border-gray-50 hover:border-gray-100'}`}>
-                        <input type="checkbox" checked={(permData.banks || []).includes(b.id)} onChange={() => togglePerm('banks', b.id)} className="w-4 h-4 rounded text-indigo-600" />
-                        <span className="text-xs font-bold truncate">{b.name}</span>
-                      </label>
+                  <div className="flex gap-2 mb-3">
+                    {(['all', 'specific', 'none'] as const).map(m => (
+                      <button key={m} onClick={() => setBanksMode(m)} className={`px-4 py-2 rounded-xl text-xs font-black transition-all ${(permData.banks?.mode || 'all') === m ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-500'}`}>
+                        {m === 'all' ? '全部' : m === 'specific' ? '指定' : '无'}
+                      </button>
                     ))}
                   </div>
+                  {permData.banks?.mode === 'specific' && (
+                    <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto">
+                      {(banks || []).map((b: any) => (
+                        <label key={b.id} className={`flex items-center gap-2 p-2 rounded-xl cursor-pointer border-2 transition-all ${(permData.banks?.banks || []).includes(b.id) ? 'border-indigo-600 bg-indigo-50' : 'border-gray-50 hover:border-gray-100'}`}>
+                          <input type="checkbox" checked={(permData.banks?.banks || []).includes(b.id)} onChange={() => togglePerm('banks', b.id)} className="w-4 h-4 rounded text-indigo-600" />
+                          <span className="text-xs font-bold truncate">{b.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div>
