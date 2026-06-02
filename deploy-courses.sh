@@ -25,7 +25,13 @@ args = parser.parse_args()
 
 COURSE_NAME = args.course
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-PRESENTATION_DIR = os.path.join(SCRIPT_DIR, 'ai-trainer-course', 'presentation')
+# 课件工程默认在仓库外（不入版本控制）
+# 默认查找位置（按顺序）：
+#   1. $COURSE_DIR 环境变量
+#   2. $HOME/.cache/<course>/presentation/
+#   3. 仓库内 ai-trainer-course/presentation/（已废弃，仅兼容旧部署）
+COURSE_DIR = os.environ.get('COURSE_DIR', os.path.join(os.path.expanduser('~'), '.cache', COURSE_NAME, 'presentation'))
+PRESENTATION_DIR = COURSE_DIR
 COURSE_SRC = os.path.join(PRESENTATION_DIR, 'dist')
 COURSE_DST_LOCAL = os.path.join(SCRIPT_DIR, 'public', 'courses', COURSE_NAME)
 COURSE_DST_DIST = os.path.join(SCRIPT_DIR, 'dist', 'courses', COURSE_NAME)

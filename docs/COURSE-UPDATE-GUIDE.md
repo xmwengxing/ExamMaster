@@ -25,14 +25,13 @@
 
 | 项 | 值 |
 |---|---|
-| 源文档 | `<course>/docs/<X.X 章节名>.md` （`<course>` = 课件目录名）|
-| 课件源码 | `<course>/presentation/` |
-| 课件构建产物 | `<course>/presentation/dist/` |
+| 课件工程位置 | **仓库外**（推荐 `~/.cache/<course>/` 或工作区外路径）—— 课件源**不入版本控制**（见 `ai-trainer-course/README.md`）|
+| 课件工程内部 | `<course>/docs/` 源文档 · `<course>/presentation/` 源码 · `<course>/presentation/dist/` 构建产物 |
 | 本地 dev 静态（nginx 服务） | `dist/courses/<course>/` |
 | 本地 vite dev 静态 | `public/courses/<course>/` |
-| 远端服务器静态 | `root@47.104.173.139:/www/wwwroot/exammaster.zzzjl.com/dist/courses/<course>/` |
-| 部署脚本 | `deploy-courses.sh` |
-| 章节入库 SQL | `scripts/import-<X.X>-chapters.sql` |
+| 远端服务器静态 | `<server>:<project>/dist/courses/<course>/` |
+| 部署脚本 | `deploy-courses.sh`（仓库内）|
+| 章节入库 SQL 模板 | `scripts/import-course-chapter.template.sql`（复制后改 X.X）|
 | 学员端入口 | `pages/Student/InteractiveCourseViewer.tsx` |
 | 管理端入口 | `pages/Admin/InteractiveCourseManager.tsx` |
 | 后端 service | `src/services/interactive-courses.service.js` |
@@ -45,7 +44,7 @@
 ## 1. 完整流程（7 步）
 
 ### Step 1：源文档（Markdown）
-位置：`ai-trainer-course/docs/<X.X 标题>.md`
+位置：`<course>/docs/<X.X 标题>.md`（在仓库外的课件工程内）
 
 命名约定：
 - `1.1业务流程设计.md`
@@ -54,7 +53,7 @@
 - `2.1数据处理规范制定基础.md`
 
 ### Step 2：课件开发（React + Vite + TypeScript）
-位置：`ai-trainer-course/presentation/`
+位置：`<course>/presentation/`
 
 使用 **course-forge skill** 生成：
 - `src/chapters/<chapter>.tsx` —— 每章一个文件
@@ -71,14 +70,15 @@
 
 ### Step 4：构建
 ```bash
-cd ai-trainer-course/presentation
+cd <course>/presentation
 npm run build
 # 产物: presentation/dist/ (含 courses/<course>/ 目录)
 ```
 
 ### Step 5：部署（`deploy-courses.sh` 一键完成 4 步）
 ```bash
-python3 deploy-courses.sh --course ai-trainer
+# 默认 COURSE_NAME = ai-trainer，路径硬编码在脚本顶部可改
+python3 deploy-courses.sh --course <course-name>
 # [1/4] 构建课件
 # [2/4] 复制到本地 public/courses/ (vite dev 读)
 # [2.5/4] 同步到本地 dist/courses/ (docker nginx :ro 挂载)
@@ -88,26 +88,15 @@ python3 deploy-courses.sh --course ai-trainer
 ⚠️ **服务器 SSH 密码**：默认 `Jinglang@2026`，可用 `SSH_PASSWORD=...` 环境变量覆盖。
 
 ### Step 6：DB 入库（每章一次 SQL）
-**模板**：`scripts/import-<X.X>-chapters.sql`
+**模板**：`scripts/import-course-chapter.template.sql`
 
-```sql
-INSERT INTO interactive_courses
-  (id, title, description, base_path, cover_image, status, sort_order, group_id, start_chapter)
-VALUES (
-  'ic-trainer-1.6',                  -- id 约定: ic-trainer-<X.X>
-  '业务流程构建及业务优化通用方法',   -- title: 来自 course.json section.title
-  '<描述>',                          -- description: "人工智能训练师三级 · X.X 标题 — N分钟..."
-  'courses/ai-trainer/',             -- base_path: 静态目录（与 deploy 一致）
-  '',                                -- cover_image: 沿用上一个章节或留空
-  'published',                       -- status: published / draft
-  6,                                 -- sort_order: 在组内顺序
-  'icg-ai-trainer-3',                -- group_id: 课程组
-  119                                -- start_chapter: 0-indexed 课件内起始章节
-) ON CONFLICT (id) DO UPDATE SET ...;
-```
-
-执行：
 ```bash
+# 1. 复制模板
+cp scripts/import-course-chapter.template.sql scripts/import-<X.X>-chapters.sql
+
+# 2. 修改模板中的 X.X / start_chapter / sort_order / group_id / description
+
+# 3. 执行
 PGPASSWORD=<密码> docker exec -i examaster_postgres psql -U edumaster_user -d edumaster \
   < scripts/import-<X.X>-chapters.sql
 ```
@@ -115,7 +104,7 @@ PGPASSWORD=<密码> docker exec -i examaster_postgres psql -U edumaster_user -d 
 ⚠️ **start_chapter 计算方法**：
 ```bash
 node -e "
-const c = JSON.parse(require('fs').readFileSync('ai-trainer-course/presentation/dist/course.json'));
+const c = JSON.parse(require('fs').readFileSync('<course>/presentation/dist/course.json'));
 let i = 0;
 for (const sec of c.sections) {
   for (const seg of (sec.segments || [])) {
@@ -135,25 +124,24 @@ PGPASSWORD=<密码> docker exec -i examaster_postgres psql -U edumaster_user -d 
   -c "SELECT id, title, sort_order, start_chapter, status FROM interactive_courses ORDER BY sort_order;"
 
 # 2. 本地 dist 与 public 一致
-diff -rq public/courses/ai-trainer dist/courses/ai-trainer
+diff -rq public/courses/<course> dist/courses/<course>
 
-# 3. 远端服务器 dist 是 1.6
+# 3. 远端服务器 dist 是最新版
 SSH_ASKPASS=/tmp/_ssh_pass.py SSH_ASKPASS_REQUIRE=force ssh root@47.104.173.139 \
-  'grep -c t6-bill-gate /www/wwwroot/exammaster.zzzjl.com/dist/courses/ai-trainer/course.json'
+  'grep -c <X.X-section-id> <server>/dist/courses/<course>/course.json'
 
 # 4. 重启 docker nginx 让本地 dist 生效
 docker restart examaster_nginx
-# 验证: docker exec examaster_nginx ls /usr/share/nginx/html/courses/ai-trainer/audio/ | grep -c "^t6-"
+# 验证: docker exec examaster_nginx ls /usr/share/nginx/html/courses/<course>/audio/ | wc -l
 
 # 5. 学员端 API 返回 published 章节
 curl -s -H "Cookie: <学员token>" http://localhost:3080/api/interactive-courses/public \
   | jq '.groups[].chapters[].id'
-# 期望: 6 个 published (1.1~1.6)
 ```
 
 嵌入 URL 模板：
 ```
-https://<域名>/courses/ai-trainer/embed.html?auto=1&chapter=<start_chapter>
+https://<域名>/courses/<course>/embed.html?auto=1&chapter=<start_chapter>
 ```
 
 ---
