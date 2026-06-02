@@ -2,7 +2,7 @@
 
 > **此目录是占位**。课件源码、源文档、构建产物均**不入版本控制**（属于用户数据产物，体积大、版本耦合到课件内容）。
 >
-> 课件作者请按 `docs/COURSE-UPDATE-GUIDE.md` 工作流，把课件工程放在本目录之外（推荐：`~/.cache/ai-trainer-course/` 或工作区外的独立路径），构建产物经 `deploy-courses.sh` 部署到 `dist/courses/ai-trainer/` 和远端服务器。
+> 课件作者请按 `docs/COURSE-UPDATE-GUIDE.md` 工作流，把课件工程放在本目录之外（推荐：`~/.cache/ai-trainer-course/` 或工作区外的独立路径），构建产物按 Step 5 工作流部署到 `dist/courses/ai-trainer/` 和远端服务器。
 
 ## 为什么不在仓库里
 

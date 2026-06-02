@@ -16,7 +16,7 @@
 --   id              : 'ic-trainer-<X.X>' （或 'ic-<group-prefix>-<X.X>' 自定义）
 --   title           : 来自课件 course.json section.title
 --   description     : 课件简介（章节数 / 时长 / 涵盖内容）
---   base_path       : 'courses/<course-name>/' （与 deploy-courses.sh 一致）
+--   base_path       : 'courses/<course-name>/' （与 dist/courses/<course-name>/ 目录一致）
 --   cover_image     : 封面图（留空 = 默认）
 --   status          : 'published'（学员可见） / 'draft'（占位，学员不可见）
 --   sort_order      : 在课程组内的排序，1-based
@@ -32,7 +32,7 @@ VALUES (
   'ic-trainer-X.X',                  -- TODO: 改 X.X
   '<section.title>',                 -- TODO: 改 course.json section.title
   '<description>',                   -- TODO: 课件简介
-  'courses/<course-name>/',          -- TODO: 改 course name (与 deploy-courses.sh 一致)
+  'courses/<course-name>/',          -- TODO: 改 course name (与 dist/courses/<course-name>/ 目录一致)
   '',                                -- 封面图（留空）
   'published',                       -- published / draft
   <sort_order>,                      -- TODO: 在组内顺序

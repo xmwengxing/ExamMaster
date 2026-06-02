@@ -30,7 +30,7 @@
 | 本地 dev 静态（nginx 服务） | `dist/courses/<course>/` |
 | 本地 vite dev 静态 | `public/courses/<course>/` |
 | 远端服务器静态 | `<server>:<project>/dist/courses/<course>/` |
-| 部署脚本 | `deploy-courses.sh`（仓库内）|
+| 部署脚本 | （开发者本地，不入仓；见 Step 5 通用工作流）|
 | 章节入库 SQL 模板 | `scripts/import-course-chapter.template.sql`（复制后改 X.X）|
 | 学员端入口 | `pages/Student/InteractiveCourseViewer.tsx` |
 | 管理端入口 | `pages/Admin/InteractiveCourseManager.tsx` |
@@ -75,17 +75,30 @@ npm run build
 # 产物: presentation/dist/ (含 courses/<course>/ 目录)
 ```
 
-### Step 5：部署（`deploy-courses.sh` 一键完成 4 步）
+### Step 5：部署（开发者本地脚本，不入仓库）
+仓库不提供通用部署脚本——每个用户的服务器配置差异很大（路径、认证方式、nginx 路径等）。以下为**通用工作流参考**：
+
 ```bash
-# 默认 COURSE_NAME = ai-trainer，路径硬编码在脚本顶部可改
-python3 deploy-courses.sh --course <course-name>
-# [1/4] 构建课件
-# [2/4] 复制到本地 public/courses/ (vite dev 读)
-# [2.5/4] 同步到本地 dist/courses/ (docker nginx :ro 挂载)
-# [3/4] 上传到服务器 dist/courses/
+# 1. 构建课件（在 course 工程目录）
+cd $COURSE_DIR && npm run build
+# 产物: presentation/dist/ (含 courses/<course>/ 目录)
+
+# 2. 复制到 ExamMaster 的 vite dev 路径
+cp -r presentation/dist/courses/<course>/* public/courses/<course>/
+
+# 3. 复制到 ExamMaster 的 nginx :ro 挂载路径
+cp -r presentation/dist/courses/<course>/* dist/courses/<course>/
+
+# 4. rsync 到服务器
+rsync -avz --delete dist/courses/<course>/ <user>@<host>:/www/wwwroot/exammaster.zzzjl.com/dist/courses/<course>/
+
+# 5. 重启 nginx 让容器重新读 dist
+docker restart examaster_nginx
 ```
 
-⚠️ **服务器认证**：推荐用 SSH key（`~/.ssh/config` + ssh-agent）免密登录。如使用密码认证，需通过 `SSH_PASSWORD=...` 环境变量传入（**不要** hardcode 在脚本里）。
+⚠️ **服务器认证**：推荐用 SSH key（`~/.ssh/config` + ssh-agent）免密登录。如使用密码认证：
+- 密码用 `SSH_PASSWORD=...` 环境变量传入，**不要** hardcode 在脚本里
+- 或使用 `sshpass -e rsync ...`（`SSHPASS` 环境变量）
 
 ### Step 6：DB 入库（每章一次 SQL）
 **模板**：`scripts/import-course-chapter.template.sql`
@@ -186,14 +199,14 @@ https://<域名>/courses/<course>/embed.html?auto=1&chapter=<start_chapter>
 
 ### 陷阱 2：本地 dist 不同步（**已修 2026-06-02**）
 - **症状**：本地 docker nginx 学员看到旧版（1.5），但服务器已是新版（1.6）
-- **根因**：`deploy-courses.sh` 同步到 `public/courses/` + 远端 dist，**未同步本地 `dist/courses/`**；而 `docker-compose.yml` 把 `./dist` 挂到 nginx 容器
-- **修法**：deploy 脚本新增 `[2.5/4] 同步到本地 dist/courses/`
+- **根因**：部署脚本只同步到 `public/courses/` + 远端 dist，**未同步本地 `dist/courses/`**；而 `docker-compose.yml` 把 `./dist` 挂到 nginx 容器
+- **修法**：部署脚本新增 `[2.5/4] 同步到本地 dist/courses/`
 - **副作用**：deploy 完成后**必须** `docker restart examaster_nginx` 让容器重新读 dist
 
-### 陷阱 3：服务器 SSH 密码过期
+### 陷阱 3：服务器 SSH 认证失败
 - **症状**：`rsync` 失败，deploy 中断
-- **修法**：用 `SSH_PASSWORD=新密码 python3 deploy-courses.sh` 覆盖默认值
-- **默认值**：脚本无默认值；推荐用 SSH key 认证，密码用 `SSH_PASSWORD` 环境变量传入
+- **修法**：用 SSH key 认证（`~/.ssh/config` 配置），或用 `SSH_PASSWORD=...` 环境变量传密码
+- **注意**：任何部署脚本都应从环境变量读取密码，**绝不** hardcode
 
 ### 陷阱 4：嵌入 URL 起始章节错位
 - **症状**：点击 1.5 跳到第 1 章（不是 1.5 首章）
@@ -269,7 +282,7 @@ SELECT id, title, sort_order, start_chapter, status FROM interactive_courses ORD
 5. **课程组排序**靠 `sort_order`，不要靠 `created_at`（学员端按 `sort_order ASC` 渲染）
 
 ### 5.3 部署
-1. **每次课件改完跑一次 `deploy-courses.sh`**
+1. **每次课件改完跑一次本地部署脚本**（见 Step 5）
 2. **deploy 完成后 `docker restart examaster_nginx`**（本地 dist 同步后必须）
 3. **服务器同步**靠 SSH，密码失效时改 `SSH_PASSWORD` 环境变量
 4. **生产环境有 bug 时**先看 nginx error log：`docker logs examaster_nginx`

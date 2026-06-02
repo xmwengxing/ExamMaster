@@ -1,6 +1,6 @@
 # `dist/courses/` —— nginx 课件静态目录占位
 
-> 课件构建产物由 `deploy-courses.sh` 同步到此目录供 docker nginx 服务。
+> 课件构建产物由开发者本地部署脚本同步到此目录供 docker nginx 服务。
 > **不入版本控制**（用户数据产物，体积大）。
-> 运行时由 `python3 deploy-courses.sh --course <name>` 填充。
+> 运行时由 `cp -r $COURSE_DIR/dist/courses/<name>/* dist/courses/<name>/` 填充。
 > 注意：每次 deploy 后必须 `docker restart examaster_nginx` 让容器刷新只读挂载。
