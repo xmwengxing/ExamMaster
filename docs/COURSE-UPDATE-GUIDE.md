@@ -85,7 +85,7 @@ python3 deploy-courses.sh --course <course-name>
 # [3/4] 上传到服务器 dist/courses/
 ```
 
-⚠️ **服务器 SSH 密码**：默认 `***REDACTED***`，可用 `SSH_PASSWORD=...` 环境变量覆盖。
+⚠️ **服务器认证**：推荐用 SSH key（`~/.ssh/config` + ssh-agent）免密登录。如使用密码认证，需通过 `SSH_PASSWORD=...` 环境变量传入（**不要** hardcode 在脚本里）。
 
 ### Step 6：DB 入库（每章一次 SQL）
 **模板**：`scripts/import-course-chapter.template.sql`
@@ -193,7 +193,7 @@ https://<域名>/courses/<course>/embed.html?auto=1&chapter=<start_chapter>
 ### 陷阱 3：服务器 SSH 密码过期
 - **症状**：`rsync` 失败，deploy 中断
 - **修法**：用 `SSH_PASSWORD=新密码 python3 deploy-courses.sh` 覆盖默认值
-- **默认值**：`***REDACTED***`（deploy-courses.sh line 19）
+- **默认值**：脚本无默认值；推荐用 SSH key 认证，密码用 `SSH_PASSWORD` 环境变量传入
 
 ### 陷阱 4：嵌入 URL 起始章节错位
 - **症状**：点击 1.5 跳到第 1 章（不是 1.5 首章）
