@@ -98,10 +98,15 @@ docker compose up -d
 │   ├── cli.js              # CLI command entry
 │   ├── seed.sql            # Sample data
 │   └── generate-secure-passwords.js
+├── courses/                # Interactive course presentations (see docs/COURSE-UPDATE-GUIDE.md)
+│   └── <name>/             # e.g. ai-trainer/ — Vite + React + TTS output
+├── dist/                   # Production build output (served by nginx)
 ├── tests/                  # Test files
 ├── nginx/                  # Nginx configuration
 ├── public/                 # Static assets
-└── types/                  # TypeScript type definitions
+├── types/                  # TypeScript type definitions
+└── docs/                   # Project documentation
+    └── COURSE-UPDATE-GUIDE.md  # Interactive course authoring/deployment guide
 ```
 
 ## ⚙️ Configuration Guide
@@ -133,6 +138,14 @@ npm run docker:up      # Start Docker services
 npm run docker:down    # Stop Docker services
 npm run test           # Run tests
 ```
+
+## 🎓 Interactive Courses
+
+ExamMaster ships with a generic **interactive course** module that renders any Vite + React + TTS presentation under `courses/<name>/embed.html`, with chapters managed via the `interactive_courses` DB table and grouped by `interactive_course_groups`.
+
+For course authoring, deploying, and DB management, see [**docs/COURSE-UPDATE-GUIDE.md**](docs/COURSE-UPDATE-GUIDE.md).
+
+The authoring toolkit (templates, components, TTS runners) lives in the separate [**course-forge**](https://github.com/xmwengxing/course-forge) repository.
 
 ## 🚢 Docker Images
 

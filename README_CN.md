@@ -98,10 +98,15 @@ docker compose up -d
 │   ├── cli.js              # CLI 命令入口
 │   ├── seed.sql            # 示例数据
 │   └── generate-secure-passwords.js
+├── courses/                # 交互式课件产物（见 docs/COURSE-UPDATE-GUIDE.md）
+│   └── <name>/             # 如 ai-trainer/ — Vite + React + TTS 输出
+├── dist/                   # 生产构建产物（nginx 服务）
 ├── tests/                  # 测试文件
 ├── nginx/                  # Nginx 配置
 ├── public/                 # 静态资源
-└── types/                  # TypeScript 类型定义
+├── types/                  # TypeScript 类型定义
+└── docs/                   # 项目文档
+    └── COURSE-UPDATE-GUIDE.md  # 交互式课件开发与部署指南
 ```
 
 ## ⚙️ 配置指南
@@ -134,6 +139,14 @@ npm run docker:down    # 停止 Docker 服务
 npm run test           # 运行测试
 ```
 
+## 🎓 交互式课件
+
+ExamMaster 内置**通用交互式课件**模块，渲染 `courses/<name>/embed.html` 下任意 Vite + React + TTS 课件，章节通过 `interactive_courses` 表管理、按 `interactive_course_groups` 分组。
+
+课件的作者、部署与数据库管理请参见 [**docs/COURSE-UPDATE-GUIDE.md**](docs/COURSE-UPDATE-GUIDE.md)。
+
+课件制作工具链（模板、组件、TTS 脚本）在独立的 [**course-forge**](https://github.com/xmwengxing/course-forge) 仓库。
+
 ## 🚢 Docker 镜像
 
 从 GitHub Container Registry 拉取：
@@ -144,7 +157,7 @@ docker pull ghcr.io/xmwengxing/ExamMaster:latest
 
 ## 📄 许可证
 
-MIT License — 详见 [LICENSE](LICENSE)
+MIT 许可证 — 详见 [LICENSE](LICENSE)
 
 ## 🤝 贡献
 
