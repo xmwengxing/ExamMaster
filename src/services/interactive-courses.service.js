@@ -48,16 +48,16 @@ export async function listChapters(db, filters = {}) {
 export async function createChapter(db, data) {
   const id = `ic-${Date.now()}`;
   await db.query(
-    'INSERT INTO interactive_courses (id, title, description, base_path, cover_image, status, sort_order, group_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
-    [id, data.title, data.description || '', data.base_path, data.cover_image || '', data.status || 'draft', data.sort_order || 0, data.group_id]
+    'INSERT INTO interactive_courses (id, title, description, base_path, cover_image, status, sort_order, group_id, start_chapter) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)',
+    [id, data.title, data.description || '', data.base_path, data.cover_image || '', data.status || 'draft', data.sort_order || 0, data.group_id, data.start_chapter ?? 0]
   );
   return { id, ...data };
 }
 
 export async function updateChapter(db, id, data) {
   await db.query(
-    'UPDATE interactive_courses SET title=$1, description=$2, base_path=$3, cover_image=$4, status=$5, sort_order=$6, group_id=$7, updated_at=NOW() WHERE id=$8',
-    [data.title, data.description || '', data.base_path, data.cover_image || '', data.status || 'draft', data.sort_order || 0, data.group_id, id]
+    'UPDATE interactive_courses SET title=$1, description=$2, base_path=$3, cover_image=$4, status=$5, sort_order=$6, group_id=$7, start_chapter=$8, updated_at=NOW() WHERE id=$9',
+    [data.title, data.description || '', data.base_path, data.cover_image || '', data.status || 'draft', data.sort_order || 0, data.group_id, data.start_chapter ?? 0, id]
   );
 }
 
