@@ -1,0 +1,5 @@
+# `public/courses/` —— vite dev 课件静态目录占位
+
+> 课件构建产物由 `deploy-courses.sh` 同步到此目录供 vite dev 模式服务。
+> **不入版本控制**（用户数据产物，体积大）。
+> 运行时由 `python3 deploy-courses.sh --course <name>` 填充。
