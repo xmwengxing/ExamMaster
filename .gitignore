@@ -125,3 +125,8 @@ sync.sh
 ai-trainer-course/
 # 课件部署产物
 public/courses/
+
+# Local tooling (not part of ExamMaster source)
+.claude/
+.opencode/
+scripts/
