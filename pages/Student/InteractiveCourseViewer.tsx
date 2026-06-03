@@ -34,7 +34,8 @@ export default function InteractiveCourseViewer() {
 
   const openChapter = (c: Chapter) => {
     const ch = c.start_chapter ?? 0;
-    const url = `/${c.base_path}embed.html?auto=1&chapter=${ch}`.replace(/\/+/g, '/');
+    const courseParam = activeGroup?.title?.includes('四级') ? '&course=l4' : '';
+    const url = `/${c.base_path}embed.html?auto=1&chapter=${ch}${courseParam}`.replace(/\/+/g, '/');
     window.open(url, '_blank');
   };
 

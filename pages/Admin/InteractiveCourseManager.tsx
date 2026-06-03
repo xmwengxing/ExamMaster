@@ -31,6 +31,7 @@ export default function InteractiveCourseManager() {
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState('');
   const [loading, setLoading] = useState(false);
+  const [syncMsg, setSyncMsg] = useState('');
 
   // Chapter modal
   const [chModalOpen, setChModalOpen] = useState(false);
@@ -65,6 +66,26 @@ export default function InteractiveCourseManager() {
 
   useEffect(() => { loadGroups(); }, []);
   useEffect(() => { loadChapters(selectedGroupId); }, [selectedGroupId]);
+
+  const syncDetect = async () => {
+    if (!selectedGroupId) return;
+    setSyncMsg('正在检测...');
+    try {
+      const res = await fetch('/api/interactive-courses/detect', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ group_id: selectedGroupId }),
+      });
+      const data = await res.json();
+      if (data.created?.length > 0) {
+        setSyncMsg(`✓ 已添加 ${data.created.length} 个新课：${data.created.map((c: any) => c.title).join('、')}`);
+        loadChapters(selectedGroupId);
+      } else {
+        setSyncMsg(data.message || '未发现新课件目录');
+      }
+    } catch (e) { setSyncMsg('检测失败'); }
+    setTimeout(() => setSyncMsg(''), 5000);
+  };
 
   // --- Chapter CRUD ---
   const openCreateChapter = () => {
@@ -155,10 +176,16 @@ export default function InteractiveCourseManager() {
             <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>
               章节列表 — {groups.find(g => g.id === selectedGroupId)?.title || ''}
             </h3>
-            <button onClick={openCreateChapter} style={{ padding: '6px 16px', background: '#52c41a', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>
-              + 新增章节
-            </button>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+              <button onClick={openCreateChapter} style={{ padding: '6px 16px', background: '#52c41a', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>
+                + 新增章节
+              </button>
+              <button onClick={syncDetect} style={{ padding: '6px 16px', background: '#4361ee', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>
+                同步课件章节
+              </button>
+            </div>
           </div>
+          {syncMsg && <div style={{ padding: '8px 16px', marginBottom: 12, background: syncMsg.startsWith('✓') ? '#f6ffed' : '#fff7e6', border: '1px solid ' + (syncMsg.startsWith('✓') ? '#b7eb8f' : '#ffd591'), borderRadius: 6, fontSize: 14, color: '#333' }}>{syncMsg}</div>}
           {loading ? <p>加载中...</p> : (
             <table style={{ width: '100%', borderCollapse: 'collapse', background: '#fff', borderRadius: 8, overflow: 'hidden' }}>
               <thead>

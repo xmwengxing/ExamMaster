@@ -101,3 +101,22 @@ export async function deleteChapter(req, res) {
     res.status(500).json({ error: '删除失败' });
   }
 }
+
+// --- Auto-detect ---
+
+export async function detectUpdates(req, res) {
+  try {
+    const groupId = req.query.group_id || req.body?.group_id || '';
+    if (!groupId) {
+      return res.status(400).json({ error: '缺少 group_id 参数' });
+    }
+    const result = await service.detectAndCreateChapters(req.db, groupId);
+    if (result.error) {
+      return res.json({ message: result.error, created: [] });
+    }
+    res.json({ message: `发现 ${result.created.length} 个新课，已自动添加`, created: result.created });
+  } catch (err) {
+    console.error('[interactive-courses] detectUpdates error:', err);
+    res.status(500).json({ error: '检测失败' });
+  }
+}

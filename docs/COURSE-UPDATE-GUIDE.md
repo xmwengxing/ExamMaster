@@ -1,342 +1,210 @@
 # 交互式课件更新指南
 
-> ExamMaster 课件的常态化开发 / 部署 / 入库 / 验证流程。
-> **AI/开发者必读** —— 课件是持续维护的常态业务，不是"做完一次"。
+> ExamMaster 课件的开发、部署、入库、验证流程。
+> 使用前确保已安装 [course-forge](https://github.com/xmwengxing/course-forge) skill。
 
 ---
 
-## 课件制作工具链
-
-课件从源文档到可发布的 Web 课件，整套模板、组件、TTS 合成、字幕生成、3D 探索等工具沉淀在独立的 skill 仓库：
-
-**🔗 [course-forge](https://github.com/xmwengxing/course-forge)**
-
-克隆到本地后作为 AI 助手的 skill 加载（`~/.agents/skills/course-forge/SKILL.md`），用于：
-- 源文档分段拆分（S1-S5 / 每段 3-8 章）
-- React + Vite + TS 课件项目脚手架
-- 5 个沉淀组件：`AnimatedNumber` / `BpmnFlow` / `FlippableCard` / `StaggeredAppear` / `TabSwitcher`
-- TTS 合成（provider-agnostic：MiniMax / OpenAI / edge-tts / 内置）
-- 字幕时序生成 + 章节时长统计
-- 画面-口播对位 5 维自检清单
-
----
-
-## 0. 速查
+## 速查
 
 | 项 | 值 |
 |---|---|
-| 课件工程位置 | **仓库外**（推荐 `~/.cache/<course>/` 或工作区外路径）—— 课件源**不入版本控制**（见 `ai-trainer-course/README.md`）|
-| 课件工程内部 | `<course>/docs/` 源文档 · `<course>/presentation/` 源码 · `<course>/presentation/dist/` 构建产物 |
-| 本地 dev 静态（nginx 服务） | `dist/courses/<course>/` |
-| 本地 vite dev 静态 | `public/courses/<course>/` |
-| 远端服务器静态 | `<server>:<project>/dist/courses/<course>/` |
-| 部署脚本 | （开发者本地，不入仓；见 Step 5 通用工作流）|
-| 章节入库 SQL 模板 | `scripts/import-course-chapter.template.sql`（复制后改 X.X）|
-| 学员端入口 | `pages/Student/InteractiveCourseViewer.tsx` |
-| 管理端入口 | `pages/Admin/InteractiveCourseManager.tsx` |
-| 后端 service | `src/services/interactive-courses.service.js` |
-| 后端 controller | `src/controllers/interactive-courses.controller.js` |
-| 后端路由 | `src/routes/interactive-courses.routes.js` |
-| 完整工作流 skill | [course-forge](https://github.com/xmwengxing/course-forge) 仓库 |
+| 课件工程 | `ai-trainer-course/presentation/`（不入 git） |
+| 课件源码 | `presentation/src/chapters/` — 每章一个目录 |
+| 课程结构 | `presentation/public/course.json` |
+| 源文档 | `ai-trainer-course/docs/` |
+| 本地预览 | `http://localhost:5173/?auto=1`（dev）/ `http://localhost:9080/courses/ai-trainer/embed.html`（Docker） |
+| 部署脚本 | `python3 deploy-courses.sh`（仅课件）/ `python3 deploy.sh`（全站） |
 
 ---
 
-## 1. 完整流程（7 步）
+## 目录结构
 
-### Step 1：源文档（Markdown）
-位置：`<course>/docs/<X.X 标题>.md`（在仓库外的课件工程内）
-
-命名约定：
-- `1.1业务流程设计.md`
-- `1.6业务流程构建及业务优化通用方法.md`
-- `1.7简单场景业务流程分析与优化.md`
-- `2.1数据处理规范制定基础.md`
-
-### Step 2：课件开发（React + Vite + TypeScript）
-位置：`<course>/presentation/`
-
-使用 **course-forge skill** 生成：
-- `src/chapters/<chapter>.tsx` —— 每章一个文件
-- `src/chapters.ts` —— 注册章节
-- `src/course.json` —— sections 树状结构（用 `regenerate-course-json.py` 重新格式化）
-- `audio/<chapter>/*.mp3` —— TTS 合成音频
-- 音频优先用 **MiniMax speech-2.8-hd** + `Chinese_casual_instructor_vv2` 音色
-
-### Step 3：验收
-- **时长统计**：`python3 scripts/chapter-stats.py`（总时长、纯朗读、视频预估）
-- **画面-口播对位 5 维自检**：数字 / 专名 / 形状 / 对比 / 时序
-- **5 类动态来源硬性规则**：数字滚动 / 序列入场 / 微动效 / 互动组件 / 路径绘制
-- **浏览器回放**：空格启动 Auto 模式，鼠标点击翻页
-
-### Step 4：构建
-```bash
-cd <course>/presentation
-npm run build
-# 产物: presentation/dist/ (含 courses/<course>/ 目录)
 ```
-
-### Step 5：部署（开发者本地脚本，不入仓库）
-仓库不提供通用部署脚本——每个用户的服务器配置差异很大（路径、认证方式、nginx 路径等）。以下为**通用工作流参考**：
-
-```bash
-# 1. 构建课件（在 course 工程目录）
-cd $COURSE_DIR && npm run build
-# 产物: presentation/dist/ (含 courses/<course>/ 目录)
-
-# 2. 复制到 ExamMaster 的 vite dev 路径
-cp -r presentation/dist/courses/<course>/* public/courses/<course>/
-
-# 3. 复制到 ExamMaster 的 nginx :ro 挂载路径
-cp -r presentation/dist/courses/<course>/* dist/courses/<course>/
-
-# 4. rsync 到服务器
-rsync -avz --delete dist/courses/<course>/ <user>@<host>:/www/wwwroot/exammaster.zzzjl.com/dist/courses/<course>/
-
-# 5. 重启 nginx 让容器重新读 dist
-docker restart examaster_nginx
-```
-
-⚠️ **服务器认证**：推荐用 SSH key（`~/.ssh/config` + ssh-agent）免密登录。如使用密码认证：
-- 密码用 `SSH_PASSWORD=...` 环境变量传入，**不要** hardcode 在脚本里
-- 或使用 `sshpass -e rsync ...`（`SSHPASS` 环境变量）
-
-### Step 6：DB 入库（每章一次 SQL）
-**模板**：`scripts/import-course-chapter.template.sql`
-
-```bash
-# 1. 复制模板
-cp scripts/import-course-chapter.template.sql scripts/import-<X.X>-chapters.sql
-
-# 2. 修改模板中的 X.X / start_chapter / sort_order / group_id / description
-
-# 3. 执行
-PGPASSWORD=<密码> docker exec -i examaster_postgres psql -U edumaster_user -d edumaster \
-  < scripts/import-<X.X>-chapters.sql
-```
-
-⚠️ **start_chapter 计算方法**：
-```bash
-node -e "
-const c = JSON.parse(require('fs').readFileSync('<course>/presentation/dist/course.json'));
-let i = 0;
-for (const sec of c.sections) {
-  for (const seg of (sec.segments || [])) {
-    for (const ch of (seg.chapters || [])) {
-      if (sec.id === '1.6' && ch.id === ch.id) { console.log('1.6 起始:', i); break; }
-      i++;
-    }
-  }
-}
-"
-```
-
-### Step 7：验证（5 步）
-```bash
-# 1. DB 数据
-PGPASSWORD=<密码> docker exec -i examaster_postgres psql -U edumaster_user -d edumaster \
-  -c "SELECT id, title, sort_order, start_chapter, status FROM interactive_courses ORDER BY sort_order;"
-
-# 2. 本地 dist 与 public 一致
-diff -rq public/courses/<course> dist/courses/<course>
-
-# 3. 远端服务器 dist 是最新版
-SSH_ASKPASS=/tmp/_ssh_pass.py SSH_ASKPASS_REQUIRE=force ssh root@47.104.173.139 \
-  'grep -c <X.X-section-id> <server>/dist/courses/<course>/course.json'
-
-# 4. 重启 docker nginx 让本地 dist 生效
-docker restart examaster_nginx
-# 验证: docker exec examaster_nginx ls /usr/share/nginx/html/courses/<course>/audio/ | wc -l
-
-# 5. 学员端 API 返回 published 章节
-curl -s -H "Cookie: <学员token>" http://localhost:3080/api/interactive-courses/public \
-  | jq '.groups[].chapters[].id'
-```
-
-嵌入 URL 模板：
-```
-https://<域名>/courses/<course>/embed.html?auto=1&chapter=<start_chapter>
+ExamMaster/
+├── ai-trainer-course/
+│   ├── course.json                    # 课程结构（section > segment > chapter）
+│   ├── docs/                          # 源文档（口播稿）
+│   ├── presentation/                  # Vite + React + TS
+│   │   ├── src/
+│   │   │   ├── chapters/             # 每章一个目录
+│   │   │   ├── registry/chapters.ts  # 章节注册（脚本自动生成，勿手动编辑）
+│   │   │   ├── components/           # 共享组件
+│   │   │   ├── hooks/                # 共享 hooks
+│   │   │   └── styles/tokens.css     # 主题 tokens
+│   │   ├── public/
+│   │   │   ├── audio/                # TTS 合成 MP3
+│   │   │   └── subtitle-timing.json  # 字幕时序
+│   │   └── scripts/                  # extract-narrations / synthesize / compress / subtitle
+│   └── deploy-courses.sh             # 课件增量部署
+├── public/courses/ai-trainer/         # Vite build 输出至此后 nginx 可直接访问
+└── dist/courses/ai-trainer/           # Docker nginx 的只读挂载目录
 ```
 
 ---
 
-## 2. 关键概念
+## 开发流程
 
-### `start_chapter`（核心字段）
-- **定义**：该章节在课件 `course.json` 内的 **0-indexed 章节序号**
-- **作用**：学员点击"开始学习"时跳到 `?chapter=<start_chapter>`
-- **当前已设置值**：
-  | 章节 | start_chapter | 含义 |
-  |---|---|---|
-  | 1.1 | 0 | t1.1.x 第 0 章 |
-  | 1.2 | 30 | t1.2.x 第 30 章（1.1 累计 30 章）|
-  | 1.3 | 55 | 累计 55 章 |
-  | 1.4 | 77 | 累计 77 章 |
-  | 1.5 | 97 | 累计 97 章 |
-  | 1.6 | 119 | 累计 119 章（+24）|
-  | 1.7 | 143 | 累计 143 章（占位）|
-  | 1.8 | 167 | 累计 167 章（占位）|
+### 1. 源文档
+口播稿放入 `ai-trainer-course/docs/`，文件名建议使用 `<编号> <标题>.md`。
 
-### 命名约定
-- **章节 id**：`ic-trainer-<X.X>` （`interactive_courses` 表主键）
-- **课程组 id**：`icg-<timestamp>`（自动生成，1.6/1.7/1.8 沿用现有 `icg-ai-trainer-3`）
-- **课件内章节 id**：`t<section>-<slug>` （如 `t6-bill-gate`）
+### 2. 课件开发
+在 `presentation/src/chapters/` 下创建章节目录（编号全局递增）：
 
-### 课程组与章节
-- 1 个 `interactive_course_groups` 记录 = 1 套课程
-- 1 个 `interactive_courses` 记录 = 1 个章节（如"1.1 通用业务流程和业务数据"）
-- 学员端按"组 → 章节"两级渲染（`pages/Student/InteractiveCourseViewer.tsx`）
-- **状态过滤**：`status='published'` 才在学员端显示
+```
+chapters/NNN-<prefix>-<id>/
+├── index.tsx       # 画面组件（step >= N 渐进揭示）
+├── index.css       # 独立 CSS 前缀
+└── narrations.ts   # 口播文本数组
+```
 
----
+章节开发完成后，运行注册脚本自动生成 `chapters.ts` 和更新 `course.json`：
 
-## 3. 关键陷阱（必读）
+```bash
+cd presentation/src
+python3 generate-registry.py    # 扫描 chapters/ 全量注册
+```
 
-### 陷阱 1：`start_chapter` service bug（**已修 2026-06-02**）
-- **症状**：管理员在 InteractiveCourseManager 表单填 `start_chapter=119`，但 DB 写入 0
-- **根因**：`src/services/interactive-courses.service.js` 的 `createChapter` / `updateChapter` SQL 漏写 `start_chapter` 列
-- **修法**：PR 已合入，SQL 增加 `start_chapter=$9` + params 同步
-- **检查**：commit hash / diff 关键词 `start_chapter` 即可定位
+### 3. 验收
+```bash
+cd presentation
+npm run dev                     # → http://localhost:5173/?auto=1
+```
 
-### 陷阱 2：本地 dist 不同步（**已修 2026-06-02**）
-- **症状**：本地 docker nginx 学员看到旧版（1.5），但服务器已是新版（1.6）
-- **根因**：部署脚本只同步到 `public/courses/` + 远端 dist，**未同步本地 `dist/courses/`**；而 `docker-compose.yml` 把 `./dist` 挂到 nginx 容器
-- **修法**：部署脚本新增 `[2.5/4] 同步到本地 dist/courses/`
-- **副作用**：deploy 完成后**必须** `docker restart examaster_nginx` 让容器重新读 dist
+### 4. 音频合成
+```bash
+cd presentation
+npm run extract-narrations
+MINIMAX_API_KEY=<key> npm run synthesize-audio
+bash scripts/compress-audio.sh --preset high     # 可选：64kbps 压缩
+python3 scripts/subtitle-timing.py
+```
 
-### 陷阱 3：服务器 SSH 认证失败
-- **症状**：`rsync` 失败，deploy 中断
-- **修法**：用 SSH key 认证（`~/.ssh/config` 配置），或用 `SSH_PASSWORD=...` 环境变量传密码
-- **注意**：任何部署脚本都应从环境变量读取密码，**绝不** hardcode
+### 5. 构建
+```bash
+npm run build    # → dist/
+```
 
-### 陷阱 4：嵌入 URL 起始章节错位
-- **症状**：点击 1.5 跳到第 1 章（不是 1.5 首章）
-- **根因**：`start_chapter=0`（admin 漏填或 service bug）
-- **修法**：见陷阱 1 + 用 SQL 直接 `UPDATE` 修正
+### 6. 入库
 
-### 陷阱 5：占位章节混淆学员
-- **症状**：1.7/1.8 占位后学员看到空白卡
-- **根因**：`status='published'` 而课件未构建
-- **修法**：占位章节必须用 `status='draft'`，学员端 `/api/interactive-courses/public` 只返回 published
+**推荐方式**：管理员在交互式课堂中点击「**同步课件章节**」，系统自动读取 `course.json`，对比 DB，INSERT 缺失条目（title / start_chapter / sort_order 全部自动填入）。
 
-### 陷阱 6：AI 训练师三级组 id 是历史值
-- **症状**：新增课程组时 `group_id` 用错
-- **根因**：`icg-ai-trainer-3` 是数据库中现有组的实际 id，不一定符合 `icg-${Date.now()}` 模板
-- **修法**：先 `SELECT id, title FROM interactive_course_groups` 确认再插入
-
-### 陷阱 7：course.json 的 `id` 与 DB 章节 `id` 不是一回事
-- `course.json` 的 `sections[].id` = 业务章节号（"1.6"）
-- DB `interactive_courses.id` = 内部主键（"ic-trainer-1.6"）
-- 两者通过 `sort_order` 排序关联，不要混用
-
----
-
-## 4. SQL 模板（每章复制）
-
+**手动 SQL 备用**：
 ```sql
--- X.X 章节
 INSERT INTO interactive_courses
-  (id, title, description, base_path, cover_image, status, sort_order, group_id, start_chapter)
+  (id, title, description, base_path, status, sort_order, group_id, start_chapter)
 VALUES (
-  'ic-trainer-X.X',                  -- 改 X.X
-  '<section.title>',                 -- 改
-  '人工智能训练师三级 · X.X <标题> — N分钟交互式课件，<涵盖>。',  -- 改
-  'courses/ai-trainer/',             -- 一般不动
-  '',
-  'published',
-  <sort_order>,                      -- 改
-  'icg-ai-trainer-3',                -- 一般不动
-  <start_chapter>                    -- 改（用 node 脚本算）
-) ON CONFLICT (id) DO UPDATE SET
-  title         = EXCLUDED.title,
-  description   = EXCLUDED.description,
-  base_path     = EXCLUDED.base_path,
-  status        = 'published',
-  sort_order    = EXCLUDED.sort_order,
-  group_id      = EXCLUDED.group_id,
-  start_chapter = EXCLUDED.start_chapter,
-  updated_at    = NOW();
-
--- 验证
-SELECT id, title, sort_order, start_chapter, status FROM interactive_courses ORDER BY sort_order;
+  'course-<id>', '<标题>', '<简介>',
+  'courses/ai-trainer/', 'published', <序号>,
+  '<group_id>', <start_chapter>
+);
 ```
+`start_chapter` = 该课第一个章节在全局 `chapters` 数组中的起始下标。
 
----
+### 7. 本地验证
 
-## 5. 日常维护建议
-
-### 5.1 课件开发
-1. **每一章开发前先看 1.6 已沉淀的 5 个组件**（`templates/scripts/` 或 `presentation/src/components/`）：
-   - `AnimatedNumber` / `BpmnFlow` / `FlippableCard` / `StaggeredAppear` / `TabSwitcher`
-2. **新增组件要纳入 `presentation/src/components/`**，并写最少 1 个使用示例
-3. **TTS 优先级**：MiniMax → OpenAI → edge-tts → 自带 TTS（限流时降级）
-4. **避免纯黄色**：配色按语义（红/绿/蓝/紫）分散视觉疲劳
-5. **字号按信息密度自适应**，不统一放大
-6. **边框用实线不用虚线**
-7. **5 主题色 token**（`token.css`）：`--bad` 红 / `--good` 绿 / `--info` 蓝 / `--flow` 紫 / `--ease-soft-out` 柔和
-
-### 5.2 课程开发
-1. **新章节入 DB 前**先确认源文档已在 `ai-trainer-course/docs/`
-2. **管理端 InteractiveCourseManager 维护**优于直接 SQL（可审计）
-3. **每章发布前必跑 5 步验证**（见 §1 Step 7）
-4. **保留旧章节 `status='draft'` 而不是删除**（历史练习进度可恢复）
-5. **课程组排序**靠 `sort_order`，不要靠 `created_at`（学员端按 `sort_order ASC` 渲染）
-
-### 5.3 部署
-1. **每次课件改完跑一次本地部署脚本**（见 Step 5）
-2. **deploy 完成后 `docker restart examaster_nginx`**（本地 dist 同步后必须）
-3. **服务器同步**靠 SSH，密码失效时改 `SSH_PASSWORD` 环境变量
-4. **生产环境有 bug 时**先看 nginx error log：`docker logs examaster_nginx`
-5. **新课件**需要复制 `ai-trainer-course` 整个目录并改 `COURSE_NAME`
-
-### 5.4 学员端常见问题
-| 现象 | 排查 |
-|---|---|
-| 学员看不到新章节 | DB `status='published'`？`/api/interactive-courses/public` 拉到了吗？|
-| 跳到错误章节 | `start_chapter` 是否对？用 SQL `SELECT` 确认 |
-| 音频不播放 | nginx 容器 `/usr/share/nginx/html/courses/<course>/audio/` 存在？|
-| 嵌入页 404 | `base_path` 是否对？`courses/ai-trainer/` 与 nginx 实际目录一致？|
-| 历史进度丢失 | 学员 sessionStorage 不持久化，刷新正常会清空 |
-
-### 5.5 给 AI 助手的指示
-- 任何"更新课件"任务，**先看本指南**再动手
-- 任何"加新章节"任务，**先算 start_chapter**（用 node 脚本）
-- 任何"修 service"任务，**检查 start_chapter 字段是否在 SQL 中**（陷阱 1）
-- 任何"deploy"任务，**记得 docker restart examaster_nginx**（陷阱 2）
-
----
-
-## 6. 故障排查清单
+课件构建后无需嵌入主项目即可独立预览：
 
 ```bash
-# 1. DB 中章节数
-PGPASSWORD=... docker exec -i examaster_postgres psql -U edumaster_user -d edumaster \
-  -c "SELECT COUNT(*) FROM interactive_courses WHERE status='published';"
+npx serve dist                        # 或其他静态文件服务
+# → http://localhost:3000/?auto=1
+```
 
-# 2. 学员端 API 拉到的章节
-curl -s http://localhost:3080/api/interactive-courses/public \
-  -H "Cookie: <token>" | jq '.groups[].chapters | length'
+嵌入主项目后验证：
 
-# 3. nginx 实际服务的 audio
-docker exec examaster_nginx ls /usr/share/nginx/html/courses/ai-trainer/audio/ | head
+```bash
+curl -o /dev/null -w "%{http_code}" http://localhost:9080/courses/ai-trainer/embed.html
+# → 200
+```
 
-# 4. 嵌入页是否 200
-docker exec examaster_nginx curl -s -o /dev/null -w "%{http_code}\n" \
-  http://localhost/courses/ai-trainer/embed.html
-
-# 5. 服务器 dist 是否最新
-SSH_ASKPASS=/tmp/_ssh_pass.py SSH_ASKPASS_REQUIRE=force \
-  ssh root@47.104.173.139 \
-  'ls -la /www/wwwroot/exammaster.zzzjl.com/dist/courses/ai-trainer/course.json'
-
-# 6. 数据库密码
-PGPASSWORD 变量在 docker-compose.yml + .env
+### 8. 部署至服务器
+```bash
+python3 deploy-courses.sh             # rsync 课件至服务器
+python3 deploy.sh                     # 全站部署（含主应用代码）
 ```
 
 ---
 
-## 7. 链接
+## 嵌入 URL
 
-- [README.md](../README.md) / [README_CN.md](../README_CN.md) — 项目总览
-- [AGENTS.md](../AGENTS.md) — AI 助手指令（包含本指南的简化版）
-- [course-forge skill](file:///home/shijingtian/.agents/skills/course-forge/SKILL.md) — 课件开发工作流
-- [postgres/migrations](../postgres/migrations/) — DB 迁移历史
+```
+/courses/ai-trainer/embed.html?auto=1&chapter=<start_chapter>
+```
+
+| 参数 | 说明 |
+|------|------|
+| `auto=1` | 自动播放模式 |
+| `chapter=N` | 从第 N 章开始（0-indexed） |
+
+---
+
+## 多色语义
+
+课件组件可使用以下语义色，在不同主题下自动适配：
+
+| 变量 | 用途 |
+|------|------|
+| `--accent` | 核心概念 / 金句 |
+| `--accent-tech` | 技术元素 / 工具 |
+| `--accent-good` | 正向结论 / 最佳实践 |
+| `--accent-warn` | 警告 / 风险 / 红线 |
+| `--accent-deep` | 进阶 / 理论深度 |
+
+---
+
+## 关键陷阱
+
+| 问题 | 原因 | 修复 |
+|------|------|------|
+| 导航菜单消失 | `course.json` JSON 损坏 | 用脚本重新生成，勿手动编辑 |
+| 章节卡片跳错位置 | DB 中 `start_chapter` 填错 | SQL UPDATE 或用「同步课件章节」自动更正 |
+| 字幕与音频不同步 | narrations 修改后未重新合成 | 重跑 extract → synthesize → subtitle-timing |
+| 本地 nginx 看不到更新 | 课件文件未进入 `dist/` | 运行 `deploy-courses.sh`（自动 build + copy + dist 同步） |
+
+---
+
+## 多课程部署（可选）
+
+当需要在一个 presentation 项目中承载多套课程体系（如不同等级、不同主题）时，推荐以下方式：
+
+### 架构
+- **单构建**：所有课程共享同一套 Vite 项目、组件库和 hooks
+- **课程隔离**：各课程使用独立的 `course-*.json` 和主题，通过 URL 参数切换
+
+### 课程结构
+```
+presentation/public/
+├── course.json           # 默认课程结构
+├── course-<level>.json   # 其他课程结构
+```
+
+### URL 参数
+```
+embed.html?course=<level>&auto=1&chapter=<start>
+```
+`course` 参数缺省时加载 `course.json`。
+
+### App 适配
+`App.tsx` 根据 `course` 参数：
+- 设置 `<html data-theme="...">` 切换主题
+- 加载对应的 `course-*.json`
+- 按课程过滤章节列表（防止跨课程跳转）
+
+### 主题
+多套主题共存于 `tokens.css`，通过 CSS 属性选择器隔离：
+
+```css
+[data-theme="dark"]  { --surface: #1e1e24; --text: #f4f4f5; }
+[data-theme="light"] { --surface: #f1ebd8; --text: #14110b; }
+```
+
+章节组件使用语义 token（`var(--text)` 等）自动适配。UI 组件（菜单、字幕、控制栏）使用硬编码颜色以保证跨主题可读。
+
+### 新增课程体系 Checklist
+1. 创建 `course-<level>.json`
+2. 在 `tokens.css` 中新增对应 `[data-theme]` 块
+3. 在 `App.tsx` URL 参数映射中添加 course → JSON + theme + 章节前缀过滤
+4. 在 `embed.html` 内联脚本中添加 theme 初始化逻辑
+5. 在 DB 中创建课程组（管理员前端操作）
+6. 在 `interactive-courses.service.js` 的 `detectAndCreateChapters` 中添加组名到 JSON 文件的匹配规则
+7. 新课件章节的 ID 前缀在 `App.tsx:filterChapters` 白名单中注册

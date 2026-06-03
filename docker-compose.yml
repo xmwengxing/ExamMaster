@@ -55,6 +55,7 @@ services:
       - ./db.js:/app/db.js:ro
       - ./utils:/app/utils:ro
       - ./src:/app/src:ro
+      - ./dist:/app/dist:ro
       - ./registration-templates:/app/registration-templates:ro
       - ./uploads:/app/uploads
     ports:

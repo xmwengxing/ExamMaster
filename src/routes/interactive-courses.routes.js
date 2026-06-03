@@ -13,6 +13,9 @@ router.post('/groups', auth, adminAuth, ctrl.createGroup);
 router.put('/groups/:id', auth, adminAuth, ctrl.updateGroup);
 router.delete('/groups/:id', auth, adminAuth, ctrl.deleteGroup);
 
+// 管理员：自动检测并添加新课章节
+router.post('/detect', auth, adminAuth, ctrl.detectUpdates);
+
 // 管理员：章节 CRUD（需指定 group_id）
 router.get('/chapters', auth, adminAuth, ctrl.listChapters);
 router.post('/chapters', auth, adminAuth, ctrl.createChapter);
