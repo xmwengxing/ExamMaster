@@ -71,11 +71,12 @@ export async function detectAndCreateChapters(db, groupId) {
   const path = await import('path');
   
   // 查询 group 名称以确定使用哪个 course JSON 文件
-  const groupResult = await db.query('SELECT name FROM interactive_course_groups WHERE id=$1', [groupId]);
-  const groupName = groupResult.rows[0]?.name || '';
+  const groupResult = await db.query('SELECT title FROM interactive_course_groups WHERE id=$1', [groupId]);
+  const groupName = groupResult.rows[0]?.title || '';
   
   // 读取 course JSON（优先 dist，回退 public）
-  const courseFile = groupName.includes('四级') ? 'course-l4.json' : 'course.json';
+  const isL4 = groupName.includes('四级');
+  const courseFile = isL4 ? 'course-l4.json' : 'course.json';
   const tryPaths = [
     `dist/courses/ai-trainer/${courseFile}`,
     `public/courses/ai-trainer/${courseFile}`,
@@ -114,14 +115,16 @@ export async function detectAndCreateChapters(db, groupId) {
   const created = [];
   let cumulativeChapters = 0;
   
+  const level = isL4 ? '四级' : '三级';
+  const prefix = isL4 ? 'ic-trainer-4-' : 'ic-trainer-';
+
   for (const section of course.sections) {
     const sectionChapters = section.segments.reduce((sum, seg) => sum + (seg.chapters || []).length, 0);
     
-    const dbId = `ic-trainer-${section.id}`;
+    const dbId = `${prefix}${section.id}`;
     if (!existingIds.has(dbId)) {
-      // Section ID like "1.7" → title from course.json
       const title = section.title || section.id;
-      const description = `人工智能训练师三级 · ${section.id} ${title}`;
+      const description = `人工智能训练师${level} · ${section.id} ${title}`;
       const startChapter = cumulativeChapters;
       
       await db.query(

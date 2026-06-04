@@ -75,10 +75,18 @@ npm run dev                     # → http://localhost:5173/?auto=1
 ```bash
 cd presentation
 npm run extract-narrations
+
+# 增量合成（推荐 — 只生成缺失音频，跳过已有）
 MINIMAX_API_KEY=<key> npm run synthesize-audio
+
+# 全量重合成（仅当更换音色或重新切分口播时使用）
+# 合成脚本按 audio-segments.json 顺序遍历所有章节，不加 --force 时自动跳过已有 MP3
+# MINIMAX_API_KEY=<key> npm run synthesize-audio -- --force
+
 bash scripts/compress-audio.sh --preset high     # 可选：64kbps 压缩
 python3 scripts/subtitle-timing.py
 ```
+> **注意**：合成脚本读取 `audio-segments.json`（由 extract-narrations 生成），按序遍历全部章节。增量新增章节目录后直接运行 `npm run synthesize-audio` 即可，不加 `--force` 不会重复合成已有音频。
 
 ### 5. 构建
 ```bash
@@ -88,6 +96,14 @@ npm run build    # → dist/
 ### 6. 入库
 
 **推荐方式**：管理员在交互式课堂中点击「**同步课件章节**」，系统自动读取 `course.json`，对比 DB，INSERT 缺失条目（title / start_chapter / sort_order 全部自动填入）。
+
+> **映射规则**：同步函数按课程组名匹配 JSON 文件。组名包含"四级"则读取 `course-l4.json`，其他读取 `course.json`。四级课程组必须确保组名含"四级"字样。
+
+> **数据源问题排查**：如果同步后未出现新章节，检查 API 日志：
+> ```bash
+> docker logs examaster_api 2>&1 | grep detect
+> ```
+> 常见原因：`interactive_course_groups` 表查询的列名不匹配（同步代码查询 `name` 列，但表结构为 `title` 列）。确保 `src/services/interactive-courses.service.js` 中为 `SELECT title`。
 
 **手动 SQL 备用**：
 ```sql
