@@ -120,3 +120,13 @@ export async function detectUpdates(req, res) {
     res.status(500).json({ error: '检测失败' });
   }
 }
+
+export async function discoverUpdates(req, res) {
+  try {
+    const result = await service.discoverCourses(req.db);
+    res.json({ created: result });
+  } catch (err) {
+    console.error('[interactive-courses] discoverUpdates error:', err);
+    res.status(500).json({ error: '检测失败' });
+  }
+}

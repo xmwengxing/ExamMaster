@@ -16,6 +16,9 @@ router.delete('/groups/:id', auth, adminAuth, ctrl.deleteGroup);
 // 管理员：自动检测并添加新课章节
 router.post('/detect', auth, adminAuth, ctrl.detectUpdates);
 
+// 管理员：自动发现已部署但未入库的课件
+router.post('/discover', auth, adminAuth, ctrl.discoverUpdates);
+
 // 管理员：章节 CRUD（需指定 group_id）
 router.get('/chapters', auth, adminAuth, ctrl.listChapters);
 router.post('/chapters', auth, adminAuth, ctrl.createChapter);

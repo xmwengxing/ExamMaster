@@ -76,7 +76,8 @@ export async function detectAndCreateChapters(db, groupId) {
   
   // 读取 course JSON（优先 dist，回退 public）
   const isL4 = groupName.includes('四级');
-  const courseFile = isL4 ? 'course-l4.json' : 'course.json';
+  const isKids = groupName.includes('儿童');
+  const courseFile = isKids ? 'course-kids.json' : (isL4 ? 'course-l4.json' : 'course.json');
   const tryPaths = [
     `dist/courses/ai-trainer/${courseFile}`,
     `public/courses/ai-trainer/${courseFile}`,
@@ -115,8 +116,8 @@ export async function detectAndCreateChapters(db, groupId) {
   const created = [];
   let cumulativeChapters = 0;
   
-  const level = isL4 ? '四级' : '三级';
-  const prefix = isL4 ? 'ic-trainer-4-' : 'ic-trainer-';
+  const level = isKids ? '儿童' : (isL4 ? '四级' : '三级');
+  const prefix = isKids ? 'ic-kids-' : (isL4 ? 'ic-trainer-4-' : 'ic-trainer-');
 
   for (const section of course.sections) {
     const sectionChapters = section.segments.reduce((sum, seg) => sum + (seg.chapters || []).length, 0);
@@ -140,4 +141,57 @@ export async function detectAndCreateChapters(db, groupId) {
   }
   
   return { created, total: course.sections.length };
+}
+
+/**
+ * 自动发现已部署但未入库的课件，创建 course group 并同步章节。
+ */
+const COURSE_MAP = {
+  'course-kids.json': { title: '儿童编程基础--AI方向', description: '儿童AI编程启蒙课程（7-13岁）', courseParam: 'kids' },
+};
+
+export async function discoverCourses(db) {
+  const fs = await import('fs');
+  const path = await import('path');
+  const created = [];
+
+  const searchDirs = [
+    'dist/courses/ai-trainer/',
+    'public/courses/ai-trainer/',
+  ];
+
+  for (const dir of searchDirs) {
+    const fullDir = path.resolve(dir);
+    if (!fs.existsSync(fullDir)) continue;
+
+    for (const [jsonFile, info] of Object.entries(COURSE_MAP)) {
+      const jsonPath = path.join(fullDir, jsonFile);
+      if (!fs.existsSync(jsonPath)) continue;
+
+      // 检查是否已有同名 group
+      const existing = await db.query('SELECT id FROM interactive_course_groups WHERE title=$1', [info.title]);
+      if (existing.rows.length > 0) continue;
+
+      // 创建 group
+      const groupId = `icg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      const maxSort = await db.query('SELECT COALESCE(MAX(sort_order), 0) as mx FROM interactive_course_groups');
+      await db.query(
+        'INSERT INTO interactive_course_groups (id, title, description, sort_order, course_param) VALUES ($1,$2,$3,$4,$5)',
+        [groupId, info.title, info.description, parseInt(maxSort.rows[0].mx) + 1, info.courseParam || '']
+      );
+
+      // 同步章节
+      let chapterResult = null;
+      try {
+        chapterResult = await detectAndCreateChapters(db, groupId);
+      } catch (e) {
+        chapterResult = { error: e.message };
+      }
+
+      created.push({ groupId, title: info.title, chapters: chapterResult });
+    }
+    break;
+  }
+
+  return created;
 }

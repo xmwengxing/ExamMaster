@@ -32,6 +32,7 @@ export default function InteractiveCourseManager() {
   const [selectedGroupId, setSelectedGroupId] = useState('');
   const [loading, setLoading] = useState(false);
   const [syncMsg, setSyncMsg] = useState('');
+  const [discoverMsg, setDiscoverMsg] = useState('');
 
   // Chapter modal
   const [chModalOpen, setChModalOpen] = useState(false);
@@ -85,6 +86,24 @@ export default function InteractiveCourseManager() {
       }
     } catch (e) { setSyncMsg('检测失败'); }
     setTimeout(() => setSyncMsg(''), 5000);
+  };
+
+  const discoverCourses = async () => {
+    setDiscoverMsg('正在扫描...');
+    try {
+      const res = await fetch('/api/interactive-courses/discover', {
+        method: 'POST',
+        headers: authHeaders(),
+      });
+      const data = await res.json();
+      if (data.created?.length > 0) {
+        setDiscoverMsg(`✅ 已发现 ${data.created.length} 个新课：${data.created.map((c: any) => c.title).join('、')}`);
+        loadGroups();
+      } else {
+        setDiscoverMsg('未发现未入库的新课件');
+      }
+    } catch (e) { setDiscoverMsg('检测失败'); }
+    setTimeout(() => setDiscoverMsg(''), 5000);
   };
 
   // --- Chapter CRUD ---
@@ -145,7 +164,11 @@ export default function InteractiveCourseManager() {
         <button onClick={openCreateGroup} style={{ padding: '8px 20px', background: '#4361ee', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 14 }}>
           + 新增课程
         </button>
+        <button onClick={discoverCourses} style={{ padding: '8px 20px', background: '#52c41a', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 14 }}>
+          🔍 同步课程
+        </button>
       </div>
+      {discoverMsg && <div style={{ padding: '8px 16px', marginBottom: 12, background: '#f6ffed', border: '1px solid #b7eb8f', borderRadius: 6, fontSize: 14, color: '#333' }}>{discoverMsg}</div>}
 
       {/* 课程组标签 */}
       <div style={{ marginBottom: 16, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
