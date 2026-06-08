@@ -1,7 +1,7 @@
-# 交互式课件更新指南
+# 交互式课件开发与更新指南
 
 > ExamMaster 课件的开发、部署、入库、验证流程。
-> 使用前确保已安装 [course-forge](https://github.com/xmwengxing/course-forge) skill。
+> 课件开发遵循 [course-forge](https://github.com/xmwengxing/course-forge) skill 规范。
 
 ---
 
@@ -9,156 +9,178 @@
 
 | 项 | 值 |
 |---|---|
-| 课件工程 | `ai-trainer-course/presentation/`（不入 git） |
+| 课件工程 | `ai-trainer-course/presentation/` |
 | 课件源码 | `presentation/src/chapters/` — 每章一个目录 |
-| 课程结构 | `presentation/public/course.json` |
+| 课程结构 | `presentation/public/course.json` — 默认课程；`course-{id}.json` — 扩展课程 |
 | 源文档 | `ai-trainer-course/docs/` |
+| 素材目录 | `docs/materials/` — 场景截图、模板等按名称引用 |
 | 本地预览 | `http://localhost:5173/?auto=1`（dev）/ `http://localhost:9080/courses/ai-trainer/embed.html`（Docker） |
-| 部署脚本 | `python3 deploy-courses.sh`（仅课件）/ `python3 deploy.sh`（全站） |
+| 部署脚本 | `python3 deploy-courses.sh`（仅课件） |
 
 ---
 
 ## 目录结构
 
 ```
-ExamMaster/
-├── ai-trainer-course/
-│   ├── course.json                    # 课程结构（section > segment > chapter）
-│   ├── docs/                          # 源文档（口播稿）
-│   ├── presentation/                  # Vite + React + TS
-│   │   ├── src/
-│   │   │   ├── chapters/             # 每章一个目录
-│   │   │   ├── registry/chapters.ts  # 章节注册（脚本自动生成，勿手动编辑）
-│   │   │   ├── components/           # 共享组件
-│   │   │   ├── hooks/                # 共享 hooks
-│   │   │   └── styles/tokens.css     # 主题 tokens
-│   │   ├── public/
-│   │   │   ├── audio/                # TTS 合成 MP3
-│   │   │   └── subtitle-timing.json  # 字幕时序
-│   │   └── scripts/                  # extract-narrations / synthesize / compress / subtitle
-│   └── deploy-courses.sh             # 课件增量部署
-├── public/courses/ai-trainer/         # Vite build 输出至此后 nginx 可直接访问
-└── dist/courses/ai-trainer/           # Docker nginx 的只读挂载目录
+ai-trainer-course/
+├── course.json / course-{id}.json    # 课程结构（课 → 段 → 章）
+├── docs/                             # 源文档（口播稿）
+│   ├── <课程名>.md
+│   └── materials/                    # 素材（截图、模板等）
+├── presentation/
+│   ├── src/
+│   │   ├── chapters/                 # 每章 `<编号>-<前缀>-<id>/`
+│   │   │   ├── index.tsx             # 画面组件（step >= N 渐进揭示）
+│   │   │   ├── index.css             # 独立 CSS 前缀（2~4 字母）
+│   │   │   └── narrations.ts         # 口播文本数组（☆ 唯一真相源）
+│   │   ├── registry/chapters.ts      # 全局章节注册（脚本自动生成）
+│   │   ├── components/               # 共享组件
+│   │   ├── hooks/                    # 共享 hooks
+│   │   └── styles/                   # tokens / base / animations
+│   ├── public/
+│   │   ├── audio/                    # TTS 合成 MP3
+│   │   └── subtitle-timing.json      # 字幕时序
+│   └── scripts/                      # 合成/字幕/录屏
+└── dist/                             # Vite 构建产物（纯静态）
 ```
 
 ---
 
 ## 开发流程
 
-### 1. 源文档
-口播稿放入 `ai-trainer-course/docs/`，文件名建议使用 `<编号> <标题>.md`。
+### 1. 源文档 + 素材
+
+口播稿放入 `docs/<课程名>.md`。课件中提到的真实场景截图、模板文件等放入 `docs/materials/`，开发时按文件名引用。
 
 ### 2. 课件开发
-在 `presentation/src/chapters/` 下创建章节目录（编号全局递增）：
+
+#### 单章结构
+
+在 `presentation/src/chapters/` 下创建章节目录：
 
 ```
-chapters/NNN-<prefix>-<id>/
-├── index.tsx       # 画面组件（step >= N 渐进揭示）
-├── index.css       # 独立 CSS 前缀
-└── narrations.ts   # 口播文本数组
+chapters/<编号>-<前缀>-<id>/
+├── index.tsx       # 画面组件
+├── index.css       # 独立 CSS 前缀（2~4 字母，不跨章复用）
+└── narrations.ts   # `export const narrations: string[]`
 ```
 
-章节开发完成后，运行注册脚本自动生成 `chapters.ts` 和更新 `course.json`：
+#### 设计约束速查
+
+开发每章时遵循 skill 规范中的关键原则：
+
+| 维度 | 约束 |
+|:--|:--|
+| **布局** | 连续两章不得同模式（8 种模式可选：全版/分栏/网格/表格/非对称/Z字形/放射/沉浸） |
+| **交互** | 连续两章不得同交互模式（10 类可选：点击揭示/状态切换/对比裁决/可展开链/拖拽/测验/表格动画/脉冲/过程模拟等） |
+| **空间** | 元素可分布在画布不同区域（中心/边栏/角落/背景层），step 推进时旧元素可位移保留（积累模式）或整屏替换（替换模式） |
+| **字体** | 中英混排（中文 Noto Sans SC / 英文 Inter），禁全场 Inter/Roboto |
+| **色彩** | 走主题 token（`var(--accent)` / `var(--text)` / `var(--surface)` 等），禁纯黑 #000 / 纯白 #FFF |
+| **动态** | 每章至少 1 处 CSS 过程演示（数字递增/连线绘制/场景渐变……fade-in 入场不算） |
+| **交互元素** | 按钮/可点击区域加 `data-no-advance` |
+| **字幕空间** | 底部留空 60-80px |
+
+完整设计规范 → course-forge skill `references/`。
+
+#### 章节注册
+
+章节目录创建完成后，运行注册脚本自动生成 `chapters.ts`：
 
 ```bash
-cd presentation/src
-python3 generate-registry.py    # 扫描 chapters/ 全量注册
+cd presentation
+# 脚本扫描 src/chapters/ → 自动生成 src/registry/chapters.ts
+# 超过 50 章时 Component 使用 React.lazy 按需加载
 ```
 
-### 2.1 在已有课程中增补章节（插入到中间位置）
+**注意**：`chapters.ts` 由脚本自动生成，**不要手动编辑**。新增章节后会触发 code-split —— 每章拆为独立 JS chunk，首屏只加载当前课程所需的章节。
 
-当需要在已有课程的 S1-S5 之间插入新章节（如 S6 知识点加深）时，需注意**章节编号冲突**问题：
+#### 章节编号与插入
 
-**原理**：章节目录 `src/chapters/` 以 `{编号}-{前缀}-{描述}` 命名（如 `483-f1-scifi-bubble`）。章节在课程列表中的**排序由目录名字母顺序决定**，而非 `course.json`。两个章节使用相同编号会导致排序后交叉排列，播放顺序错乱。
+章节目录 `{编号}-{前缀}-{id}`，排序由目录名字母序决定。
 
-**排序规则**：目录名按字符串排序。例如 `10-foo` < `10a-bar` < `11-baz`（因为 `-` < `a` 且 `0` < `1`）。
+| 场景 | 方法 |
+|:--|:--|
+| 前后有数字空隙 | 直接使用间隙编号 |
+| 编号相邻无空隙 | 前编号后加字母后缀（`674a-`, `674b-`...） |
+| 区间已满 | 挪到末尾用更大编号 |
 
-**插入方案**：
-1. 确定新章节应位于哪两个目录之间
-2. 如前后编号相邻无空隙，可在前一个编号后加字母后缀：例如在 `10-` 和 `11-` 之间可用 `10a-`、`10b-` 等
-3. **方案 B**：使用大于当前最大编号的数字追加到末尾，在 course.json 中归入正确课程段
-4. **音频目录不受影响**：音频存在 `public/audio/<章节ID>/`（按 ID 非编号），编号变更后无需移动或重合成音频
+```bash
+# 验证无编号冲突
+ls {编号}-*/ | sort
+```
 
-**同步到主项目**：
-- 增补章节仅涉及课件工程（`ai-trainer-course/presentation/`），不需要修改 `ExamMaster/` 主项目的代码
-- 更新 `course-*.json` 后需重新构建部署
-- 已有课程的 `start_chapter` 可能变化 → 管理员需重新「同步课件章节」
+音频目录基于章节 ID（非编号），重编号后无需移动音频。
 
 ### 3. 验收
+
 ```bash
 cd presentation
 npm run dev                     # → http://localhost:5173/?auto=1
 ```
 
 ### 4. 音频合成
+
 ```bash
 cd presentation
 npm run extract-narrations
 
-# 增量合成（推荐 — 只生成缺失音频，跳过已有）
+# 全量增量合成（跳过已有 MP3）
 MINIMAX_API_KEY=<key> npm run synthesize-audio
 
-# 全量重合成（仅当更换音色或重新切分口播时使用）
-# 合成脚本按 audio-segments.json 顺序遍历所有章节，不加 --force 时自动跳过已有 MP3
-# MINIMAX_API_KEY=<key> npm run synthesize-audio -- --force
+# 仅合成指定章节（避免全量遍历）
+MINIMAX_API_KEY=<key> npm run synthesize-audio -- --chapters=id1,id2
+```
 
-bash scripts/compress-audio.sh --preset high     # 可选：64kbps 压缩
+> 合成脚本读取 `audio-segments.json`。不加 `--force` 不会重复合成已有音频。
+
+#### 字幕时序（双模式）
+
+```bash
+# 默认模式 — 80 字句界 + 字数占比分配时长 + ffprobe 实测总长
 python3 scripts/subtitle-timing.py
+
+# MiniMax 词级模式 — 利用 TTS 返回的逐词 ms 精准对齐（推荐）
+python3 scripts/subtitle-timing.py --mode minimax
+
+# 仅处理指定章节（避免全量扫描超时）
+python3 scripts/subtitle-timing.py --mode minimax --chapters id1 id2
 ```
-> **注意**：合成脚本读取 `audio-segments.json`（由 extract-narrations 生成），按序遍历全部章节。增量新增章节目录后直接运行 `npm run synthesize-audio` 即可，不加 `--force` 不会重复合成已有音频。
 
-### 5. 构建
-```bash
-npm run build    # → dist/
-```
+> MiniMax 合成时自动请求词级时间戳，若模型未返回则降级 warning，不影响音频生成。
 
-### 6. 入库
-
-**推荐方式**：管理员在交互式课堂中点击「**同步课件章节**」，系统自动读取 `course.json`，对比 DB，INSERT 缺失条目（title / start_chapter / sort_order 全部自动填入）。
-
-> **映射规则**：同步函数按课程组名匹配 JSON 文件。组名包含"四级"则读取 `course-l4.json`，其他读取 `course.json`。四级课程组必须确保组名含"四级"字样。
-
-> **数据源问题排查**：如果同步后未出现新章节，检查 API 日志：
-> ```bash
-> docker logs examaster_api 2>&1 | grep detect
-> ```
-> 常见原因：`interactive_course_groups` 表查询的列名不匹配（同步代码查询 `name` 列，但表结构为 `title` 列）。确保 `src/services/interactive-courses.service.js` 中为 `SELECT title`。
-
-**手动 SQL 备用**：
-```sql
-INSERT INTO interactive_courses
-  (id, title, description, base_path, status, sort_order, group_id, start_chapter)
-VALUES (
-  'course-<id>', '<标题>', '<简介>',
-  'courses/ai-trainer/', 'published', <序号>,
-  '<group_id>', <start_chapter>
-);
-```
-`start_chapter` = 该课第一个章节在全局 `chapters` 数组中的起始下标。
-
-### 7. 本地验证
-
-课件构建后无需嵌入主项目即可独立预览：
+#### 音频压缩（可选）
 
 ```bash
-npx serve dist                        # 或其他静态文件服务
-# → http://localhost:3000/?auto=1
+bash scripts/compress-audio.sh --preset high     # 64kbps，语音透明，↓50%
 ```
 
-嵌入主项目后验证：
+> 压缩不影响音频时长，字幕无需重新生成。
+
+### 5. 构建 + 部署
 
 ```bash
-curl -o /dev/null -w "%{http_code}" http://localhost:9080/courses/ai-trainer/embed.html
-# → 200
+npm run build                        # → dist/
+python3 deploy-courses.sh            # upload → 生产服务器
 ```
 
-### 8. 部署至服务器
+### 6. 录屏为视频（可选）
+
 ```bash
-python3 deploy-courses.sh             # rsync 课件至服务器
-python3 deploy.sh                     # 全站部署（含主应用代码）
+# Playwright 录制 — 仅录课件画布内容（不录导航/控制栏）
+node scripts/record.js --dev --duration 120            # 开发模式 2 分钟
+node scripts/record.js --headless --out demo.mp4       # 无头模式
+node scripts/record.js --url "http://exammaster.zzzjl.com/courses/ai-trainer/embed.html?auto=1&recording=1"
 ```
+
+URL 加 `?recording=1` 自动隐藏所有 UI 控件，纯画布录制。
 
 ---
+
+## 入库
+
+部署后管理员在交互式课堂后台点击「**同步课件章节**」，系统自动读取 `course.json`，对比 DB 并插入缺失条目。
+
+> 四级课程组名需含"四级"字样以匹配 `course-l4.json`。
 
 ## 嵌入 URL
 
@@ -167,80 +189,54 @@ python3 deploy.sh                     # 全站部署（含主应用代码）
 ```
 
 | 参数 | 说明 |
-|------|------|
+|:--|:--|
 | `auto=1` | 自动播放模式 |
 | `chapter=N` | 从第 N 章开始（0-indexed） |
+| `course=<id>` | 指定课程（缺省加载默认 `course.json`） |
+| `recording=1` | 录制模式（隐藏导航/控件/进度条） |
 
 ---
 
-## 多色语义
+## 多课程管理
 
-课件组件可使用以下语义色，在不同主题下自动适配：
+一个 presentation 项目可承载多门课程，通过 `course` URL 参数区分：
+
+| 文件 | 作用 |
+|:--|:--|
+| `course.json` | 默认课程 |
+| `course-{id}.json` | 扩展课程 |
+| `src/registry/chapters.ts` | 所有课程的章节平铺注册表 |
+
+### 新增课程 Checklist
+
+1. 创建 `course-{id}.json`，定义各课/段/章结构
+2. 在 `App.tsx` 的 `filterChapters` 中追加新课程的章节 ID 前缀过滤
+3. 在 `App.tsx` 的 `jsonMap` 中追加 URL 参数 → JSON 文件映射
+4. 在 DB 中创建对应课程组
+5. 新课程章节按字母后缀法分配编号，避免与已有编号区间冲突
+6. 在 `deploy-courses.sh` 部署脚本中确认新的 course JSON 文件被复制
+
+---
+
+## 语义色 Token
 
 | 变量 | 用途 |
-|------|------|
+|:--|:--|
 | `--accent` | 核心概念 / 金句 |
 | `--accent-tech` | 技术元素 / 工具 |
 | `--accent-good` | 正向结论 / 最佳实践 |
 | `--accent-warn` | 警告 / 风险 / 红线 |
-| `--accent-deep` | 进阶 / 理论深度 |
 
 ---
 
 ## 关键陷阱
 
 | 问题 | 原因 | 修复 |
-|------|------|------|
+|:--|:--|:--|
 | 导航菜单消失 | `course.json` JSON 损坏 | 用脚本重新生成，勿手动编辑 |
-| 章节卡片跳错位置 | DB 中 `start_chapter` 填错 | SQL UPDATE 或用「同步课件章节」自动更正 |
-| 字幕与音频不同步 | narrations 修改后未重新合成 | 重跑 extract → synthesize → subtitle-timing |
-| 本地 nginx 看不到更新 | 课件文件未进入 `dist/` | 运行 `deploy-courses.sh`（自动 build + copy + dist 同步） |
-| **插入章节后播放跳到其他课程** | 章节目录编号冲突（两个课程用了同号） | 检查 `ls {编号}-*/` 是否有多目录；移新章到未占用编号 |
-
----
-
-## 多课程部署（可选）
-
-当需要在一个 presentation 项目中承载多套课程体系（如不同等级、不同主题）时，推荐以下方式：
-
-### 架构
-- **单构建**：所有课程共享同一套 Vite 项目、组件库和 hooks
-- **课程隔离**：各课程使用独立的 `course-*.json` 和主题，通过 URL 参数切换
-
-### 课程结构
-```
-presentation/public/
-├── course.json           # 默认课程结构
-├── course-<level>.json   # 其他课程结构
-```
-
-### URL 参数
-```
-embed.html?course=<level>&auto=1&chapter=<start>
-```
-`course` 参数缺省时加载 `course.json`。
-
-### App 适配
-`App.tsx` 根据 `course` 参数：
-- 设置 `<html data-theme="...">` 切换主题
-- 加载对应的 `course-*.json`
-- 按课程过滤章节列表（防止跨课程跳转）
-
-### 主题
-多套主题共存于 `tokens.css`，通过 CSS 属性选择器隔离：
-
-```css
-[data-theme="dark"]  { --surface: #1e1e24; --text: #f4f4f5; }
-[data-theme="light"] { --surface: #f1ebd8; --text: #14110b; }
-```
-
-章节组件使用语义 token（`var(--text)` 等）自动适配。UI 组件（菜单、字幕、控制栏）使用硬编码颜色以保证跨主题可读。
-
-### 新增课程体系 Checklist
-1. 创建 `course-<level>.json`
-2. 在 `tokens.css` 中新增对应 `[data-theme]` 块
-3. 在 `App.tsx` URL 参数映射中添加 course → JSON + theme + 章节前缀过滤
-4. 在 `embed.html` 内联脚本中添加 theme 初始化逻辑
-5. 在 DB 中创建课程组（管理员前端操作）
-6. 在 `interactive-courses.service.js` 的 `detectAndCreateChapters` 中添加组名到 JSON 文件的匹配规则
-7. 新课件章节的 ID 前缀在 `App.tsx:filterChapters` 白名单中注册
+| 章节卡片跳错位置 | DB 中 `start_chapter` 填错 | 管理员后台「同步课件章节」自动更正 |
+| 字幕与音频不同步 | narrations 修改后未重新合成 | `extract → synthesize → subtitle-timing` |
+| 本地 nginx 看不到更新 | 课件未进入 `dist/` | 运行 `deploy-courses.sh` |
+| 插入章节后播放跳课 | 章节目录编号冲突 | `ls {编号}-*/` 检查冲突；字母后缀规避 |
+| `subtitle-timing.py` 超时 | 全量扫描 2000+ 段 | 加 `--chapters` 仅处理需要的章节 |
+| MiniMax "No word timing" | 模型偶发不返回词级数据 | 非致命——降级 warning，退到 default 模式生成字幕 |
