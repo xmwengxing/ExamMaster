@@ -114,43 +114,4 @@ This project is indexed by GitNexus as **ExamMaster** (7246 symbols, 11314 relat
 | Work in the Cluster_237 area (4 symbols) | `.claude/skills/generated/cluster-237/SKILL.md` |
 | Work in the Cluster_21 area (3 symbols) | `.claude/skills/generated/cluster-21/SKILL.md` |
 
-## 课件设计约束
-
-以下约束适用于 `ai-trainer-course/presentation/src/chapters/` 下的所有章节开发。
-
-### 字号底线
-| 用途 | 最小值 |
-|:--|:--:|
-| 正文字体 / .txt | **17px** |
-| 副标题 / .sub | **16px** |
-| 标签 / badage / 徽标 / 时间码 | **14px** |
-| 代码 / .code / .row / .log | **14px** |
-| 小字说明 / .desc / .meta | **14px** |
-| 标题 / .title | **28px** |
-| 大数字 / hero number | **36px** |
-
-任何 `font-size` 不得低于 14px。容器 padding 需随字号自适应（至少 10px 垂直 padding）。
-
-### 渐进揭示
-- 单画面元素不一次性摊开，使用 `useState` + `data-no-advance` 按钮分步揭示
-- 多个卡片类元素用点击切换 active state，或用 stagger animation-delay 错开入场
-- 避免"一个场景堆满所有内容"的静态布局
-
-### 左右分栏
-- 仅在内容确实有**对比 / 对照 / 并列**属性时使用左右分栏（左vs右、正确vs错误、输入vs输出）
-- 使用 `max-width:960px` 提供足够伸展空间，gap 至少 24px
-
-### 颜色可读性
-- 不要硬编码深色背景（`#1a1a2e`、`#2a2a3e`等），使用主题变量 `var(--surface-2)` / `var(--surface-3)`
-- 代码块 / 日志行等需要对比背景的区域，用 `var(--surface-2)`（浅色主题下为浅色底，深色主题下为深色底）
-- 确保 `color` 在所用背景上有足够对比度
-
-### 目标时长与口播稿内容量（强制）
-- **开发任何课程或章节前，必须先询问用户目标时长**（标准课时 45 分钟 / 微课 15-20 分钟 / 知识点卡片 5 分钟）
-- **口播稿不足时必须扩展**：中文 TTS 语速约 14-16 字/秒。开发前按以下公式估算：
-  - `预估音频时长（秒）= 口播稿总字数 / 15`
-  - 如果预估时长 < 目标时长 × 60%，必须先扩展口播稿再开发，不得直接写短 narration
-- **不可用废话凑字数**：扩展方式应为增加知识深度、补充案例细节、延长过渡衔接，不可重复已有内容
-- **逐段汇报时长**：每开发完一段（S1-S5 中的一段），汇报该段预估时长和累计时长，让用户判断节奏是否合适
-
 <!-- gitnexus:end -->
